@@ -1,0 +1,97 @@
+# ============================================
+# Unity 项目 .gitignore
+# 基于 Unity 官方推荐 + 项目实际结构
+# 需上传：Assets/、ProjectSettings/、Packages/
+# ============================================
+
+# ---------- Unity 生成的文件夹 ----------
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+MemoryCaptures/
+
+# ---------- 版本控制 ----------
+# 从 Plastic SCM 迁移到 Git，忽略 Plastic 相关文件
+.plastic/
+ignore.conf
+
+# ---------- IDE / 编辑器 ----------
+.vs/
+.vscode/
+.idea/
+.gradle/
+.consulo/
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+
+# Visual Studio 缓存
+.vsconfig
+
+# ---------- Unity 私有/临时文件 ----------
+*.private
+*.private.meta
+sysinfo.txt
+crashlytics-build.properties
+~UnityDirMonSyncFile~*
+
+# ---------- 崩溃转储 / 备份 / 缓存 ----------
+# Unity 崩溃时会在项目根目录生成 .dmp 文件
+*.dmp
+*.dmp.*
+*.crash
+# 编辑器/合并产生的备份文件
+*.bak
+*.orig
+*.backup
+# 编译缓存（防止出现在 obj/ 之外）
+*.cache
+# Vim 交换文件
+*.swp
+*.swo
+
+# ---------- 构建产物 ----------
+*.apk
+*.aab
+*.app
+*.unitypackage
+ExportedObj/
+
+# ---------- Addressables ----------
+**/Assets/AddressableAssetsData/*/*.bin*
+**/Assets/StreamingAssets/aa.meta
+**/Assets/StreamingAssets/*/aa/*
+
+# ---------- Asset Store Tools ----------
+**/Assets/AssetStoreTools/
+
+# ---------- PlasticSCM 插件（如存在）----------
+/Assets/Plugins/PlasticSCM*
+
+# ---------- 操作系统 ----------
+.DS_Store
+.DS_Store*
+Thumbs.db
+Desktop.ini
+
+# ---------- 说明 ----------
+# 注意：*.meta 文件必须提交！不要忽略 *.meta
+# 以上规则中只有针对特定类型（pdb/mdb/pidb）的 .meta 被忽略
