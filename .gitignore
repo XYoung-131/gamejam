@@ -52,6 +52,7 @@ ignore.conf
 sysinfo.txt
 crashlytics-build.properties
 ~UnityDirMonSyncFile~*
+debug.log
 
 # ---------- 崩溃转储 / 备份 / 缓存 ----------
 # Unity 崩溃时会在项目根目录生成 .dmp 文件
