@@ -1,42 +1,42 @@
 using UnityEngine;
 using System;
 
-//Áù±ßĞÎÖáÏò×ø±ê£¨Axial Coordinates£©£¬ÕâÊÇÎÒÃÇÕâ´ÎµØÍ¼ÓÃµÄ×ø±êÏµ
-//Í¼Æ¬ÎÒ·¢ÔÚ³ÌĞòµÄ½»Á÷ÈºÁË£¬ºóÃæÎÒ»á²¹³äÔÚgithubÀïµÄREADMEÎÄ¼şÀï
+//å…­è¾¹å½¢è½´å‘åæ ‡ï¼ˆAxial Coordinatesï¼‰ï¼Œè¿™æ˜¯æˆ‘ä»¬è¿™æ¬¡åœ°å›¾ç”¨çš„åæ ‡ç³»
+//å›¾ç‰‡æˆ‘å‘åœ¨ç¨‹åºçš„äº¤æµç¾¤äº†ï¼Œåé¢æˆ‘ä¼šè¡¥å……åœ¨githubé‡Œçš„READMEæ–‡ä»¶é‡Œ
 [Serializable]
 public struct HexCoord : IEquatable<HexCoord>
 {
-    // Á½¸ö×ø±êÖá
+    // ä¸¤ä¸ªåæ ‡è½´
     public int q;
     public int r;
 
-    // ¹¹Ôìº¯Êı
+    // æ„é€ å‡½æ•°
     public HexCoord(int q, int r)
     {
         this.q = q;
         this.r = r;
     }
 
-    // 6¸ö·½ÏòµÄÆ«ÒÆÁ¿£¨¾²Ì¬Êı×é£¬¹²ÏíÒ»·İ£©
-    // ÕâÊÇ¸øÁù¸ö·½ÏòÉèÖÃÒ»¸öÊı×é·½±ãµ÷ÓÃ£¬ÊÇÅäºÏÏÂÃæµÄGetNeighbor()ºÍGetAllNeighbors()Á½¸ö·½·¨ÓÃµÄ
-    // Ë³Ğò£ºÓÒ ¡ú ÓÒÉÏ ¡ú ×óÉÏ ¡ú ×ó ¡ú ×óÏÂ ¡ú ÓÒÏÂ
+    // 6ä¸ªæ–¹å‘çš„åç§»é‡ï¼ˆé™æ€æ•°ç»„ï¼Œå…±äº«ä¸€ä»½ï¼‰
+    // è¿™æ˜¯ç»™å…­ä¸ªæ–¹å‘è®¾ç½®ä¸€ä¸ªæ•°ç»„æ–¹ä¾¿è°ƒç”¨ï¼Œæ˜¯é…åˆä¸‹é¢çš„GetNeighbor()å’ŒGetAllNeighbors()ä¸¤ä¸ªæ–¹æ³•ç”¨çš„
+    // é¡ºåºï¼šå³ â†’ å³ä¸Š â†’ å·¦ä¸Š â†’ å·¦ â†’ å·¦ä¸‹ â†’ å³ä¸‹
     private static readonly HexCoord[] _directions = new HexCoord[]
     {
-        new HexCoord(1, 0),    // ·½Ïò0£ºÓÒ
-        new HexCoord(1, -1),   // ·½Ïò1£ºÓÒÉÏ
-        new HexCoord(0, -1),   // ·½Ïò2£º×óÉÏ
-        new HexCoord(-1, 0),   // ·½Ïò3£º×ó
-        new HexCoord(-1, 1),   // ·½Ïò4£º×óÏÂ
-        new HexCoord(0, 1),    // ·½Ïò5£ºÓÒÏÂ
+        new HexCoord(1, 0),    // æ–¹å‘0ï¼šå³
+        new HexCoord(1, -1),   // æ–¹å‘1ï¼šå³ä¸Š
+        new HexCoord(0, -1),   // æ–¹å‘2ï¼šå·¦ä¸Š
+        new HexCoord(-1, 0),   // æ–¹å‘3ï¼šå·¦
+        new HexCoord(-1, 1),   // æ–¹å‘4ï¼šå·¦ä¸‹
+        new HexCoord(0, 1),    // æ–¹å‘5ï¼šå³ä¸‹
     };
 
-    // »ñÈ¡Ö¸¶¨·½ÏòµÄÁÚ¾Ó×ø±ê
+    // è·å–æŒ‡å®šæ–¹å‘çš„é‚»å±…åæ ‡
     // direction: 0~5
     public HexCoord GetNeighbor(int direction)
     {
         if (direction < 0 || direction > 5)
         {
-            Debug.LogError($"·½ÏòÖµ {direction} ÎŞĞ§£¬Ó¦¸ÃÊÇ 0-5");
+            Debug.LogError($"æ–¹å‘å€¼ {direction} æ— æ•ˆï¼Œåº”è¯¥æ˜¯ 0-5");
             return this;
         }
 
@@ -44,7 +44,7 @@ public struct HexCoord : IEquatable<HexCoord>
         return new HexCoord(q + dir.q, r + dir.r);
     }
 
-    // »ñÈ¡ËùÓĞ6¸öÁÚ¾Ó×ø±ê
+    // è·å–æ‰€æœ‰6ä¸ªé‚»å±…åæ ‡
     public HexCoord[] GetAllNeighbors()
     {
         HexCoord[] neighbors = new HexCoord[6];
@@ -55,8 +55,8 @@ public struct HexCoord : IEquatable<HexCoord>
         return neighbors;
     }
 
-    // ¼ÆËãµ½ÁíÒ»¸ö¸ñ×ÓµÄ¾àÀë£¨Áù±ßĞÎ¾àÀë£©
-    // ¹«Ê½£º(|dq| + |dr| + |dq+dr|) / 2£¬ÕâÀï²»½âÊÍÁË£¬ÓĞµãÂé·³£¬¿ÉÒÔÔÚÍøÉÏËÑÒ»ÏÂ½øĞĞÁË½â
+    // è®¡ç®—åˆ°å¦ä¸€ä¸ªæ ¼å­çš„è·ç¦»ï¼ˆå…­è¾¹å½¢è·ç¦»ï¼‰
+    // å…¬å¼ï¼š(|dq| + |dr| + |dq+dr|) / 2ï¼Œè¿™é‡Œä¸è§£é‡Šäº†ï¼Œæœ‰ç‚¹éº»çƒ¦ï¼Œå¯ä»¥åœ¨ç½‘ä¸Šæœä¸€ä¸‹è¿›è¡Œäº†è§£
     public int Distance(HexCoord other)
     {
         int dq = q - other.q;
@@ -66,16 +66,16 @@ public struct HexCoord : IEquatable<HexCoord>
         return (Mathf.Abs(dq) + Mathf.Abs(dr) + Mathf.Abs(ds)) / 2;
     }
 
-    // ×Ö·û´®±íÊ¾£¨·½±ãµ÷ÊÔ´òÓ¡£©
+    // å­—ç¬¦ä¸²è¡¨ç¤ºï¼ˆæ–¹ä¾¿è°ƒè¯•æ‰“å°ï¼‰
     public override string ToString()
     {
         return $"({q}, {r})";
     }
 
-    // ÏàµÈÅĞ¶Ï£¨ÈÃ HexCoord ÄÜµ± Dictionary µÄ key£©
-    // ×öÒ»ÏÂ½âÊÍ£º
-    // ÎÒÃÇÕâ¸ö×ø±êÏµºÍ³£¹æ×ø±êÏµ²»Í¬£¬ÓÃµÄ±äÁ¿Ò²ÊÇ×Ô¼ºÉùÃ÷µÄ½á¹¹Ìå£¬²»ÄÜÓÃ³£¹æµÄequals()¸ù¾İqºÍrµÄÖµÏàµÈ£¬À´Ö±½ÓÖ¤Ã÷ÊÇÍ¬Ò»¸ö¸ñ×Ó
-    // ÕâÀïÒªÖØĞÂĞ´Ò»ÏÂequals()µÄÂß¼­À´ÈÃÔ­À´µÄequals()¹¦ÄÜÊÊÓÃÓÚÏÖÔÚµÄAxial×ø±êÏµ
+    // ç›¸ç­‰åˆ¤æ–­ï¼ˆè®© HexCoord èƒ½å½“ Dictionary çš„ keyï¼‰
+    // åšä¸€ä¸‹è§£é‡Šï¼š
+    // æˆ‘ä»¬è¿™ä¸ªåæ ‡ç³»å’Œå¸¸è§„åæ ‡ç³»ä¸åŒï¼Œç”¨çš„å˜é‡ä¹Ÿæ˜¯è‡ªå·±å£°æ˜çš„ç»“æ„ä½“ï¼Œä¸èƒ½ç”¨å¸¸è§„çš„equals()æ ¹æ®qå’Œrçš„å€¼ç›¸ç­‰ï¼Œæ¥ç›´æ¥è¯æ˜æ˜¯åŒä¸€ä¸ªæ ¼å­
+    // è¿™é‡Œè¦é‡æ–°å†™ä¸€ä¸‹equals()çš„é€»è¾‘æ¥è®©åŸæ¥çš„equals()åŠŸèƒ½é€‚ç”¨äºç°åœ¨çš„Axialåæ ‡ç³»
     public override bool Equals(object obj)
     {
         return obj is HexCoord coord && Equals(coord);
@@ -86,13 +86,13 @@ public struct HexCoord : IEquatable<HexCoord>
         return q == other.q && r == other.r;
     }
 
-    //°ÑqºÍrµÄÖµºÏ²¢³ÉÒ»¸ö¹şÏ£Âë£¬Ğ´Áù±ßĞÎ¸ñ×ÓµÄÊôĞÔµÄÊ±ºò£¬ÄÜ¸ü¹æÕûÒ»µã
+    //æŠŠqå’Œrçš„å€¼åˆå¹¶æˆä¸€ä¸ªå“ˆå¸Œç ï¼Œå†™å…­è¾¹å½¢æ ¼å­çš„å±æ€§çš„æ—¶å€™ï¼Œèƒ½æ›´è§„æ•´ä¸€ç‚¹
     public override int GetHashCode()
     {
         return HashCode.Combine(q, r);
     }
 
-    // ÔËËã·ûÖØÔØ£¨== ºÍ !=£©£¬ÕâÀïÖØĞ´µÄÄ¿µÄºÍÉÏÃæµÄequalsÒ»Ä£Ò»Ñù£¬¾Í²»¶àËµÒ»±éÁË
+    // è¿ç®—ç¬¦é‡è½½ï¼ˆ== å’Œ !=ï¼‰ï¼Œè¿™é‡Œé‡å†™çš„ç›®çš„å’Œä¸Šé¢çš„equalsä¸€æ¨¡ä¸€æ ·ï¼Œå°±ä¸å¤šè¯´ä¸€éäº†
     public static bool operator ==(HexCoord a, HexCoord b)
     {
         return a.Equals(b);
@@ -103,7 +103,7 @@ public struct HexCoord : IEquatable<HexCoord>
         return !a.Equals(b);
     }
 
-    // ×ø±ê¼Ó¼õ·¨
+    // åæ ‡åŠ å‡æ³•
     public static HexCoord operator +(HexCoord a, HexCoord b)
     {
         return new HexCoord(a.q + b.q, a.r + b.r);
