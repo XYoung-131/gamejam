@@ -39,7 +39,7 @@ public class CardData : ScriptableObject
     public List<CardTag> tags = new List<CardTag>();
     
     [Header("相关Buff")]
-    public List<CardData> buffs = new List<CardData>();
+    public List<BuffData> buffs = new List<BuffData>();
     
     [Header("内部备注")]
     [TextArea] public string devNotes;

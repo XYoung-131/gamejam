@@ -19,4 +19,5 @@ MonoBehaviour:
   maxUses: 3
   rarity: 2
   tags: 00000000
+  buffs: []
   devNotes: 
