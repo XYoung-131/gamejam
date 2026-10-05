@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 00bca2f6a565a374da8b0d1304cc43ea, type: 3}
+  m_Name: "\u86C7\u94F3"
+  m_EditorClassIdentifier: 
+  unitName: "\u86C7\u94F3"
+  maxHealth: 3
+  grade: 0
+  passiveAbility: "\u65E0"
+  aiLogic: "\u76F8\u90BB3\u683C\u5185\u6CA1\u6709\u73A9\u5BB6\u65F6\uFF0C\u4F7F\u7528
+    \u5FEB\u8D70 \u79FB\u52A8\u5230\u6B63\u597D\u8DDD\u79BB\u73A9\u5BB63\u683C\u8303\u56F4\uFF0C\u76F8\u90BB3\u683C\u5185\u6709\u73A9\u5BB6\uFF0C\u5219\u4F7F\u7528
+    \u8F70\u51FB\uFF0C\u82E5\u76F8\u90BB\u683C\u6709\u73A9\u5BB6\uFF0C\u4F7F\u7528
+    \u5FEB\u8D70 \u8FDC\u79BB\u73A9\u5BB6\uFF0C\u82E5\u4E0A\u56DE\u5408\u4F7F\u7528\u8F70\u51FB\uFF0C\u8FD9\u56DE\u5408\u4F7F\u7528
+    \u5FEB\u8D70 \u79FB\u52A8\u5230\u6B63\u597D\u8DDD\u79BB\u73A9\u5BB63\u683C\u8303\u56F4"
+  skillGroup1:
+  - {fileID: 11400000, guid: 3bd228247c9727e40917d1c53075f3e5, type: 2}
+  skillGroup2:
+  - {fileID: 11400000, guid: 98c2e8508556a0c48a4444728ee03836, type: 2}
+  skillGroup3: []
+  icon: {fileID: 0}
+  prefab: {fileID: 0}

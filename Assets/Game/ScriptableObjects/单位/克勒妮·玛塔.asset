@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 00bca2f6a565a374da8b0d1304cc43ea, type: 3}
+  m_Name: "\u514B\u52D2\u59AE\xB7\u739B\u5854"
+  m_EditorClassIdentifier: 
+  unitName: "\u514B\u52D2\u59AE\xB7\u739B\u5854"
+  maxHealth: 14
+  grade: 1
+  passiveAbility: "\u5728\u573A\u65F6\uFF0C\u6240\u6709 \u795E\u5E99\u9F20\uFF0C\u514B\u52D2\u59AE\u4E4B\u5B50
+    \u7684\u8840\u91CF\u52A01\uFF0C\u514B\u52D2\u59AE\u4E4B\u76FE\u8840\u91CF\u52A02\r\n\u53D7\u5230\u4F24\u5BB3\u65F6\uFF0C\u5C06\u81F3\u591A2\u70B9\u4F24\u5BB3\u8F6C\u79FB\u5230\u968F\u673A1\u540D
+    \u795E\u5E99\u9F20 \uFF0C\u514B\u52D2\u59AE\u4E4B\u5B50 \u6216 \u514B\u52D2\u59AE\u4E4B\u76FE
+    \u4E0A\r\n\u5982\u679C\u573A\u4E0A\u4E0D\u5B58\u5728\u4EFB\u4F55 \u795E\u5E99\u9F20
+    \uFF0C\u514B\u52D2\u59AE\u4E4B\u5B50 \u6216 \u514B\u52D2\u59AE\u4E4B\u76FE\uFF0C\u81EA\u8EAB
+    \u7729\u6655 1\u56DE\u5408\r\n\u88AB\u51FB\u8D25\u540E\u672C\u5173\u7ACB\u523B\u83B7\u80DC"
+  aiLogic: "\u6280\u80FD\u7EC4\u4F7F\u7528\u987A\u5E8F\uFF1A2\u20144\u20142\u20143\u2014\u5FAA\u73AF\uFF0C\u4F7F\u7528\u6280\u80FD\u7EC41\u65F6\u4E0D\u4F1A\u6253\u65AD\u539F\u6709\u6280\u80FD\u5FAA\u73AF\uFF08\u76F8\u5F53\u4E8E\u4E34\u65F6\u63D2\u51651\u4E2A\u6280\u80FD\u7EC4\uFF09\n\u5F53\u73A9\u5BB6\u4E0E\u81EA\u8EAB\u8DDD\u79BB2\u683C\u4EE5\u5185\u6216\u8005\u4E0A\u56DE\u5408\u53D7\u5230\u653B\u51FB\u65F6\uFF0C\u5728\u6280\u80FD\u7EC4\u672B\u5C3E\u52A0\u51651\u4E2A\u5FEB\u8D70\uFF0C\u8FDC\u79BB\u73A9\u5BB6\uFF0C\u8BE5\u6548\u679C\u67091\u56DE\u5408\u51B7\u5374"
+  skillGroup1:
+  - {fileID: 11400000, guid: 98c2e8508556a0c48a4444728ee03836, type: 2}
+  - {fileID: 11400000, guid: d0422fb118a698b4181b6c42836a1c06, type: 2}
+  - {fileID: 11400000, guid: bd1d12a3997e6fb4680957dcbae193a1, type: 2}
+  - {fileID: 11400000, guid: 0e2ff39f744961343b68d6ff437854b9, type: 2}
+  skillGroup2: []
+  skillGroup3: []
+  icon: {fileID: 0}
+  prefab: {fileID: 0}

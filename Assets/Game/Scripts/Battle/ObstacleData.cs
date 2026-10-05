@@ -17,6 +17,9 @@ public class ObstacleData : ScriptableObject
 
     [Header("能力")]
     [TextArea] public string specialAbility;
+    
+    [Header("相关Buff")]
+    public List<CardData> buffs = new List<CardData>();
 
     [Header("资源引用")]
     public Sprite icon;

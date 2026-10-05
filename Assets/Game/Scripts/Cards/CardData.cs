@@ -6,6 +6,7 @@ public enum Rarity
     普通,
     固有,
     稀有,
+    传奇,
     敌方特有
 }
 
@@ -36,7 +37,10 @@ public class CardData : ScriptableObject
     [Header("分类")]
     public Rarity rarity;
     public List<CardTag> tags = new List<CardTag>();
-
+    
+    [Header("相关Buff")]
+    public List<CardData> buffs = new List<CardData>();
+    
     [Header("内部备注")]
     [TextArea] public string devNotes;
 }
