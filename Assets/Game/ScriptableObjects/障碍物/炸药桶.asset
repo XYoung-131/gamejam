@@ -16,5 +16,6 @@ MonoBehaviour:
   maxHealth: 3
   tags: 00000000
   specialAbility: "\u88AB\u6467\u6BC1\u540E\u5BF9\u76F8\u90BB\u6240\u6709\u654C\u4EBA\u9020\u62103\u70B9\u4F24\u5BB3\uFF0C\u5BF9\u73A9\u5BB6\u9020\u62101\u70B9"
-  icon: {fileID: 0}
-  prefab: {fileID: 0}
+  buffs: []
+  icon: {fileID: 21300000, guid: 80727d709d4073d4aa0b708e5bf68fdd, type: 3}
+  prefab: {fileID: 7458477937087658686, guid: 565036918c8e0e243ac1f48e1801e7e9, type: 3}

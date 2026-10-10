@@ -17,5 +17,6 @@ MonoBehaviour:
   tags: 00000000
   specialAbility: "\u6BCF\u96942\u56DE\u5408\u5728\u968F\u673A\u76841\u4E2A\u76F8\u90BB\u5730\u5757\u4E0A\u751F\u62101\u53EA
     \u795E\u5E99\u9F20\uFF0C\u6BCF\u751F\u62101\u53EA\u8840\u91CF\u51CF1"
-  icon: {fileID: 0}
-  prefab: {fileID: 0}
+  buffs: []
+  icon: {fileID: 21300000, guid: 80727d709d4073d4aa0b708e5bf68fdd, type: 3}
+  prefab: {fileID: 2465597888209641251, guid: 6386510049f925249a0ed5cf27d01d28, type: 3}
