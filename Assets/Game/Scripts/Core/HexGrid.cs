@@ -38,6 +38,22 @@ public class HexGrid : MonoBehaviour
     [Tooltip("格子预制体（需要挂 HexCell 脚本）")]
     public HexCell cellPrefab;
 
+    [Header("地图形状")]
+    [Tooltip("进入游戏时生成格子")]
+    public bool generateOnStart = false;
+
+    [Tooltip("使用下方坐标列表代替规则半径地图")]
+    public bool useCustomShape = false;
+
+    public List<HexCoord> customCells = new List<HexCoord>();
+
+    [Header("绘制对齐")]
+    [Tooltip("整张网格在世界坐标中的偏移")]
+    public Vector2 originOffset = Vector2.zero;
+
+    [Tooltip("纵向间距倍率，用于匹配有透视感的地图画稿")]
+    public float verticalScale = 1f;
+
     [Header("坐标方向")]
     [Tooltip("六边形朝向：Flat-top（平顶）或 Pointy-top（尖顶）")]
     public HexOrientation orientation = HexOrientation.FlatTop;
@@ -46,6 +62,12 @@ public class HexGrid : MonoBehaviour
 
     private Dictionary<HexCoord, HexCell> cells = new Dictionary<HexCoord, HexCell>();
     private Transform cellsParent;
+
+    private void Start()
+    {
+        if (generateOnStart)
+            GenerateGrid();
+    }
 
     // ========== 网格生成 ==========
 
@@ -67,14 +89,23 @@ public class HexGrid : MonoBehaviour
             Destroy(cell.gameObject);
         cells.Clear();
 
-        // 按半径生成（轴向坐标）
-        for (int q = -gridRadius; q <= gridRadius; q++)
+        if (useCustomShape)
         {
-            int r1 = Mathf.Max(-gridRadius, -q - gridRadius);
-            int r2 = Mathf.Min(gridRadius, -q + gridRadius);
-            for (int r = r1; r <= r2; r++)
+            foreach (HexCoord coord in customCells)
             {
-                CreateCell(new HexCoord(q, r));
+                if (!cells.ContainsKey(coord))
+                    CreateCell(coord);
+            }
+        }
+        else
+        {
+            // 按半径生成（轴向坐标）
+            for (int q = -gridRadius; q <= gridRadius; q++)
+            {
+                int r1 = Mathf.Max(-gridRadius, -q - gridRadius);
+                int r2 = Mathf.Min(gridRadius, -q + gridRadius);
+                for (int r = r1; r <= r2; r++)
+                    CreateCell(new HexCoord(q, r));
             }
         }
 
@@ -123,13 +154,13 @@ public class HexGrid : MonoBehaviour
         {
             float x = hexSize * (3f / 2f * hex.q);
             float y = hexSize * (Mathf.Sqrt(3) * hex.r + Mathf.Sqrt(3) / 2f * hex.q);
-            return new Vector3(x, y, 0);
+            return new Vector3(x + originOffset.x, y * verticalScale + originOffset.y, 0);
         }
         else // Pointy-top（尖顶）
         {
             float x = hexSize * (Mathf.Sqrt(3) * hex.q + Mathf.Sqrt(3) / 2f * hex.r);
             float y = hexSize * (3f / 2f * hex.r);
-            return new Vector3(x, y, 0);
+            return new Vector3(x + originOffset.x, y * verticalScale + originOffset.y, 0);
         }
     }
 
@@ -139,8 +170,8 @@ public class HexGrid : MonoBehaviour
     /// </summary>
     public HexCoord WorldToHex(Vector3 worldPos)
     {
-        float x = worldPos.x;
-        float y = worldPos.y;
+        float x = worldPos.x - originOffset.x;
+        float y = (worldPos.y - originOffset.y) / Mathf.Max(verticalScale, 0.0001f);
 
         float q, r;
 
