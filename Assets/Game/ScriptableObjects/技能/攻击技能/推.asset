@@ -16,7 +16,16 @@ MonoBehaviour:
   description: "\u9009\u62E91\u4E2A\u76F8\u90BB\u76EE\u6807\uFF0C\u51FB\u90001\u683C\uFF0C\u9020\u62101\u70B9\u7269\u7406\u4F24\u5BB3"
   thoughtCost: 0
   actionCost: 7
-  maxUses: -1
+  maxUses: 0
+  minRange: 0
+  maxRange: 1
+  damage: 1
+  targetTypes: 00000000
+  defenseEffectType: 1
+  defenseValue: 0
+  defenseTargetTypes: 01000000
+  library: 0
   rarity: 1
   tags: 00000000
+  buffs: []
   devNotes: "\u521D\u59CB\u5C31\u6709\uFF0C\u4E0D\u4F1A\u901A\u8FC7\u5176\u4ED6\u65B9\u5F0F\u83B7\u5F97"
