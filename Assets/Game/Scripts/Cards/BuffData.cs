@@ -38,12 +38,19 @@ public enum BuffEffectType
 
     // 特殊效果
     清除所有负面,
+    清除所有正面,
     免疫负面,
     免疫伤害,
     免疫死亡,
     回合结束死亡
 }
 
+public enum BuffCategory
+{
+    伤害类,
+    效果类,
+    护盾类
+}
 [System.Serializable]
 public class BuffEffect
 {
@@ -74,6 +81,8 @@ public class BuffData : ScriptableObject
 
     [Header("分类")]
     public BuffPolarity polarity;
+
+    public BuffCategory category;
 
 
     [Header("持续与叠加")]
