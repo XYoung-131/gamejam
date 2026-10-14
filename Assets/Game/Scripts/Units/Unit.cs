@@ -16,6 +16,12 @@ public class BuffInstance
 /// <summary>
 /// 单位基类——所有单位（玩家、敌人、NPC）共有的属性和行为
 /// 继承 MonoBehaviour，挂在单位 GameObject 上
+/// 
+/// Buff 结算逻辑：
+///   - 伤害类 buff：回合开始时触发效果（流血扣血等）
+///   - 效果类 buff：实时计算（GetAttack、TakeDamage 里叠加）
+///   - 所有 buff 持续时间：回合结束时 -1，过期移除
+///   - 护盾：回合结束时直接清零（特殊类，独立管理）
 /// </summary>
 public abstract class Unit : MonoBehaviour
 {
@@ -25,7 +31,7 @@ public abstract class Unit : MonoBehaviour
 
     [Header("运行时状态")]
     [SerializeField] protected int currentHealth;    // 当前血量
-    [SerializeField] protected int shield;          // 护盾
+    [SerializeField] protected int shield;          // 护盾（回合结束清零）
     [SerializeField] protected HexCoord currentCoord; // 当前所在六边形坐标
 
     // 当前身上的所有 buff
@@ -76,7 +82,7 @@ public abstract class Unit : MonoBehaviour
 
         // 受到伤害倍率（易伤 = >1，减伤 = <1）
         float damageMultiplier = GetTotalEffectValue(BuffEffectType.受到伤害倍率, BuffTrigger.受到伤害时);
-        if (damageMultiplier <= 0) damageMultiplier = 1f;  // 没 buff 时倍率为 1
+        if (damageMultiplier <= 0) damageMultiplier = 1f;
         amount = Mathf.CeilToInt(amount * damageMultiplier);
 
         // 先扣护盾
@@ -123,11 +129,25 @@ public abstract class Unit : MonoBehaviour
 
     /// <summary>
     /// 添加护盾
+    /// 注意：护盾每回合结束清零，不会保留到下一回合
     /// </summary>
     public virtual void AddShield(int amount)
     {
         shield += amount;
         EventManager.Trigger("UnitShieldChanged", this);
+    }
+
+    /// <summary>
+    /// 回合结束时清零护盾
+    /// 不管护盾还剩多少，直接归零
+    /// </summary>
+    public virtual void ClearShieldOnTurnEnd()
+    {
+        if (shield > 0)
+        {
+            shield = 0;
+            EventManager.Trigger("UnitShieldCleared", this);
+        }
     }
 
     // ============================================================
@@ -272,13 +292,17 @@ public abstract class Unit : MonoBehaviour
                     RemoveAllNegativeBuffs();
                     break;
 
+                case BuffEffectType.清除所有正面:
+                    RemoveAllPositiveBuffs();
+                    break;
+
                 case BuffEffectType.回合结束死亡:
                     // 在回合结束触发时直接死亡
                     if (trigger == BuffTrigger.回合结束)
                         Die();
                     break;
 
-                // 属性类 buff 不在这里触发（在 GetAttack/TakeDamage 等方法里计算）
+                // 属性类 buff 不在这里触发（在 GetAttack/TakeDamage 等方法里实时计算）
             }
         }
     }
@@ -300,23 +324,69 @@ public abstract class Unit : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 移除所有正面 buff
+    /// </summary>
+    public virtual void RemoveAllPositiveBuffs()
+    {
+        for (int i = activeBuffs.Count - 1; i >= 0; i--)
+        {
+            if (activeBuffs[i].data.polarity == BuffPolarity.正面)
+            {
+                BuffData data = activeBuffs[i].data;
+                activeBuffs.RemoveAt(i);
+                OnBuffRemoved?.Invoke(this, data);
+                EventManager.Trigger("UnitBuffRemoved", this, data);
+            }
+        }
+    }
+
     // ============================================================
-    //                    回合生命周期
+    //                    回合生命周期（新结算逻辑）
     // ============================================================
 
     /// <summary>
     /// 回合开始时调用
+    /// 新逻辑：只触发伤害类 buff 的回合开始效果（流血扣血等）
+    /// 持续时间递减移到回合结束做
     /// </summary>
     public virtual void OnTurnStart()
     {
-        // 1. 触发"回合开始"效果（如持续伤害）
+        // 只触发"回合开始"时机的 buff 效果（伤害类 buff 在这里跳伤害）
         TriggerBuffs(BuffTrigger.回合开始);
+    }
 
-        // 2. 所有 buff 持续回合 -1（永久 buff 不减）
+    /// <summary>
+    /// 回合结束时调用
+    /// 新逻辑：
+    ///   ① 触发回合结束效果
+    ///   ② 护盾清零
+    ///   ③ 所有 buff 持续时间 -1，过期移除
+    /// </summary>
+    public virtual void OnTurnEnd()
+    {
+        // ① 触发"回合结束"时机的 buff 效果
+        TriggerBuffs(BuffTrigger.回合结束);
+
+        // ② 护盾清零（每回合结束清空，不管剩多少）
+        ClearShieldOnTurnEnd();
+
+        // ③ buff 持续时间递减 + 移除过期
+        TickBuffDuration();
+    }
+
+    /// <summary>
+    /// buff 持续时间结算：所有 buff 时间 -1，过期的移除
+    /// 从 OnTurnStart 拆出来，统一在回合结束时调用
+    /// </summary>
+    public virtual void TickBuffDuration()
+    {
         for (int i = activeBuffs.Count - 1; i >= 0; i--)
         {
             var buff = activeBuffs[i];
-            if (buff.remainingDuration == -1) continue;  // 永久 buff
+
+            // 永久 buff 不减时间
+            if (buff.remainingDuration == -1) continue;
 
             buff.remainingDuration--;
             if (buff.remainingDuration <= 0)
@@ -327,14 +397,6 @@ public abstract class Unit : MonoBehaviour
                 EventManager.Trigger("UnitBuffExpired", this, expiredData);
             }
         }
-    }
-
-    /// <summary>
-    /// 回合结束时调用
-    /// </summary>
-    public virtual void OnTurnEnd()
-    {
-        TriggerBuffs(BuffTrigger.回合结束);
     }
 
     /// <summary>
@@ -477,6 +539,7 @@ public abstract class Unit : MonoBehaviour
 
     /// <summary>
     /// 获取攻击力（考虑所有攻击伤害加成 buff）
+    /// 效果类 buff 在这里实时计算
     /// </summary>
     public virtual int GetAttack()
     {

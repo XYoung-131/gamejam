@@ -14,7 +14,15 @@ using UnityEngine;
 //  - TurnManager：监听 GameManager 抛出的回合事件，把每个大阶段
 //    拆成更细的步骤（预告/行动/结算），并用协程控制节奏（等待秒数）。
 //
-//  驱动方式（事件驱动，不是每帧轮询）：
+//  Buff 结算新逻辑：
+//    玩家回合开始 → 玩家 OnTurnStart（只触发伤害类 buff 效果）
+//    玩家行动
+//    玩家回合结束 → 玩家 OnTurnEnd（效果 + 护盾清零 + 减时间）
+//    敌人回合开始 → 敌人 OnTurnStart（只触发伤害类 buff 效果）
+//    敌人行动
+//    敌人回合结束 → 敌人 OnTurnEnd（效果 + 护盾清零 + 减时间）← 之前缺失，已补上
+//
+// 驱动方式（事件驱动，不是每帧轮询）：
 //  GameManager 抛 "PlayerTurnStarted" → 本类开始回合预告流程
 //  玩家点结束回合 → RequestEndPlayerTurn() → 让 GameManager 切敌人回合
 //  GameManager 抛 "EnemyTurnStarted"   → 本类执行敌方行动流程
@@ -116,6 +124,9 @@ public class TurnManager : MonoBehaviour
     /// <summary>
     /// 收到 GameManager 的"玩家回合开始"事件。
     /// turnCount 是 GameManager 传来的当前回合数（第几个回合）。
+    /// 
+    /// 新 buff 逻辑：这里调用玩家的 OnTurnStart()，只触发伤害类 buff 效果，
+    /// 持续时间结算移到回合结束。
     /// </summary>
     private void HandlePlayerTurnStarted(int turnCount)
     {
@@ -131,8 +142,8 @@ public class TurnManager : MonoBehaviour
         ChangePhase(TurnPhase.回合开始);
         Debug.Log($"===== 第 {turnCount} 回合开始：敌方技能预告 =====");
 
-        // 玩家回合开始结算：OnTurnStart 内部会回满思绪/耐力，
-        // 并触发"回合开始"时机的 buff（比如流血扣血）
+        // 玩家回合开始结算：OnTurnStart 触发"回合开始"时机的 buff（如流血扣血）
+        // 注意：新逻辑里 OnTurnStart 只触发效果，不减时间（时间在回合结束减）
         PlayerUnit player = FindAlivePlayer();
         if (player != null)
             player.OnTurnStart();
@@ -191,13 +202,18 @@ public class TurnManager : MonoBehaviour
 
     /// <summary>
     /// 结束玩家回合的时间线。
+    /// 
+    /// 新 buff 逻辑：玩家回合结束时调用 OnTurnEnd()，里面包含：
+    ///   ① 触发回合结束效果
+    ///   ② 护盾清零
+    ///   ③ 所有 buff 持续时间 -1 + 移除过期
     /// </summary>
     private IEnumerator EndPlayerTurnRoutine()
     {
         ChangePhase(TurnPhase.Buff结算);   // 一切换阶段，玩家就不能再出牌了
         Debug.Log("----- 结束回合：Buff 结算 -----");
 
-        // 玩家"回合结束"时机的 buff（回血、中毒结算、回合结束死亡等）
+        // 玩家"回合结束"结算（效果 + 护盾清零 + 减时间，都在 OnTurnEnd 里）
         PlayerUnit player = FindAlivePlayer();
         if (player != null)
             player.OnTurnEnd();
@@ -216,7 +232,7 @@ public class TurnManager : MonoBehaviour
     }
 
     // ============================================================
-    //  ④ 敌方行动：敌人回合开始 buff → 逐个放预告技能 → ⑤
+    //  ④ 敌方行动：敌人回合开始 buff → 逐个放预告技能 → 敌人回合结束结算 → ⑤
     // ============================================================
 
     /// <summary>收到 GameManager 的"敌人回合开始"事件。</summary>
@@ -228,13 +244,18 @@ public class TurnManager : MonoBehaviour
 
     /// <summary>
     /// 敌方行动的时间线（协程）。
+    /// 
+    /// 新 buff 逻辑改动：
+    ///   - 敌人回合开始：调用 OnTurnStart（只触发伤害类 buff 效果）
+    ///   - 敌人放技能
+    ///   - 敌人回合结束：调用 OnTurnEnd（效果 + 护盾清零 + 减时间）← 新增，之前缺失
     /// </summary>
     private IEnumerator EnemyPhaseRoutine()
     {
         ChangePhase(TurnPhase.敌方行动);
         Debug.Log("----- 敌方行动阶段 -----");
 
-        // 敌人自己的"回合开始"buff
+        // 敌人自己的"回合开始"buff（只触发伤害类效果，不减时间）
         foreach (var enemy in FindAliveEnemies())
             enemy.OnTurnStart();
 
@@ -250,6 +271,24 @@ public class TurnManager : MonoBehaviour
             yield return enemy.ExecutePlannedSkills(enemySkillDelay);
             yield return new WaitForSeconds(enemyInterval);
         }
+
+        if (!IsBattleRunning())
+        {
+            ChangePhase(TurnPhase.战斗结束);
+            yield break;
+        }
+
+        // ===== 【新增】敌人回合结束 buff 结算 =====
+        // 之前缺失了这一步，导致敌人的回合结束 buff 永远不触发，
+        // 敌人的 buff 持续时间也不会减少（因为时间在回合结束减）。
+        Debug.Log("----- 敌方回合结束：Buff 结算 -----");
+        foreach (var enemy in FindAliveEnemies())
+        {
+            if (enemy.GetCurrentHealth() > 0)
+                enemy.OnTurnEnd();   // 效果 + 护盾清零 + 减时间
+        }
+        EventManager.Trigger("EnemyBuffsSettled");
+        // ============================================
 
         if (!IsBattleRunning())
         {
