@@ -4,7 +4,9 @@ using System.Collections.Generic;
 public enum UnitGrade
 {
     小怪,
-    精英怪
+    精英怪,
+    // 追加在末尾：Unity 按枚举序号序列化，新增不会影响已有的单位资产
+    BOSS
 }
 
 [CreateAssetMenu(fileName = "NewUnit", menuName = "Game/Unit Data")]
