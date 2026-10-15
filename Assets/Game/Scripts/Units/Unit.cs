@@ -14,6 +14,26 @@ public class BuffInstance
 }
 
 /// <summary>
+/// 伤害类型——决定伤害如何被护盾/减伤处理（对应设计文档"伤害类型"一节）
+/// </summary>
+public enum DamageType
+{
+    物理,   // 最普通的伤害：先扣护盾(护甲)，再受减伤/易伤影响
+    真实,   // 无视护甲(护盾)，但仍受减伤/易伤影响
+    Buff    // 中毒/灼烧/流血等持续伤害：受护盾格挡，也受减伤/易伤影响
+}
+
+/// <summary>
+/// 位移类型——文档里的三种位移动画
+/// </summary>
+public enum DisplacementType
+{
+    击退,   // 沿远离施法者的方向一格一格后退（撞到东西会停下并结算伤害）
+    拉近,   // 沿朝向施法者的方向一格一格靠近（同上）
+    传送    // 闪现到目标格，途中穿过什么都没有影响
+}
+
+/// <summary>
 /// 单位基类——所有单位（玩家、敌人、NPC）共有的属性和行为
 /// 继承 MonoBehaviour，挂在单位 GameObject 上
 /// 
@@ -34,19 +54,29 @@ public abstract class Unit : MonoBehaviour
     [SerializeField] protected int shield;          // 护盾（回合结束清零）
     [SerializeField] protected HexCoord currentCoord; // 当前所在六边形坐标
 
+    [Header("位移碰撞伤害（在 Inspector 里按单位类型填写）")]
+    [Tooltip("被位移时撞到障碍物/其他单位，自己受到的伤害（玩家=1，敌人=2）")]
+    public int collisionSelfDamage = 2;
+    [Tooltip("被位移时撞到障碍物/其他单位，被撞的一方受到的伤害（文档=2）")]
+    public int collisionBlockerDamage = 2;
+    [Tooltip("是否具有反弹效果：被撞的一方受伤，自己反转方向继续位移")]
+    public bool reflectsDisplacement = false;
+
+    // 位移期间的"延迟死亡"标记：位移过程中血量归零不立刻消失，
+    // 等整段位移全部结算完再统一死亡（文档："位移期间死亡，等位移结束再消失"）
+    protected bool isDisplacing = false;   // 是否正在被位移
+    protected bool pendingDeath = false;   // 位移中已归零，等位移结束再死
+
+    // 死亡标记：Unity 的 Destroy 延迟到帧末执行，Die() 之后对象还会被调用若干次。
+    // 所有会改动状态的公开方法开头都要判它，防止"给已死单位挂 buff"、
+    // "死亡事件发两遍"这类问题。
+    protected bool isDead = false;
+
+    /// <summary>是否已死亡（Die() 已触发、GameObject 等待销毁）</summary>
+    public bool IsDead => isDead;
+
     // 当前身上的所有 buff
     [SerializeField] protected List<BuffInstance> activeBuffs = new List<BuffInstance>();
-
-    // 是否已经死亡。
-    // 为什么不能只看 currentHealth：Unity 的 Destroy 是"延迟到帧末执行"的，
-    // Die() 之后这个 C# 对象还要存活若干次调用，光看血量挡不住"给死人挂 buff / 补刀"。
-    [SerializeField] protected bool isDead = false;
-
-    /// <summary>
-    /// 这个单位是不是已经死了。
-    /// Die() 之后恒为 true（本作没有复活），用于挡住一切后续结算。
-    /// </summary>
-    public bool IsDead => isDead;
 
     // 事件
     public event System.Action<Unit> OnUnitDied;
@@ -62,8 +92,10 @@ public abstract class Unit : MonoBehaviour
         currentHealth = unitData.maxHealth;
         shield = 0;
         currentCoord = startCoord;
-        isDead = false;
         activeBuffs.Clear();
+        isDead = false;        // 复用单位时重置死亡标记
+        pendingDeath = false;
+        isDisplacing = false;
 
         // 把自己注册到格子上
         if (HexGrid.Instance != null)
@@ -79,62 +111,92 @@ public abstract class Unit : MonoBehaviour
     // ============================================================
 
     /// <summary>
-    /// 受到伤害
-    /// 先扣护盾，再扣血；考虑各种 buff 效果
+    /// 受到伤害（带伤害类型）。
+    /// 处理顺序（对应文档"伤害类型"）：
+    /// 1. 免疫伤害 → 直接不受伤；
+    /// 2. 固定减免（受到伤害固定减免 buff）；
+    /// 3. 倍率增减（易伤 +25% / 减伤），所有小数向上取整（文档："所有数值向上取整，0.1 也算 1"）；
+    /// 4. 扣护盾：真实伤害无视护甲(护盾)，物理/Buff 伤害会被护盾格挡；
+    /// 5. 扣血。
     /// </summary>
-    public virtual void TakeDamage(int amount)
+    /// <param name="type">默认物理伤害，保持旧调用方式不变</param>
+    public virtual void TakeDamage(int amount, DamageType type = DamageType.物理)
     {
-        // 已经死亡 → 不再吃任何伤害。
-        // Destroy 延迟到帧末执行，期间可能还有别的结算（连锁、反伤、持续伤害）打过来，
-        // 不挡住的话会对一个正在销毁的物体重复跑死亡流程。
-        if (isDead) return;
+        if (amount <= 0) return;
+        if (isDead) return;   // 已死亡的单位不再结算任何伤害
 
         // 免疫伤害 → 直接返回
         if (HasEffect(BuffEffectType.免疫伤害))
             return;
 
-        // 受到伤害固定减免（殊死一搏 = 3）
-        // 属性类效果不限触发时机，策划填"立即生效"还是"受到伤害时"都会算进来。
+        // 受到伤害固定减免。
+        // 注意：查询不限触发时机——策划把效果填成"立即生效"或"受到伤害时"都会算进来，
+        // 避免填错 trigger 就静默失效（查询永远返回 0）。
         float damageReduce = GetTotalEffectValue(BuffEffectType.受到伤害固定减免);
         amount = Mathf.Max(0, amount - Mathf.RoundToInt(damageReduce));
 
-        // 受到伤害倍率（易伤 = 1.25，减伤 < 1）
-        // 倍率型返回的是"最终绝对乘数"：易伤叠 2 层 = 1 + 0.25×2 = 1.5，
-        // 而不是把 1.25 直接相加（那会变成 2.5 倍）。没挂易伤时返回 1。
-        float damageMultiplier = Mathf.Max(0f, GetTotalEffectValue(BuffEffectType.受到伤害倍率));
-        amount = Mathf.CeilToInt(amount * damageMultiplier);
+        // 受到伤害倍率（易伤 = >1，减伤 = <1），倍率型叠加规则见 GetTotalEffectValue
+        float damageMultiplier = GetTotalEffectValue(BuffEffectType.受到伤害倍率);
+        if (damageMultiplier <= 0) damageMultiplier = 1f;  // 没有该类型 buff 时返回 1，这里再兜底
+        amount = Mathf.CeilToInt(amount * damageMultiplier);   // 向上取整
 
-        // 先扣护盾
-        if (shield > 0)
+        // 扣护盾（真实伤害无视护甲）
+        if (type != DamageType.真实 && shield > 0)
         {
             int absorbed = Mathf.Min(shield, amount);
             shield -= absorbed;
             amount -= absorbed;
         }
 
-        // 再扣血
-        if (amount > 0)
-        {
-            currentHealth -= amount;
-            if (currentHealth <= 0)
-            {
-                currentHealth = 0;
-                // 免疫死亡 → 血量锁在 1
-                if (HasEffect(BuffEffectType.免疫死亡))
-                {
-                    currentHealth = 1;
-                }
-                else
-                {
-                    Die();
-                }
-            }
-        }
+        // 扣血（统一走 ApplyHealthLoss，内部处理免疫死亡 + 位移延迟死亡）
+        ApplyHealthLoss(amount);
 
         // 触发"受到伤害时"的 buff 效果
         TriggerBuffs(BuffTrigger.受到伤害时);
 
         EventManager.Trigger("UnitDamaged", this);
+    }
+
+    /// <summary>
+    /// 统一的扣血入口：所有伤害/持续伤害最终都从这里扣血，
+    /// 保证"免疫死亡"和"位移期间延迟死亡"两条规则只写一次。
+    /// </summary>
+    protected virtual void ApplyHealthLoss(int amount)
+    {
+        if (amount <= 0) return;
+
+        currentHealth -= amount;
+        if (currentHealth <= 0)
+        {
+            currentHealth = 0;
+
+            // 免疫死亡 → 血量锁在 1
+            if (HasEffect(BuffEffectType.免疫死亡))
+            {
+                currentHealth = 1;
+                return;
+            }
+
+            // 正在被位移 → 先记为"待死亡"，等位移结算完再消失
+            if (isDisplacing)
+            {
+                pendingDeath = true;
+                return;
+            }
+
+            Die();
+        }
+    }
+
+    /// <summary>
+    /// 清空护盾（文档："下个回合开始时护盾会消失"）。
+    /// 由 OnTurnStart 统一调用。
+    /// </summary>
+    public virtual void ClearShield()
+    {
+        if (shield == 0) return;
+        shield = 0;
+        EventManager.Trigger("UnitShieldChanged", this);
     }
 
     /// <summary>
@@ -178,11 +240,8 @@ public abstract class Unit : MonoBehaviour
     /// </summary>
     public virtual void ApplyBuff(BuffData buffData)
     {
-        // 已经死亡的单位不再接受任何 buff。
-        // 场景：攻击把目标打死了，但卡牌结算后面的"施加负面 buff"还会跑；
-        //       Destroy 是延迟到帧末的，不判死就会给一个正在销毁的物体挂上 buff，
-        //       并广播 UnitBuffApplied 事件，让 UI 拿到一个已死单位。
-        if (isDead || buffData == null) return;
+        if (isDead) return;   // 已死亡的单位不再接受任何 buff
+        if (buffData == null) return;
 
         // 免疫负面 → 如果是负面 buff 直接跳过
         if (buffData.polarity == BuffPolarity.负面 && HasEffect(BuffEffectType.免疫负面))
@@ -225,6 +284,24 @@ public abstract class Unit : MonoBehaviour
     }
 
     /// <summary>
+    /// 施加一个"永久"buff。
+    /// 和 ApplyBuff 的唯一区别：不管 BuffData 资产上的 duration 填了什么，
+    /// 实际持续时间都会被锁成 -1（永久）。遗物这种"拿了就一直生效"的加成走这里，
+    /// 就不会因为策划在 BuffData 上填了回合数而到期消失。
+    /// </summary>
+    public virtual void ApplyPermanentBuff(BuffData buffData)
+    {
+        if (buffData == null) return;
+
+        ApplyBuff(buffData);
+
+        // ApplyBuff 会把 duration 原样写进实例，这里再强制改成永久
+        BuffInstance instance = activeBuffs.Find(b => b.data == buffData);
+        if (instance != null)
+            instance.remainingDuration = -1;
+    }
+
+    /// <summary>
     /// 移除一个 buff
     /// </summary>
     public virtual void RemoveBuff(BuffData buffData)
@@ -264,59 +341,77 @@ public abstract class Unit : MonoBehaviour
     }
 
     /// <summary>
-    /// 获取某种效果类型的总数值——【不限触发时机】。
+    /// 获取某种效果类型的总数值（叠加所有同类型 buff）——【不限触发时机】。
     ///
-    /// 属性类加成统一用这个重载：无论策划把 effect 的 trigger 填成
-    /// "立即生效"还是"攻击时"/"受到伤害时"，都会算进来。
-    /// 这样就不会出现"填错一个 trigger 就静默失效"的情况（这个坑踩过一次：
-    /// 力量填了立即生效、代码却按攻击时去查，返回 0，加成整个不见）。
+    /// 属性类加成（攻击伤害加成、受到伤害倍率等）统一用这个重载：
+    /// 无论策划把效果填成"立即生效"还是"攻击时"/"受到伤害时"，都算数，
+    /// 彻底避免"填错 trigger 就静默失效"（按错误时机查询永远返回 0）。
     ///
-    /// 数值合并规则分两类（由 BuffData.IsMultiplierType 判定）：
-    ///   · 加成型：value 是增量，直接累加（力量 +1、无力 -1、殊死一搏 3）
-    ///   · 倍率型：value 是绝对乘数，累加"偏离 1 的部分"后加回 1：
-    ///         最终倍率 = 1 + Σ( value - 1 ) × 层数
-    ///     易伤 1.25 叠 2 层 → 1 + 0.25×2 = 1.5（而不是 1.25 + 1.25 = 2.5）
-    ///
-    /// 没有任何该类型 buff 时：倍率型返回 1（即不变），加成型返回 0。
+    /// 叠加规则按效果类型区分（分类见 BuffData.IsMultiplierType）：
+    ///   · 加成型（力量 +1、无力 -1、殊死一搏 3）→ 数值直接累加，没有 buff 时返回 0；
+    ///   · 倍率型（易伤 1.25、力竭 0.5、虚弱 1.25）→ 累加"偏离 1"的部分再乘回去，
+    ///     即 最终倍率 = 1 + Σ(value - 1) × 层数，没有 buff 时返回 1。
+    ///     （易伤 1.25 叠 2 层 = 1.5 倍，而不是被错算成 2.5 倍）
     /// </summary>
     public virtual float GetTotalEffectValue(BuffEffectType effectType)
     {
-        return GetTotalEffectValue(effectType, null);
-    }
-
-    /// <summary>
-    /// 获取某种效果类型的总数值——只统计【指定触发时机】的效果。
-    ///
-    /// 只用于"按回合 / 按事件触发"的效果（回合开始的持续伤害、攻击时触发等），
-    /// 这类场景里"哪个时机"本身是有意义的。
-    /// 属性类加成请用不带 trigger 的那个重载。
-    /// </summary>
-    /// <param name="trigger">为 null 表示不限触发时机</param>
-    public virtual float GetTotalEffectValue(BuffEffectType effectType, BuffTrigger? trigger)
-    {
-        bool isMultiplier = BuffData.IsMultiplierType(effectType);
-
-        // 倍率型从 1 起算（乘法的单位元），加成型从 0 起算
-        float total = isMultiplier ? 1f : 0f;
+        float total = 0f;
 
         foreach (var buff in activeBuffs)
         {
-            if (buff == null || buff.data == null) continue;
+            if (buff.data == null) continue;
 
             foreach (var effect in buff.data.effects)
             {
-                if (effect == null) continue;
                 if (effect.effectType != effectType) continue;
-                if (trigger.HasValue && effect.trigger != trigger.Value) continue;
 
-                // 倍率型累加"偏离 1"的部分，加成型直接累加数值；两者都要乘层数
-                float perStack = isMultiplier ? (effect.value - 1f) : effect.value;
-                total += perStack * buff.currentStacks;
+                if (BuffData.IsMultiplierType(effectType))
+                {
+                    // 倍率型：累加偏离 1 的部分（0.5 → -0.5，1.25 → +0.25）
+                    total += (effect.value - 1f) * buff.currentStacks;
+                }
+                else
+                {
+                    // 加成型：数值直接累加
+                    total += effect.value * buff.currentStacks;
+                }
             }
         }
 
-        // 倍率被叠成负数没有意义（比如力竭叠太多），下限钳到 0
-        return isMultiplier ? Mathf.Max(0f, total) : total;
+        if (BuffData.IsMultiplierType(effectType))
+        {
+            // 倍率型：最终倍率 = 1 + 偏移和，下限 0（力竭叠太多 → 资源完全不回复）
+            return Mathf.Max(0f, 1f + total);
+        }
+        return total;
+    }
+
+    /// <summary>
+    /// 获取某种效果类型的总数值——【只统计指定触发时机】。
+    /// 留给"按回合/按事件触发"的效果（固定持续伤害等）用；
+    /// 属性类加成请不要用这个重载，用不限时机的版本。
+    /// </summary>
+    public virtual float GetTotalEffectValue(BuffEffectType effectType, BuffTrigger trigger)
+    {
+        float total = 0f;
+        foreach (var buff in activeBuffs)
+        {
+            if (buff.data == null) continue;
+
+            foreach (var effect in buff.data.effects)
+            {
+                if (effect.effectType != effectType || effect.trigger != trigger) continue;
+
+                if (BuffData.IsMultiplierType(effectType))
+                    total += (effect.value - 1f) * buff.currentStacks;
+                else
+                    total += effect.value * buff.currentStacks;
+            }
+        }
+
+        if (BuffData.IsMultiplierType(effectType))
+            return Mathf.Max(0f, 1f + total);
+        return total;
     }
 
     /// <summary>
@@ -411,7 +506,10 @@ public abstract class Unit : MonoBehaviour
     /// </summary>
     public virtual void OnTurnStart()
     {
-        // 只触发"回合开始"时机的 buff 效果（伤害类 buff 在这里跳伤害）
+        // 0. 护盾在下个回合开始时消失（文档规则）
+        ClearShield();
+
+        // 1. 触发"回合开始"效果（如持续伤害）
         TriggerBuffs(BuffTrigger.回合开始);
     }
 
@@ -483,13 +581,12 @@ public abstract class Unit : MonoBehaviour
     /// </summary>
     protected virtual void Die()
     {
-        // 防重复：已经死过了就直接返回。
-        // 不挡的话，"被持续伤害打死"和"被卡牌直接打死"两条路可能先后各跑一次 Die()，
-        // 导致 UnitDied 事件发两遍、PlayerUnit 那边重复判定"全员阵亡"。
+        // 防重复：持续伤害打死 + 卡牌打死两条路可能先后到达，
+        // 不拦的话 UnitDied 会发两遍、PlayerUnit 会重复判"全员阵亡"
         if (isDead) return;
         isDead = true;
 
-        // 触发"死亡时"效果（此时 isDead 已置位，死亡时效果里的伤害不会再打到这个单位身上）
+        // 触发"死亡时"效果
         TriggerBuffs(BuffTrigger.死亡时);
 
         // 从格子上移除
@@ -504,7 +601,7 @@ public abstract class Unit : MonoBehaviour
         OnUnitDied?.Invoke(this);
         EventManager.Trigger("UnitDied", this);
 
-        // 销毁物体
+        // 销毁物体（延迟到帧末；在此之前 isDead 会拦住对本文凭的一切调用）
         Destroy(gameObject);
     }
 
@@ -517,8 +614,11 @@ public abstract class Unit : MonoBehaviour
     /// </summary>
     public virtual void MoveTo(HexCoord target)
     {
-        // 已死亡 → 不能移动（Destroy 延迟到帧末，期间可能还有移动指令打进来）
-        if (isDead) return;
+        if (isDead)
+        {
+            Debug.Log($"{data.unitName} 已死亡，无法移动");
+            return;
+        }
 
         // 禁止行动 buff
         if (HasEffect(BuffEffectType.禁止行动))
@@ -596,6 +696,199 @@ public abstract class Unit : MonoBehaviour
     }
 
     // ============================================================
+    //            位移系统（击退 / 拉近 / 传送，对应文档"移动"一节）
+    //
+    //  表现：
+    //  - 击退/拉近：一格一格平移过去（越过被撞的格子会立即停下）；
+    //  - 传送：直接闪现到目标格，途中不结算碰撞。
+    //
+    //  碰撞规则：
+    //  - 撞上障碍物或敌方单位时立即停止位移；
+    //  - 自己按 collisionSelfDamage 掉血（玩家=1，敌人=2，Inspector 里填）；
+    //  - 撞到的一方按 collisionBlockerDamage 掉血（敌人和障碍物都=2）；
+    //  - 若本方有 reflectsDisplacement（反弹），则只有被撞的一方掉血，
+    //    自己反转方向继续位移。
+    //
+    //  位移期间血量归零不会立刻消失，等位移全部结算完再统一死亡。
+    // ============================================================
+
+    /// <summary>
+    /// 对自身施加一次位移。reference 用来确定方向：
+    /// 击退 = 远离 reference；拉近 = 靠近 reference。
+    /// 传送不在本方法处理，请直接用 TeleportTo(dest)。
+    /// </summary>
+    public virtual void ApplyDisplacement(DisplacementType type, int distance, Unit reference)
+    {
+        if (type == DisplacementType.传送 || distance <= 0) return;
+        if (HexGrid.Instance == null) return;
+
+        // 计算初始方向（在当前格的 6 个邻居里选最贴合目标方向的那个）
+        HexCoord dir = GetDisplacementDir(type, reference);
+        if (dir.q == 0 && dir.r == 0) return;   // 无法确定方向，直接放弃
+
+        isDisplacing = true;      // 开启"延迟死亡"
+        pendingDeath = false;
+
+        int remaining = distance;
+        int guard = 0;            // 防止反弹死循环的保险丝
+        while (remaining > 0 && guard < 64)
+        {
+            guard++;
+            HexCoord next = new HexCoord(currentCoord.q + dir.q, currentCoord.r + dir.r);
+            HexCell nextCell = HexGrid.Instance.GetCell(next);
+
+            // 越界（撞地图边界）：只对自己结算伤害，然后停下
+            if (nextCell == null)
+            {
+                TakeDamage(collisionSelfDamage, DamageType.物理);
+                break;
+            }
+
+            // 前方有障碍物或单位 → 结算碰撞
+            if (nextCell.obstacle != null || nextCell.occupyUnit != null)
+            {
+                bool stop = HandleDisplacementCollision(nextCell, ref dir, ref remaining);
+                if (stop) break;
+                continue;   // 反弹后方向已取反，继续走
+            }
+
+            // 前方畅通 → 前进一格
+            StepTo(next);
+            remaining--;
+        }
+
+        isDisplacing = false;
+
+        // 位移全部结算完，再处理位移期间累积的死亡
+        if (pendingDeath)
+        {
+            pendingDeath = false;
+            Die();
+        }
+
+        EventManager.Trigger("UnitDisplaced", this);
+    }
+
+    /// <summary>
+    /// 传送：无视途中的障碍物和单位，直接闪现到目标格（文档："传送时会闪现到目标格子"）。
+    /// 落点被占用或不可行走时传送失败。
+    /// </summary>
+    public virtual void TeleportTo(HexCoord dest)
+    {
+        if (HexGrid.Instance == null) return;
+
+        HexCell destCell = HexGrid.Instance.GetCell(dest);
+        if (destCell == null || !destCell.isWalkable) return;
+        if (destCell.obstacle != null) return;
+        if (destCell.occupyUnit != null && destCell.occupyUnit != this) return;
+
+        HexCell oldCell = HexGrid.Instance.GetCell(currentCoord);
+        if (oldCell != null)
+            oldCell.occupyUnit = null;
+
+        currentCoord = dest;
+        destCell.occupyUnit = this;
+        transform.position = HexGrid.Instance.HexToWorld(dest);
+
+        OnMove();
+        EventManager.Trigger("UnitTeleported", this);
+    }
+
+    /// <summary>
+    /// 处理位移碰撞，返回"是否停止位移"：
+    /// - 普通碰撞：自己和被撞方都掉血 → 停止；
+    /// - 反弹：只有被撞方掉血，方向取反继续 → 不停止。
+    /// </summary>
+    protected virtual bool HandleDisplacementCollision(HexCell cell, ref HexCoord dir, ref int remaining)
+    {
+        Unit blocker = cell.occupyUnit;
+        Obstacle obstacle = cell.obstacle;
+
+        if (reflectsDisplacement)
+        {
+            // 反弹：只有被撞的一方受伤，自己反转方向继续位移
+            if (blocker != null) blocker.TakeDamage(collisionBlockerDamage, DamageType.物理);
+            if (obstacle != null) obstacle.TakeDamage(collisionBlockerDamage);
+
+            dir = new HexCoord(-dir.q, -dir.r);   // 方向取反
+            remaining--;                          // 反弹也算消耗一格
+            return false;
+        }
+
+        // 普通碰撞：撞的一方和被撞的一方都掉血，然后停止
+        TakeDamage(collisionSelfDamage, DamageType.物理);
+        if (blocker != null) blocker.TakeDamage(collisionBlockerDamage, DamageType.物理);
+        if (obstacle != null) obstacle.TakeDamage(collisionBlockerDamage);
+        return true;
+    }
+
+    /// <summary>
+    /// 计算位移方向（返回一格的方向向量）。
+    /// 击退：远离 reference；拉近：靠近 reference。
+    /// 做法：把"理想落点"当作目标，在 6 个邻居里挑离它最近的那一格。
+    /// </summary>
+    protected virtual HexCoord GetDisplacementDir(DisplacementType type, Unit reference)
+    {
+        HexCoord anchor = reference != null ? reference.GetCoord() : currentCoord;
+
+        HexCoord idealTarget;
+        if (type == DisplacementType.拉近)
+        {
+            idealTarget = anchor;   // 越靠近 reference 越好
+        }
+        else
+        {
+            // 击退：理想落点 = 当前格 + (当前格 - reference)，即背离 reference 的方向
+            HexCoord away = new HexCoord(currentCoord.q - anchor.q, currentCoord.r - anchor.r);
+            idealTarget = new HexCoord(currentCoord.q + away.q, currentCoord.r + away.r);
+        }
+
+        HexCoord best = currentCoord;
+        int bestDist = int.MaxValue;
+        for (int i = 0; i < 6; i++)
+        {
+            HexCoord n = currentCoord.GetNeighbor(i);
+            int d = n.Distance(idealTarget);
+            if (d < bestDist)
+            {
+                bestDist = d;
+                best = n;
+            }
+        }
+
+        return new HexCoord(best.q - currentCoord.q, best.r - currentCoord.r);
+    }
+
+    /// <summary>
+    /// 移动到相邻格（位移专用，不做寻路和方向校验，也不消耗耐力）。
+    /// 位移每前进一步都会触发"移动时"效果。
+    /// </summary>
+    protected virtual void StepTo(HexCoord next)
+    {
+        HexCell oldCell = HexGrid.Instance.GetCell(currentCoord);
+        if (oldCell != null)
+            oldCell.occupyUnit = null;
+
+        currentCoord = next;
+        HexCell newCell = HexGrid.Instance.GetCell(next);
+        if (newCell != null)
+            newCell.occupyUnit = this;
+
+        transform.position = HexGrid.Instance.HexToWorld(next);
+
+        OnMove();
+        EventManager.Trigger("UnitMoved", this);
+    }
+
+    /// <summary>
+    /// 受到位移碰撞伤害的便捷入口（外部系统若想直接造成碰撞伤害可调用）。
+    /// </summary>
+    public virtual void ApplyCollisionDamage(int amount)
+    {
+        TakeDamage(amount, DamageType.物理);
+    }
+
+    // ============================================================
     //                     属性访问器
     // ============================================================
 
@@ -603,6 +896,9 @@ public abstract class Unit : MonoBehaviour
     public int GetCurrentHealth() => currentHealth;
     public int GetMaxHealth() => data != null ? data.maxHealth : 0;
     public int GetShield() => shield;
+
+    /// <summary>是否正在被位移（外部系统如击退/拉近时判断）</summary>
+    public bool IsDisplacing => isDisplacing;
     public List<BuffInstance> GetActiveBuffs() => activeBuffs;
 
     /// <summary>
@@ -611,32 +907,18 @@ public abstract class Unit : MonoBehaviour
     /// </summary>
     public virtual int GetAttack()
     {
+        if (isDead) return 0;
+
         int baseAttack = 1;  // 基础攻击（MVP 简化，以后从 data 读）
-        // 力量 / 无力 / 临时力量 走"攻击伤害加成"。
-        // 用不限触发时机的那个重载，策划填"立即生效"或"攻击时"都能生效。
+        // 力量 / 无力 / 临时力量都属于属性类加成，查询不限触发时机
+        // （按"攻击时"查会漏掉填成"立即生效"的，反之亦然）
         float bonus = GetTotalEffectValue(BuffEffectType.攻击伤害加成);
         return Mathf.Max(0, baseAttack + Mathf.RoundToInt(bonus));
     }
 
     /// <summary>
-    /// 这个单位身上有没有"攻击目标限制"（亲密），且 candidate 正好在被禁名单里。
-    /// 玩家点选目标、自动索敌、卡牌结算三处都会用它兜底。
-    /// </summary>
-    public virtual bool IsAttackTargetForbidden(Unit candidate)
-    {
-        if (candidate == null) return false;
-
-        foreach (var buff in activeBuffs)
-        {
-            if (buff.data != null && buff.data.IsForbiddenAttackTarget(candidate))
-                return true;
-        }
-        return false;
-    }
-
-    /// <summary>
-    /// 是否能攻击（同时也决定"能不能出牌"——CardData.Resolve 用它拦下所有动作）
-    /// 已死亡 或 中了"禁止行动"（眩晕）都不行。
+    /// 是否能攻击（死亡单位与被眩晕单位都放不出牌；
+    /// CardData.Resolve 用它做兜底拦截）
     /// </summary>
     public virtual bool CanAttack()
     {
@@ -644,12 +926,28 @@ public abstract class Unit : MonoBehaviour
     }
 
     /// <summary>
-    /// 获取移动距离加成（敏捷 +1 / 残废 -1）
-    /// 加成型，不限触发时机。
+    /// 获取移动距离加成
     /// </summary>
     public virtual int GetMoveBonus()
     {
         return Mathf.RoundToInt(GetTotalEffectValue(BuffEffectType.移动距离加成));
+    }
+
+    /// <summary>
+    /// 亲密（攻击目标限制）：目标是否被自己身上"攻击目标限制"buff 列入禁打名单。
+    /// PlayerCardSystem 选目标时调用（拦在扣费之前），CardData.Resolve 里再兜一道。
+    /// </summary>
+    public virtual bool IsAttackTargetForbidden(Unit target)
+    {
+        if (target == null) return false;
+
+        foreach (var buff in activeBuffs)
+        {
+            if (buff.data == null) continue;
+            if (buff.data.IsForbiddenAttackTarget(target))
+                return true;
+        }
+        return false;
     }
 
     // ============================================================
@@ -658,13 +956,13 @@ public abstract class Unit : MonoBehaviour
 
     /// <summary>
     /// 内部扣血（跳过 buff 计算，防止递归）
-    /// 用于流血等持续伤害效果
+    /// 用于中毒/灼烧/流血等持续伤害效果（这些属于 Buff 伤害，可被护盾格挡）
     /// </summary>
     protected void TakeDamageInternal(int amount)
     {
-        // 已死 → 不再重复结算，避免对一个正在销毁的单位反复跑死亡流程
-        if (isDead) return;
+        if (isDead || amount <= 0) return;
 
+        // 护盾格挡 Buff 伤害（文档："护盾能格挡 buff 伤害"）
         if (shield > 0)
         {
             int absorbed = Mathf.Min(shield, amount);
@@ -672,15 +970,6 @@ public abstract class Unit : MonoBehaviour
             amount -= absorbed;
         }
 
-        if (amount > 0)
-        {
-            currentHealth -= amount;
-            if (currentHealth <= 0)
-            {
-                currentHealth = 0;
-                if (!HasEffect(BuffEffectType.免疫死亡))
-                    Die();
-            }
-        }
+        ApplyHealthLoss(amount);
     }
 }

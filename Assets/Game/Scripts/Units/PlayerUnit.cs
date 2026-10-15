@@ -8,12 +8,18 @@ using System.Collections.Generic;
 public class PlayerUnit : Unit
 {
     [Header("玩家特有")]
-    [Tooltip("每回合思绪上限")]
-    public int maxThought = 20;
-    [Tooltip("每回合耐力上限（耐力 = 行动资源，移动和出牌共用）")]
-    public int maxStamina = 3;
-    [Tooltip("每回合抽卡数")]
-    public int drawPerTurn = 5;
+    [Tooltip("思绪上限（文档：耐力和思绪上限都是 40）")]
+    public int maxThought = 40;
+    [Tooltip("耐力上限（耐力 = 行动资源，移动和出牌共用）")]
+    public int maxStamina = 40;
+    [Tooltip("战斗开始时的思绪（文档：战斗开始时有 20 点）")]
+    public int startThought = 20;
+    [Tooltip("战斗开始时的耐力（文档：战斗开始时有 20 点）")]
+    public int startStamina = 20;
+    [Tooltip("每回合结束时恢复的思绪（文档：每回合结束恢复 15 点）")]
+    public int thoughtRegenPerTurnEnd = 15;
+    [Tooltip("每回合结束时恢复的耐力（文档：每回合结束恢复 15 点）")]
+    public int staminaRegenPerTurnEnd = 15;
 
     // 运行时状态
     protected int currentThought;
@@ -42,8 +48,9 @@ public class PlayerUnit : Unit
     public override void Initialize(UnitData unitData, HexCoord startCoord)
     {
         base.Initialize(unitData, startCoord);
-        currentThought = maxThought;
-        currentStamina = maxStamina;
+        // 战斗开始时按配置给初始资源（文档：开局 20 点）
+        currentThought = startThought;
+        currentStamina = startStamina;
         hasActedThisTurn = false;
     }
 
@@ -53,17 +60,21 @@ public class PlayerUnit : Unit
 
     public override void OnTurnStart()
     {
-        base.OnTurnStart();  // 先执行基类的 buff 结算
-
-        // 回合开始：补满思绪和耐力
-        currentThought = maxThought;
-        currentStamina = maxStamina;
+        // 只做 buff 结算和护盾清空，不再回满资源——
+        // 资源恢复统一放在"回合结束"（文档：每回合结束恢复 15 点）
+        base.OnTurnStart();
         hasActedThisTurn = false;
     }
 
     public override void OnTurnEnd()
     {
         base.OnTurnEnd();
+
+        // 回合结束：恢复思绪/耐力，但不超过上限（文档：每回合结束恢复 15 点）
+        currentThought = Mathf.Min(maxThought, currentThought + thoughtRegenPerTurnEnd);
+        currentStamina = Mathf.Min(maxStamina, currentStamina + staminaRegenPerTurnEnd);
+        EventManager.Trigger("PlayerResourceChanged", this);
+
         isSelected = false;
     }
 
@@ -336,8 +347,102 @@ public class PlayerUnit : Unit
         {
             HexCell cell = HexGrid.Instance.GetCell(coord);
             if (cell != null && cell.isWalkable && cell.occupyUnit == null)
-                cell.SetHighlight(true);
+                cell.SetMoveRangeHighlight(true);   // 文档：可到达格子变绿
         }
+    }
+
+    // ============================================================
+    //                    药水 / 遗物
+    // ============================================================
+
+    [Header("药水与遗物")]
+    [Tooltip("药水持有上限（文档：上限 3 个）")]
+    public int maxPotions = 3;
+
+    // 持有的药水（按顺序排列）
+    protected readonly List<PotionData> potions = new List<PotionData>();
+    // 已获得的遗物（永久生效的 buff 已经挂到身上，这里只做记录）
+    protected readonly List<RelicData> relics = new List<RelicData>();
+
+    /// <summary>当前持有的药水（UI 只读）</summary>
+    public IReadOnlyList<PotionData> Potions => potions;
+
+    /// <summary>已获得的遗物（UI 只读）</summary>
+    public IReadOnlyList<RelicData> Relics => relics;
+
+    /// <summary>
+    /// 获得一瓶药水。背包已满则拿不到（返回 false）。
+    /// </summary>
+    public bool AddPotion(PotionData potion)
+    {
+        if (potion == null || potions.Count >= maxPotions) return false;
+
+        potions.Add(potion);
+        EventManager.Trigger("PotionChanged", this);
+        return true;
+    }
+
+    /// <summary>
+    /// 使用第 index 瓶药水。文档：只能在玩家的行动阶段使用。
+    /// 只能对自己使用（target 传 null 即自己）。
+    /// </summary>
+    public bool UsePotion(int index, Unit target = null)
+    {
+        if (index < 0 || index >= potions.Count)
+        {
+            Debug.Log("药水序号无效");
+            return false;
+        }
+
+        if (!CanActNow())
+        {
+            Debug.Log("不是玩家行动阶段，不能使用药水");
+            return false;
+        }
+
+        PotionData potion = potions[index];
+        potions.RemoveAt(index);
+
+        // 药水效果：默认作用在自己身上
+        potion.Resolve(target != null ? target : this);
+        EventManager.Trigger("PotionChanged", this);
+        return true;
+    }
+
+    /// <summary>
+    /// 获得遗物：记录进列表，并立刻应用它的效果（永久 buff / 即时效果）。
+    /// </summary>
+    public bool AddRelic(RelicData relic)
+    {
+        // 已经持有过同一件遗物就直接跳过（掉落去重）
+        if (relic == null || HasRelic(relic)) return false;
+
+        relics.Add(relic);
+        relic.Apply(this);
+        EventManager.Trigger("RelicChanged", this);
+        return true;
+    }
+
+    /// <summary>
+    /// 是否已经持有这件遗物（掉落池去重、UI 显示已拥有用）。
+    /// </summary>
+    public bool HasRelic(RelicData relic)
+    {
+        return relic != null && relics.Contains(relic);
+    }
+
+    /// <summary>
+    /// 现在能不能进行主动操作（用药水等）。
+    /// 优先看 TurnManager 的精确阶段；没有 TurnManager 时退回 GameManager。
+    /// </summary>
+    protected bool CanActNow()
+    {
+        if (TurnManager.Instance != null)
+            return TurnManager.Instance.Phase == TurnPhase.玩家行动;
+
+        return GameManager.Instance != null &&
+               GameManager.Instance.IsInBattle &&
+               GameManager.Instance.isPlayerTurn;
     }
 
     // ============================================================

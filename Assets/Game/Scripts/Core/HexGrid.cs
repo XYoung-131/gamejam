@@ -289,6 +289,59 @@ public class HexGrid : MonoBehaviour
         return result;
     }
 
+    // ========== 视线 / 阻挡 ==========
+
+    /// <summary>
+    /// 判断 from 到 to 之间是否被阻挡。
+    /// 文档："当目标与自身之间有其他敌人或者障碍物，那么目标相对于自身就是被阻挡的。"
+    /// 起点和终点自身不计入阻挡，只检查中间经过的格子。
+    /// </summary>
+    public bool IsLineBlocked(HexCoord from, HexCoord to)
+    {
+        if (from == to) return false;
+
+        List<HexCoord> line = GetHexLine(from, to);
+        for (int i = 1; i < line.Count - 1; i++)   // 跳过起点和终点
+        {
+            HexCell cell = GetCell(line[i]);
+            if (cell != null && (cell.obstacle != null || cell.occupyUnit != null))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// 取两个格子连线经过的所有格子坐标（含起点、终点）。
+    /// 用标准六边形连线算法：在两端点间做线性插值，再取整到最近格子。
+    /// </summary>
+    public List<HexCoord> GetHexLine(HexCoord a, HexCoord b)
+    {
+        int dist = a.Distance(b);
+        List<HexCoord> result = new List<HexCoord>();
+        if (dist == 0)
+        {
+            result.Add(a);
+            return result;
+        }
+
+        for (int i = 0; i <= dist; i++)
+        {
+            float t = (float)i / dist;
+            // 加一点点扰动，避免正好落在两格中间时取整抖动
+            float q = Mathf.Lerp(a.q, b.q, t) + 1e-6f * (b.q - a.q);
+            float r = Mathf.Lerp(a.r, b.r, t) + 1e-6f * (b.r - a.r);
+            result.Add(HexRound(q, r));
+        }
+        return result;
+    }
+
+    /// <summary>该格子是否处于烟雾中（烟雾中的单位不能被远程攻击选中）</summary>
+    public bool IsCellSmoky(HexCoord coord)
+    {
+        HexCell cell = GetCell(coord);
+        return cell != null && cell.isSmoky;
+    }
+
     // ========== 高亮 ==========
 
     /// <summary>

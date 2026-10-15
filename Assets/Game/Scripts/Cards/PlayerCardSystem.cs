@@ -72,8 +72,8 @@ public class PlayerCardSystem : MonoBehaviour
     public int offerCount = 6;           // 规则里的"6 张"
     [Tooltip("从展示的牌中随机抽出多少张供选择")]
     public int pickCount = 3;            // 规则里的"抽 3 张"
-    [Tooltip("发起一次抽卡消耗的思绪（灌注确认时还要再支付卡牌本身的思绪费用）")]
-    public int drawThoughtCost = 1;      // 注意：这是"开抽"的费用，选牌时还要再付卡费
+    [Tooltip("发起一次抽卡消耗的思绪（文档：抽牌要消耗 5 点思绪。灌注确认时还要再支付卡牌本身的思绪费用）")]
+    public int drawThoughtCost = 5;      // 注意：这是"开抽"的费用，选牌时还要再付卡费
 
     [Header("牌库（在 Inspector 中配置）")]
     [Tooltip("攻击牌库包含的所有技能")]
@@ -437,6 +437,11 @@ public class PlayerCardSystem : MonoBehaviour
             return false;
         }
 
+        // 视线校验：远程技能要求中间没有单位/障碍物，且目标不在烟雾里
+        if (finalTarget != null && finalTarget != player &&
+            !IsTargetReachable(card, player.GetCoord(), finalTarget.GetCoord()))
+            return false;
+
         // --- 扣资源（思绪 + 耐力一起判断，任一不足则两种都不扣） ---
         // 耐力消耗取"最终值"：虚弱（攻击耐力消耗倍率 1.25）会放大攻击技能的消耗
         int finalActionCost = card.GetFinalActionCost(player);
@@ -479,6 +484,10 @@ public class PlayerCardSystem : MonoBehaviour
 
         // 射程校验（单位和障碍物都用六边形坐标算距离）
         if (!IsInRange(card, player.GetCoord(), obstacle.GetCoord()))
+            return false;
+
+        // 视线校验（远程技能要求中间没有遮挡）
+        if (!IsTargetReachable(card, player.GetCoord(), obstacle.GetCoord()))
             return false;
 
         // 扣资源（耐力同样走"最终值"，虚弱会放大攻击技能的消耗）
@@ -580,6 +589,63 @@ public class PlayerCardSystem : MonoBehaviour
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// 视线判定（对应文档"被阻挡"和烟雾地板规则）：
+    /// 带"远程"标签的卡，如果施法者与目标之间有其他单位或障碍物，就打不到；
+    /// 目标站在烟雾格子里时，也无法被远程技能选中。
+    /// 近战/自身技能不受此限制。
+    /// </summary>
+    protected virtual bool IsTargetReachable(CardData card, HexCoord from, HexCoord to)
+    {
+        if (!card.tags.Contains(CardTag.远程)) return true;   // 只有远程技能检查视线
+        if (HexGrid.Instance == null) return true;
+
+        if (HexGrid.Instance.IsLineBlocked(from, to))
+        {
+            Debug.Log($"【{card.cardName}】是远程技能，中间有其他单位/障碍物阻挡");
+            return false;
+        }
+
+        if (HexGrid.Instance.IsCellSmoky(to))
+        {
+            Debug.Log($"【{card.cardName}】目标处于烟雾中，无法被远程技能选中");
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// 攻击范围预览高亮（文档："攻击范围内格子变成粉红色，有目标的格子变成深红色"）。
+    /// UI 选中某张攻击卡时调用，center 传施法者坐标。
+    /// </summary>
+    public virtual void HighlightAttackRange(CardData card, HexCoord center)
+    {
+        if (HexGrid.Instance == null || card == null) return;
+        HexGrid.Instance.ClearAllHighlights();
+
+        foreach (HexCell cell in HexGrid.Instance.GetCellsInRange(center, card.maxRange))
+        {
+            if (cell == null) continue;
+            if (center.Distance(cell.coord) < card.minRange) continue;   // 小于最小射程不显示
+
+            // 有可攻击目标 → 深红；否则粉红
+            bool hasTarget = cell.obstacle != null ||
+                             (cell.occupyUnit != null && cell.occupyUnit != player);
+            if (hasTarget)
+                cell.SetTargetHighlight(true);
+            else
+                cell.SetAttackRangeHighlight(true);
+        }
+    }
+
+    /// <summary>清除所有战斗高亮</summary>
+    public virtual void ClearHighlights()
+    {
+        if (HexGrid.Instance != null)
+            HexGrid.Instance.ClearAllHighlights();
     }
 
     // ============================================================

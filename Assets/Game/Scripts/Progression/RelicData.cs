@@ -9,14 +9,29 @@ using System.Collections.Generic;
 //  比如"强韧布料.asset""漫摄徽章.asset"，都是一件遗物。
 //
 //  它只存"静态配置"（名字、来源、触发时机、效果），不存战斗中的临时状态。
-//  真正获得遗物时调用 OnAcquire()，之后每个触发时机调用 Trigger()。
+//  真正获得遗物时调用 OnAcquire()（或兼容入口 Apply()），
+//  之后每个触发时机调用 Trigger()。
 //
 //  与 CardData 的区别：
 //    - CardData 是"主动打出去的牌"，有消耗、射程、目标；
 //    - RelicData 是"被动挂着的常驻效果"，靠触发时机自动生效，没有消耗。
 //
 //  数据来源：飞书多维表格《思维碎片（遗物）大全》
+//  合并说明：包含两套配置路径——
+//    ① effects（触发时机 × 效果类型，覆盖 22 件遗物的完整效果体系）；
+//    ② permanentBuffs / instantEffect（简化路径：直接挂永久 buff / 即时结算，
+//       LootSystem / PlayerUnit.AddRelic 走 Apply() 入口时生效）。
 // ============================================================
+
+/// <summary>
+/// 遗物掉落池——LootSystem 按池子抽遗物时使用
+/// </summary>
+public enum RelicPool
+{
+    通用,   // 事件 / 商店 / 普通掉落
+    精英,   // 精英战专属掉落
+    BOSS    // BOSS 战专属掉落
+}
 
 /// <summary>
 /// 遗物类型——对应策划表里的"类型"列，决定这件遗物从哪来
@@ -165,10 +180,28 @@ public class RelicData : ScriptableObject
     public Sprite icon;                             // 图标
 
     [Header("分类")]
-    public RelicType relicType = RelicType.精英怪掉落;   // 获取途径
+    public RelicType relicType = RelicType.精英怪掉落;   // 获取途径（策划表"类型"列）
+    [Tooltip("掉落池分组：LootSystem 按通用/精英/BOSS 三个池子抽遗物")]
+    public RelicPool pool = RelicPool.通用;
 
     [Header("效果（可多条）")]
     public List<RelicEffect> effects = new List<RelicEffect>();
+
+    // ========================================================
+    //   简化效果路径（掉落系统配套：不想配 effects 时走这里）
+    // ========================================================
+
+    [Header("永久效果（简化路径）")]
+    [Tooltip("拾取时挂给持有者的永久 buff（用了 ApplyPermanentBuff，不会随回合减少）")]
+    public List<BuffData> permanentBuffs = new List<BuffData>();
+
+    [Header("即时效果（简化路径）")]
+    [Tooltip("勾选后拾取时立刻结算一次下面的效果")]
+    public bool instantEffect = false;
+    [Tooltip("即时恢复的生命值")]
+    public int instantHeal = 0;
+    [Tooltip("即时挂上的 buff")]
+    public List<BuffData> instantBuffs = new List<BuffData>();
 
     // ========================================================
     //   技能转换配置（"玛塔的板牙"专用：把攻击技能变成啃咬）
@@ -234,6 +267,38 @@ public class RelicData : ScriptableObject
     // ============================================================
     //                          结算
     // ============================================================
+
+    /// <summary>
+    /// 兼容入口：PlayerUnit.AddRelic / LootSystem 调用 Apply()。
+    /// 先结算简化路径（永久 buff + 即时效果），再走完整的 OnAcquire 流程。
+    /// </summary>
+    public virtual void Apply(Unit holder)
+    {
+        if (holder == null) return;
+
+        // 简化路径 ①：永久 buff（ApplyPermanentBuff 保证 duration = -1）
+        foreach (var buff in permanentBuffs)
+        {
+            if (buff != null)
+                holder.ApplyPermanentBuff(buff);
+        }
+
+        // 简化路径 ②：即时效果
+        if (instantEffect)
+        {
+            if (instantHeal > 0)
+                holder.Heal(instantHeal);
+
+            foreach (var buff in instantBuffs)
+            {
+                if (buff != null)
+                    holder.ApplyBuff(buff);
+            }
+        }
+
+        // 完整路径：获得时效果（技能转换等）+ RelicAcquired 事件
+        OnAcquire(holder);
+    }
 
     /// <summary>
     /// 获得这件遗物时调用一次。

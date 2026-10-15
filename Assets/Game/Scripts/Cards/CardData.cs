@@ -106,8 +106,20 @@ public class CardData : ScriptableObject
     [Header("攻击设置（攻击卡填写）")]
     [Tooltip("造成的伤害数值（由策划填写）")]
     public int damage = 0;
+    [Tooltip("伤害类型：物理=最普通伤害（先扣护盾）；真实=无视护甲(护盾)但可被减伤；Buff=中毒/灼烧/流血等持续伤害")]
+    public DamageType damageType = DamageType.物理;
     [Tooltip("攻击卡可以选择哪些目标类型，可多选（只勾敌方单位就不能打障碍物）")]
     public List<CardTargetType> targetTypes = new List<CardTargetType> { CardTargetType.敌方单位 };
+
+    [Header("位移设置（位移类卡牌填写）")]
+    [Tooltip("勾选后这张牌结算时会造成一次位移")]
+    public bool causesDisplacement = false;
+    [Tooltip("位移类型：击退=远离施法者；拉近=靠近施法者；传送=闪现（需落点，走 Unit.TeleportTo）")]
+    public DisplacementType displacementType = DisplacementType.击退;
+    [Tooltip("位移格数")]
+    public int displacementDistance = 1;
+    [Tooltip("位移对象：false=被打中的目标单位；true=施法者自己（例如'远跳'这类自身位移）")]
+    public bool displaceSelf = false;
 
     [Header("防御设置（防御卡填写）")]
     [Tooltip("防御效果类型：治疗=恢复生命，护盾=获得护盾")]
@@ -157,6 +169,27 @@ public class CardData : ScriptableObject
 
     /// <summary>防御卡能不能对敌方单位使用（精神压制、绊倒等负面效果）</summary>
     public bool CanDefenseEnemy => defenseTargetTypes.Contains(DefenseTargetType.敌方单位);
+
+    /// <summary>
+    /// 怪物行动优先级（对应文档"怪物行动顺序"）：
+    /// 瞄准技能(0) → 带位移的攻击技能(1) → 位移技能(2) → 特技技能(3) → 纯攻击技能(4)。
+    /// 数字越小越先释放；同优先级由 EnemyUnit 随机排序。
+    /// </summary>
+    public int SkillPriority
+    {
+        get
+        {
+            bool hasMove = tags.Contains(CardTag.位移);
+            bool isAim = tags.Contains(CardTag.需要瞄准);
+            bool isStunt = tags.Contains(CardTag.特技);
+
+            if (isAim) return 0;                        // ① 瞄准技能
+            if (hasMove && IsAttack) return 1;          // ② 带位移的攻击技能
+            if (hasMove) return 2;                      // ③ 纯位移技能
+            if (isStunt) return 3;                      // ④ 特技技能
+            return 4;                                   // ⑤ 纯攻击技能 / 其它
+        }
+    }
 
     // ============================================================
     //         buff 生效后的"最终数值"（影响类 buff 在这里落地）
@@ -288,11 +321,22 @@ public class CardData : ScriptableObject
 
             caster.OnAttack();   // 触发施法者身上"攻击时"的 buff
 
-            // 伤害 = 卡牌配置的 damage + 力量/无力/临时力量等"攻击伤害加成"（按层数叠加）
+            // 伤害 = 卡牌配置的 damage + 力量/无力/临时力量等"攻击伤害加成"（按层数叠加），
+            // 并按配置的伤害类型结算（真实伤害无视护盾）
             int finalDamage = GetFinalDamage(caster);
-            target.TakeDamage(finalDamage);
+            target.TakeDamage(finalDamage, damageType);
 
             Debug.Log($"{caster.data.unitName} 使用【{cardName}】对 {target.data.unitName} 造成 {finalDamage} 点伤害");
+        }
+
+        // ---------- 第 1.5 步：位移效果 ----------
+        // 位移类卡牌（如"推"/"撞击"）：默认推被打中的目标，也可配置成推自己（如"远跳"）。
+        // 传送需要指定落点，走 Unit.TeleportTo，不在这里处理。
+        if (causesDisplacement && displacementType != DisplacementType.传送)
+        {
+            Unit subject = displaceSelf ? caster : target;
+            if (subject != null && subject.GetCurrentHealth() > 0)
+                subject.ApplyDisplacement(displacementType, displacementDistance, caster);
         }
 
         // ---------- 第 2 步：防御卡对自身生效（治疗或护盾） ----------
