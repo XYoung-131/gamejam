@@ -117,6 +117,53 @@ public class EnemyUnit : Unit
 
         for (int i = 0; i < skillsPerTurn; i++)
             plannedSkills.Add(group[Random.Range(0, group.Count)]);
+
+        // 按"怪物行动顺序"给预告技能排序（文档：瞄准 → 带位移的攻击 → 位移 → 特技 → 纯攻击）
+        ReorderByPriority();
+
+        // 打印带序号的预告，方便实战对照 UI 上的行动顺序数字
+        string orderText = "";
+        for (int i = 0; i < plannedSkills.Count; i++)
+            orderText += $"{i + 1}.{plannedSkills[i].cardName} ";
+        Debug.Log($"{data.unitName} 行动顺序：{orderText}");
+    }
+
+    /// <summary>
+    /// 按卡牌的 SkillPriority 给预告技能排序；同一优先级内部随机打乱。
+    /// 做法：按优先级从 0 到 4 分组，每组内部先洗牌再依次拼接——
+    /// 这样既保证优先级顺序，又实现"同种情况随机"。
+    /// </summary>
+    protected virtual void ReorderByPriority()
+    {
+        List<CardData> ordered = new List<CardData>();
+
+        for (int priority = 0; priority <= 4; priority++)
+        {
+            List<CardData> samePriority = new List<CardData>();
+            foreach (var card in plannedSkills)
+            {
+                if (card != null && card.SkillPriority == priority)
+                    samePriority.Add(card);
+            }
+
+            ShuffleList(samePriority);
+            ordered.AddRange(samePriority);
+        }
+
+        plannedSkills.Clear();
+        plannedSkills.AddRange(ordered);
+    }
+
+    /// <summary>Fisher-Yates 洗牌（同优先级随机用）</summary>
+    protected static void ShuffleList(List<CardData> list)
+    {
+        for (int i = list.Count - 1; i > 0; i--)
+        {
+            int j = Random.Range(0, i + 1);
+            CardData temp = list[i];
+            list[i] = list[j];
+            list[j] = temp;
+        }
     }
 
     /// <summary>
