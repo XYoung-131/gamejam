@@ -295,8 +295,7 @@ public abstract class Unit : MonoBehaviour
             if (buffData.canStack)
             {
                 existing.currentStacks = Mathf.Min(
-                    existing.currentStacks + realStacks,
-                    buffData.maxStack);
+                    existing.currentStacks + realStacks);
             }
 
             // 又叠上了 → 中毒的"连续未叠层"计数归零

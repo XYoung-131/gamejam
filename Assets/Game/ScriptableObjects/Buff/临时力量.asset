@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7522e959658a2794587e24d1a5052587, type: 3}
+  m_Name: "\u4E34\u65F6\u529B\u91CF"
+  m_EditorClassIdentifier: 
+  buffName: "\u4E34\u65F6\u529B\u91CF"
+  description: "\u6BCF\u5C42\u4F7F\u653B\u51FB\u6280\u80FD\u4F24\u5BB3\u52A0 1\uFF0C\u76EE\u6807\u56DE\u5408\u7ED3\u675F\u65F6\u5C42\u6570\u51CF
+    1\u3002"
+  icon: {fileID: 0}
+  polarity: 0
+  category: 1
+  duration: -1
+  canStack: 1
+  stackDecay: 2
+  clearIfNotStackedTurns: 0
+  halveStacksOnEliteAndBoss: 0
+  onlyForPlayerUnit: 0
+  forbiddenAttackTargets: []
+  forbiddenAttackTargetNames: []
+  effects:
+  - effectType: 4
+    trigger: 4
+    value: 1
+    isPercent: 0
+  devNotes: 

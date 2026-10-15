@@ -68,7 +68,7 @@ using UnityEngine;
 //  ⚠ 已知不一致（待统一）：RelicData 里同名的"技能耐力消耗倍率"用的是【增量】填法
 //    （滑板鞋 -25% 填 -0.25），和这里的【绝对乘数】不一致。二者尚未统一。
 //  ============================================================
-//                   全部 20 个 buff 的填写对照
+//                   全部 21 个 buff 的填写对照
 //  ============================================================
 //
 //  【负面 12 种】（没特殊标识 = 回合结束层数 -1）
@@ -83,12 +83,13 @@ using UnityEngine;
 //   灼烧      伤害类  固定持续伤害 = 1（每层）   stackDecay = 默认（即回合结束层数 -1）
 //   流血      伤害类  固定持续伤害 = 1（每层）   stackDecay = 回合结束减半
 //   易伤      影响类  受到伤害倍率 = 1.25
-//   眩晕      影响类  禁止行动                  duration 一般填 1
+//   眩晕      影响类  禁止行动                  duration = -1，按层数衰减
 //   亲密      影响类  攻击目标限制              stackDecay = 回合结束消失
-//                                             forbiddenAttackTargets = 大抱抱/小抱抱/德亚/普兰
+//                                             可用单位引用或名称指定大抱抱/小抱抱/德亚/普兰
 //
-//  【正面 8 种】（没特殊标识 = 层数不减少，即永久）
+//  【正面 9 种】（没特殊标识 = 层数不减少）
 //
+//   耐性      影响类  受到伤害固定减免 = 1     duration = -1（永久）
 //   殊死一搏  影响类  清除所有负面 + 免疫负面 + 受到伤害固定减免 3 + 回合结束死亡
 //                     duration = 1（本回合）
 //   力量      影响类  攻击伤害加成 = +1         duration = -1（永久）
@@ -96,8 +97,8 @@ using UnityEngine;
 //   敏捷      影响类  移动距离加成 = +1         duration = -1（永久）
 //   临时敏捷  影响类  移动距离加成 = +1         stackDecay = 回合结束减1
 //   无敌      影响类  免疫伤害 + 免疫死亡       （不免疫负面）
-//   神圣      影响类  特殊机制                  具体效果写在《怪物一览》里
-//   荧光      影响类  特殊机制                  荧光虫专用，用来释放特殊技能
+//   神圣      影响类  神圣状态                  具体效果仍需《怪物一览》，枚举仅区分状态
+//   荧光      影响类  荧光状态                  荧光虫专用，技能系统按此类型识别
 //
 // ============================================================
 
@@ -107,8 +108,8 @@ using UnityEngine;
 /// </summary>
 public enum BuffPolarity
 {
-    正面,
-    负面
+    正面 = 0,
+    负面 = 1
 }
 
 /// <summary>
@@ -116,14 +117,14 @@ public enum BuffPolarity
 /// </summary>
 public enum BuffCategory
 {
-    伤害类,   // 持续伤害：回合开始结算伤害，回合结束衰减
-    影响类    // 属性 / 控制 / 免疫：获得即生效，回合结束衰减
+    伤害类 = 0,   // 持续伤害：回合开始结算伤害，回合结束衰减
+    影响类 = 1    // 属性 / 控制 / 免疫：获得即生效，回合结束衰减
 }
 
 /// <summary>
 /// 效果触发时机
-/// 注意：伤害类 buff 的持续伤害统一填【回合开始】，影响类统一填【立即生效】，
-/// 这是本项目 buff 系统的约定，不要按策划文案里的"回合结束时"去填。
+/// 持续伤害统一填【回合开始】；属性效果按其用途填写攻击、移动、受伤、资源回复等时机。
+/// 清除负面填立即生效，回合结束死亡填回合结束，神圣/荧光填特殊。
 ///
 /// 属性类效果（攻击伤害加成、受到伤害倍率…）的 trigger 目前**不影响查询结果**——
 /// Unit.GetTotalEffectValue(effectType) 不限时机，填哪个都能算上。
@@ -131,13 +132,17 @@ public enum BuffCategory
 /// </summary>
 public enum BuffTrigger
 {
-    立即生效,       // 获得时就生效 / 影响类的常驻生效
-    回合开始,       // 伤害类持续伤害在这里跳
-    回合结束,
-    受到伤害时,
-    攻击时,
-    移动时,
-    死亡时
+    立即生效 = 0,
+    回合开始 = 1,
+    回合结束 = 2,
+    受到伤害时 = 3,
+    攻击时 = 4,
+    移动时 = 5,
+    死亡时 = 6,
+    特殊 = 7,
+    施法时 = 8,
+    回复思绪时 = 9,
+    恢复耐力时 = 10
 }
 
 /// <summary>
@@ -151,45 +156,50 @@ public enum BuffTrigger
 /// </summary>
 public enum BuffStackDecay
 {
-    默认,               // 负面=回合结束减1，正面=不减少
-    不减少,             // 显式声明"没特殊标识不会减少"的正面 buff
-    回合结束减1,        // 灼烧 / 临时力量 / 临时敏捷
-    回合结束减半,       // 流血：向上取整，1 层时直接清空
-    回合结束消失,       // 亲密
-    未叠加则清空        // 中毒：N 回合内没有再叠层就清空全部层数
+    默认 = 0,               // 负面=回合结束减1，正面=不减少
+    不减少 = 1,
+    回合结束减1 = 2,
+    回合结束减半 = 3,       // 向上取整，1 层时直接清空
+    回合结束消失 = 4,
+    未叠加则清空 = 5
 }
 
 /// <summary>
-/// 效果类型——策划表里 20 个 buff 用到的效果都收敛到这些成员上
-/// 以后加新 buff 如果要新机制，直接往这里追加成员（务必追加在末尾，不要插队改顺序）
+/// 效果类型——策划表里 21 个 buff 使用的共享效果。
+/// 编号是 Unity 资产保存的实际值：旧编号 0~17 不得改变，新效果使用新编号。
 /// </summary>
 public enum BuffEffectType
 {
     // ---------- 属性类（影响类 buff 用，各系统实时反查数值）----------
-    耐力回复倍率,       // 力竭 = 0.5（减半）
-    思绪回复倍率,       // 混乱 = 0.5（减半）
-    移动距离加成,       // 残废 = -1 / 敏捷 = +1（不影响传送类技能）
-    移动耐力消耗倍率,   // 沉重 = 1.25
-    攻击伤害加成,       // 无力 = -1 / 力量 = +1
-    攻击耐力消耗倍率,   // 虚弱 = 1.25
-    受到伤害倍率,       // 易伤 = 1.25（最终伤害 = 原伤害 × 该值）
-    受到伤害固定减免,   // 殊死一搏 = 3
+    耐力回复倍率 = 0,       // 力竭 = 0.5
+    思绪回复倍率 = 1,       // 混乱 = 0.5
+    移动距离加成 = 2,       // 残废 = -1 / 敏捷 = +1（不影响传送）
+    移动耐力消耗倍率 = 3,   // 沉重 = 1.25
+    攻击伤害加成 = 4,       // 无力 = -1 / 力量 = +1
+    攻击耐力消耗倍率 = 5,   // 虚弱 = 1.25
+    受到伤害倍率 = 6,       // 易伤 = 1.25
+    受到伤害固定减免 = 7,   // 耐性 = 1 / 殊死一搏 = 3
 
     // ---------- 持续伤害类（伤害类 buff 用，回合开始结算）----------
-    固定持续伤害,       // 中毒 / 灼烧 / 流血，伤害 = value × 当前层数
+    固定持续伤害 = 8,       // 中毒 / 灼烧 / 流血，伤害 = value × 当前层数
 
     // ---------- 控制类 ----------
-    禁止行动,           // 眩晕
+    禁止行动 = 9,           // 眩晕
 
     // ---------- 特殊效果类 ----------
-    清除所有负面,       // 殊死一搏
-    清除所有正面,
-    免疫负面,           // 殊死一搏
-    免疫伤害,           // 无敌
-    免疫死亡,           // 无敌
-    回合结束死亡,       // 殊死一搏（回合结束直接死亡）
-    攻击目标限制,       // 亲密（不能把这些单位选为攻击目标）
-    特殊机制            // 神圣 / 荧光——代码里单独处理
+    清除所有负面 = 10,
+    清除所有正面 = 11,
+    免疫负面 = 12,
+    免疫伤害 = 13,
+    免疫死亡 = 14,
+    回合结束死亡 = 15,
+    攻击目标限制 = 16,
+    特殊机制 = 17,          // 兼容旧配置；已知状态优先用下面的明确类型
+
+    耐力消耗倍率 = 18,
+    思绪消耗倍率 = 19,
+    神圣状态 = 20,          // 标记：具体效果由怪物机制消费
+    荧光状态 = 21           // 标记：特殊技能系统消费，不在此虚构技能效果
 }
 
 /// <summary>
@@ -203,7 +213,7 @@ public class BuffEffect
     public BuffEffectType effectType;
 
     [Header("触发时机")]
-    [Tooltip("伤害类的持续伤害填 回合开始；影响类的属性效果填 立即生效")]
+    [Tooltip("持续伤害填回合开始；属性按攻击/移动/受伤/资源回复用途填写；净化填立即生效，回合结束死亡填回合结束。属性查询目前不限时机。")]
     public BuffTrigger trigger;
 
     [Header("数值")]
@@ -211,7 +221,7 @@ public class BuffEffect
     public float value;
 
     [Header("是否百分比")]
-    [Tooltip("给 UI 显示用：勾上时界面显示为百分比（0.25 → 25%）")]
+    [Tooltip("供 UI 识别百分比属性；倍率数值仍填写绝对乘数。显示增减百分比时用 (value-1)×100，例如 1.25 显示 +25%。")]
     public bool isPercent;
 }
 
@@ -230,9 +240,6 @@ public class BuffData : ScriptableObject
     [Header("持续与叠加")]
     [Tooltip("持续回合数。-1 = 永久不消失（力量、敏捷这类常驻正面 buff）")]
     public int duration = -1;
-
-    [Tooltip("最大层数")]
-    public int maxStack = 1;
 
     [Tooltip("能不能叠层。沉重、虚弱明确写了'不叠加'，这两件要取消勾选")]
     public bool canStack = false;
@@ -253,6 +260,9 @@ public class BuffData : ScriptableObject
     [Header("攻击目标限制（effectType = 攻击目标限制 时填）")]
     [Tooltip("挂了『亲密』后，这些单位不能被选为攻击目标")]
     public List<UnitData> forbiddenAttackTargets = new List<UnitData>();
+
+    [Tooltip("尚无单位资产时可按 UnitData.unitName 精确匹配。亲密填大抱抱、小抱抱、德亚、普兰；名称改动时需同步，已有引用优先使用引用。")]
+    public List<string> forbiddenAttackTargetNames = new List<string>();
 
     [Header("效果（可多条）")]
     public List<BuffEffect> effects = new List<BuffEffect>();
@@ -286,6 +296,8 @@ public class BuffData : ScriptableObject
             case BuffEffectType.移动耐力消耗倍率:
             case BuffEffectType.攻击耐力消耗倍率:
             case BuffEffectType.受到伤害倍率:
+            case BuffEffectType.耐力消耗倍率:
+            case BuffEffectType.思绪消耗倍率:
                 return true;
 
             default:
@@ -306,7 +318,7 @@ public class BuffData : ScriptableObject
     public bool IsControl => HasEffectType(BuffEffectType.禁止行动);
 
     /// <summary>能不能叠层</summary>
-    public bool CanStack => canStack && maxStack > 1;
+    public bool CanStack => canStack;
 
     /// <summary>
     /// 实际生效的层数衰减方式。
@@ -447,6 +459,8 @@ public class BuffData : ScriptableObject
         if (candidate == null || candidate.data == null) return false;
         if (!HasEffectType(BuffEffectType.攻击目标限制)) return false;
 
-        return forbiddenAttackTargets.Contains(candidate.data);
+        if (forbiddenAttackTargets != null && forbiddenAttackTargets.Contains(candidate.data)) return true;
+        return forbiddenAttackTargetNames != null &&
+            forbiddenAttackTargetNames.Contains(candidate.data.unitName);
     }
 }
