@@ -10,14 +10,14 @@ public class PlayerUnit : Unit
     [Header("玩家特有")]
     [Tooltip("每回合思绪上限")]
     public int maxThought = 20;
-    [Tooltip("每回合行动点上限")]
-    public int maxAction = 3;
+    [Tooltip("每回合耐力上限（耐力 = 行动资源，移动和出牌共用）")]
+    public int maxStamina = 3;
     [Tooltip("每回合抽卡数")]
     public int drawPerTurn = 5;
 
     // 运行时状态
     protected int currentThought;
-    protected int currentAction;
+    protected int currentStamina;
     protected bool hasActedThisTurn = false;
 
     /// <summary>
@@ -26,9 +26,9 @@ public class PlayerUnit : Unit
     public int CurrentThought => currentThought;
 
     /// <summary>
-    /// 当前行动点
+    /// 当前耐力（即行动资源：移动、出牌都从这里扣）
     /// </summary>
-    public int CurrentAction => currentAction;
+    public int CurrentStamina => currentStamina;
 
     /// <summary>
     /// 是否被选中
@@ -43,7 +43,7 @@ public class PlayerUnit : Unit
     {
         base.Initialize(unitData, startCoord);
         currentThought = maxThought;
-        currentAction = maxAction;
+        currentStamina = maxStamina;
         hasActedThisTurn = false;
     }
 
@@ -55,9 +55,9 @@ public class PlayerUnit : Unit
     {
         base.OnTurnStart();  // 先执行基类的 buff 结算
 
-        // 回合开始：补满思绪和行动点
+        // 回合开始：补满思绪和耐力
         currentThought = maxThought;
-        currentAction = maxAction;
+        currentStamina = maxStamina;
         hasActedThisTurn = false;
     }
 
@@ -65,6 +65,63 @@ public class PlayerUnit : Unit
     {
         base.OnTurnEnd();
         isSelected = false;
+    }
+
+    // ============================================================
+    //                  思绪 / 耐力消耗（卡牌用）
+    // ============================================================
+
+    /// <summary>
+    /// 尝试消耗思绪，不足返回 false（灌注、抽卡用）
+    /// </summary>
+    public bool TrySpendThought(int amount)
+    {
+        if (amount < 0) return false;
+        if (currentThought < amount)
+        {
+            Debug.Log($"思绪不足：需要 {amount}，当前 {currentThought}");
+            return false;
+        }
+
+        currentThought -= amount;
+        EventManager.Trigger("PlayerResourceChanged", this);
+        return true;
+    }
+
+    /// <summary>
+    /// 尝试消耗耐力，不足返回 false
+    /// </summary>
+    public bool TrySpendStamina(int amount)
+    {
+        if (amount < 0) return false;
+        if (currentStamina < amount)
+        {
+            Debug.Log($"耐力不足：需要 {amount}，当前 {currentStamina}");
+            return false;
+        }
+
+        currentStamina -= amount;
+        EventManager.Trigger("PlayerResourceChanged", this);
+        return true;
+    }
+
+    /// <summary>
+    /// 同时消耗思绪 + 耐力（出牌用），任一不足则都不扣
+    /// </summary>
+    public bool TrySpendResource(int thoughtAmount, int staminaAmount)
+    {
+        if (thoughtAmount < 0 || staminaAmount < 0) return false;
+        if (currentThought < thoughtAmount || currentStamina < staminaAmount)
+        {
+            Debug.Log($"资源不足：需要思绪 {thoughtAmount}/耐力 {staminaAmount}，" +
+                      $"当前思绪 {currentThought}/耐力 {currentStamina}");
+            return false;
+        }
+
+        currentThought -= thoughtAmount;
+        currentStamina -= staminaAmount;
+        EventManager.Trigger("PlayerResourceChanged", this);
+        return true;
     }
 
     // ============================================================
@@ -82,9 +139,9 @@ public class PlayerUnit : Unit
         if (GameManager.Instance != null && !GameManager.Instance.isPlayerTurn)
             return false;
 
-        if (currentAction <= 0)
+        if (currentStamina <= 0)
         {
-            Debug.Log("行动点不足");
+            Debug.Log("耐力不足");
             return false;
         }
 
@@ -96,22 +153,23 @@ public class PlayerUnit : Unit
             return false;
         }
 
-        // 移动距离不能超过行动点（简化：1 行动点 = 走 1 格）
+        // 移动距离不能超过耐力（简化：1 耐力 = 走 1 格）
         int moveDistance = path.Count - 1;  // path 包含起点
-        int moveCost = moveDistance;        // 简化：每格消耗 1 行动点
+        int moveCost = moveDistance;        // 简化：每格消耗 1 耐力
 
         // 考虑移动距离加成 buff
         int moveBonus = GetMoveBonus();
-        int maxMove = currentAction + moveBonus;
+        int maxMove = currentStamina + moveBonus;
 
         if (moveCost > maxMove)
         {
-            Debug.Log($"移动距离不够，需要 {moveCost} 行动点，当前 {currentAction}（加成 {moveBonus}）");
+            Debug.Log($"移动距离不够，需要 {moveCost} 耐力，当前 {currentStamina}（加成 {moveBonus}）");
             return false;
         }
 
-        // 扣行动点
-        currentAction = Mathf.Max(0, currentAction - moveCost);
+        // 扣耐力
+        currentStamina = Mathf.Max(0, currentStamina - moveCost);
+        EventManager.Trigger("PlayerResourceChanged", this);
 
         // 开始移动（先简化为瞬移，以后加动画）
         MoveAlongPath(path);
@@ -159,9 +217,9 @@ public class PlayerUnit : Unit
         if (GameManager.Instance != null && !GameManager.Instance.isPlayerTurn)
             return false;
 
-        if (currentAction <= 0)
+        if (currentStamina <= 0)
         {
-            Debug.Log("行动点不足");
+            Debug.Log("耐力不足");
             return false;
         }
 
@@ -179,8 +237,9 @@ public class PlayerUnit : Unit
             return false;
         }
 
-        // 扣行动点
-        currentAction--;
+        // 扣耐力
+        currentStamina--;
+        EventManager.Trigger("PlayerResourceChanged", this);
 
         // 造成伤害
         int damage = GetAttack();
@@ -224,7 +283,7 @@ public class PlayerUnit : Unit
     {
         if (HexGrid.Instance == null) return;
 
-        int moveRange = currentAction + GetMoveBonus();
+        int moveRange = currentStamina + GetMoveBonus();
         var reachable = HexPathfinding.GetReachableCells(currentCoord, moveRange);
 
         foreach (var coord in reachable)

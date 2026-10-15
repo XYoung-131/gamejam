@@ -17,6 +17,15 @@ MonoBehaviour:
   thoughtCost: 15
   actionCost: 5
   maxUses: 3
+  minRange: 0
+  maxRange: 1
+  damage: 1
+  targetTypes: 00000000
+  defenseEffectType: 1
+  defenseValue: 0
+  defenseTargetTypes: 01000000
+  library: 0
   rarity: 2
   tags: 00000000
+  buffs: []
   devNotes: 
