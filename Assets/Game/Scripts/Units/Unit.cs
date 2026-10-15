@@ -37,6 +37,17 @@ public abstract class Unit : MonoBehaviour
     // 当前身上的所有 buff
     [SerializeField] protected List<BuffInstance> activeBuffs = new List<BuffInstance>();
 
+    // 是否已经死亡。
+    // 为什么不能只看 currentHealth：Unity 的 Destroy 是"延迟到帧末执行"的，
+    // Die() 之后这个 C# 对象还要存活若干次调用，光看血量挡不住"给死人挂 buff / 补刀"。
+    [SerializeField] protected bool isDead = false;
+
+    /// <summary>
+    /// 这个单位是不是已经死了。
+    /// Die() 之后恒为 true（本作没有复活），用于挡住一切后续结算。
+    /// </summary>
+    public bool IsDead => isDead;
+
     // 事件
     public event System.Action<Unit> OnUnitDied;
     public event System.Action<Unit, BuffData> OnBuffApplied;
@@ -51,6 +62,7 @@ public abstract class Unit : MonoBehaviour
         currentHealth = unitData.maxHealth;
         shield = 0;
         currentCoord = startCoord;
+        isDead = false;
         activeBuffs.Clear();
 
         // 把自己注册到格子上
@@ -72,17 +84,24 @@ public abstract class Unit : MonoBehaviour
     /// </summary>
     public virtual void TakeDamage(int amount)
     {
+        // 已经死亡 → 不再吃任何伤害。
+        // Destroy 延迟到帧末执行，期间可能还有别的结算（连锁、反伤、持续伤害）打过来，
+        // 不挡住的话会对一个正在销毁的物体重复跑死亡流程。
+        if (isDead) return;
+
         // 免疫伤害 → 直接返回
         if (HasEffect(BuffEffectType.免疫伤害))
             return;
 
-        // 受到伤害固定减免
-        float damageReduce = GetTotalEffectValue(BuffEffectType.受到伤害固定减免, BuffTrigger.受到伤害时);
+        // 受到伤害固定减免（殊死一搏 = 3）
+        // 属性类效果不限触发时机，策划填"立即生效"还是"受到伤害时"都会算进来。
+        float damageReduce = GetTotalEffectValue(BuffEffectType.受到伤害固定减免);
         amount = Mathf.Max(0, amount - Mathf.RoundToInt(damageReduce));
 
-        // 受到伤害倍率（易伤 = >1，减伤 = <1）
-        float damageMultiplier = GetTotalEffectValue(BuffEffectType.受到伤害倍率, BuffTrigger.受到伤害时);
-        if (damageMultiplier <= 0) damageMultiplier = 1f;
+        // 受到伤害倍率（易伤 = 1.25，减伤 < 1）
+        // 倍率型返回的是"最终绝对乘数"：易伤叠 2 层 = 1 + 0.25×2 = 1.5，
+        // 而不是把 1.25 直接相加（那会变成 2.5 倍）。没挂易伤时返回 1。
+        float damageMultiplier = Mathf.Max(0f, GetTotalEffectValue(BuffEffectType.受到伤害倍率));
         amount = Mathf.CeilToInt(amount * damageMultiplier);
 
         // 先扣护盾
@@ -159,6 +178,12 @@ public abstract class Unit : MonoBehaviour
     /// </summary>
     public virtual void ApplyBuff(BuffData buffData)
     {
+        // 已经死亡的单位不再接受任何 buff。
+        // 场景：攻击把目标打死了，但卡牌结算后面的"施加负面 buff"还会跑；
+        //       Destroy 是延迟到帧末的，不判死就会给一个正在销毁的物体挂上 buff，
+        //       并广播 UnitBuffApplied 事件，让 UI 拿到一个已死单位。
+        if (isDead || buffData == null) return;
+
         // 免疫负面 → 如果是负面 buff 直接跳过
         if (buffData.polarity == BuffPolarity.负面 && HasEffect(BuffEffectType.免疫负面))
             return;
@@ -239,25 +264,59 @@ public abstract class Unit : MonoBehaviour
     }
 
     /// <summary>
-    /// 获取某种效果类型的总数值（叠加所有同类型 buff）
-    /// 比如所有"攻击伤害加成" buff 的 value 总和
+    /// 获取某种效果类型的总数值——【不限触发时机】。
+    ///
+    /// 属性类加成统一用这个重载：无论策划把 effect 的 trigger 填成
+    /// "立即生效"还是"攻击时"/"受到伤害时"，都会算进来。
+    /// 这样就不会出现"填错一个 trigger 就静默失效"的情况（这个坑踩过一次：
+    /// 力量填了立即生效、代码却按攻击时去查，返回 0，加成整个不见）。
+    ///
+    /// 数值合并规则分两类（由 BuffData.IsMultiplierType 判定）：
+    ///   · 加成型：value 是增量，直接累加（力量 +1、无力 -1、殊死一搏 3）
+    ///   · 倍率型：value 是绝对乘数，累加"偏离 1 的部分"后加回 1：
+    ///         最终倍率 = 1 + Σ( value - 1 ) × 层数
+    ///     易伤 1.25 叠 2 层 → 1 + 0.25×2 = 1.5（而不是 1.25 + 1.25 = 2.5）
+    ///
+    /// 没有任何该类型 buff 时：倍率型返回 1（即不变），加成型返回 0。
     /// </summary>
-    /// <param name="trigger">只统计特定触发时机的效果</param>
-    public virtual float GetTotalEffectValue(BuffEffectType effectType, BuffTrigger trigger = BuffTrigger.立即生效)
+    public virtual float GetTotalEffectValue(BuffEffectType effectType)
     {
-        float total = 0f;
+        return GetTotalEffectValue(effectType, null);
+    }
+
+    /// <summary>
+    /// 获取某种效果类型的总数值——只统计【指定触发时机】的效果。
+    ///
+    /// 只用于"按回合 / 按事件触发"的效果（回合开始的持续伤害、攻击时触发等），
+    /// 这类场景里"哪个时机"本身是有意义的。
+    /// 属性类加成请用不带 trigger 的那个重载。
+    /// </summary>
+    /// <param name="trigger">为 null 表示不限触发时机</param>
+    public virtual float GetTotalEffectValue(BuffEffectType effectType, BuffTrigger? trigger)
+    {
+        bool isMultiplier = BuffData.IsMultiplierType(effectType);
+
+        // 倍率型从 1 起算（乘法的单位元），加成型从 0 起算
+        float total = isMultiplier ? 1f : 0f;
+
         foreach (var buff in activeBuffs)
         {
+            if (buff == null || buff.data == null) continue;
+
             foreach (var effect in buff.data.effects)
             {
-                if (effect.effectType == effectType && effect.trigger == trigger)
-                {
-                    // 叠加层数
-                    total += effect.value * buff.currentStacks;
-                }
+                if (effect == null) continue;
+                if (effect.effectType != effectType) continue;
+                if (trigger.HasValue && effect.trigger != trigger.Value) continue;
+
+                // 倍率型累加"偏离 1"的部分，加成型直接累加数值；两者都要乘层数
+                float perStack = isMultiplier ? (effect.value - 1f) : effect.value;
+                total += perStack * buff.currentStacks;
             }
         }
-        return total;
+
+        // 倍率被叠成负数没有意义（比如力竭叠太多），下限钳到 0
+        return isMultiplier ? Mathf.Max(0f, total) : total;
     }
 
     /// <summary>
@@ -424,7 +483,13 @@ public abstract class Unit : MonoBehaviour
     /// </summary>
     protected virtual void Die()
     {
-        // 触发"死亡时"效果
+        // 防重复：已经死过了就直接返回。
+        // 不挡的话，"被持续伤害打死"和"被卡牌直接打死"两条路可能先后各跑一次 Die()，
+        // 导致 UnitDied 事件发两遍、PlayerUnit 那边重复判定"全员阵亡"。
+        if (isDead) return;
+        isDead = true;
+
+        // 触发"死亡时"效果（此时 isDead 已置位，死亡时效果里的伤害不会再打到这个单位身上）
         TriggerBuffs(BuffTrigger.死亡时);
 
         // 从格子上移除
@@ -452,6 +517,9 @@ public abstract class Unit : MonoBehaviour
     /// </summary>
     public virtual void MoveTo(HexCoord target)
     {
+        // 已死亡 → 不能移动（Destroy 延迟到帧末，期间可能还有移动指令打进来）
+        if (isDead) return;
+
         // 禁止行动 buff
         if (HasEffect(BuffEffectType.禁止行动))
         {
@@ -544,24 +612,44 @@ public abstract class Unit : MonoBehaviour
     public virtual int GetAttack()
     {
         int baseAttack = 1;  // 基础攻击（MVP 简化，以后从 data 读）
-        float bonus = GetTotalEffectValue(BuffEffectType.攻击伤害加成, BuffTrigger.攻击时);
-        return baseAttack + Mathf.RoundToInt(bonus);
+        // 力量 / 无力 / 临时力量 走"攻击伤害加成"。
+        // 用不限触发时机的那个重载，策划填"立即生效"或"攻击时"都能生效。
+        float bonus = GetTotalEffectValue(BuffEffectType.攻击伤害加成);
+        return Mathf.Max(0, baseAttack + Mathf.RoundToInt(bonus));
     }
 
     /// <summary>
-    /// 是否能攻击
+    /// 这个单位身上有没有"攻击目标限制"（亲密），且 candidate 正好在被禁名单里。
+    /// 玩家点选目标、自动索敌、卡牌结算三处都会用它兜底。
+    /// </summary>
+    public virtual bool IsAttackTargetForbidden(Unit candidate)
+    {
+        if (candidate == null) return false;
+
+        foreach (var buff in activeBuffs)
+        {
+            if (buff.data != null && buff.data.IsForbiddenAttackTarget(candidate))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// 是否能攻击（同时也决定"能不能出牌"——CardData.Resolve 用它拦下所有动作）
+    /// 已死亡 或 中了"禁止行动"（眩晕）都不行。
     /// </summary>
     public virtual bool CanAttack()
     {
-        return !HasEffect(BuffEffectType.禁止行动);
+        return !isDead && !HasEffect(BuffEffectType.禁止行动);
     }
 
     /// <summary>
-    /// 获取移动距离加成
+    /// 获取移动距离加成（敏捷 +1 / 残废 -1）
+    /// 加成型，不限触发时机。
     /// </summary>
     public virtual int GetMoveBonus()
     {
-        return Mathf.RoundToInt(GetTotalEffectValue(BuffEffectType.移动距离加成, BuffTrigger.立即生效));
+        return Mathf.RoundToInt(GetTotalEffectValue(BuffEffectType.移动距离加成));
     }
 
     // ============================================================
@@ -574,6 +662,9 @@ public abstract class Unit : MonoBehaviour
     /// </summary>
     protected void TakeDamageInternal(int amount)
     {
+        // 已死 → 不再重复结算，避免对一个正在销毁的单位反复跑死亡流程
+        if (isDead) return;
+
         if (shield > 0)
         {
             int absorbed = Mathf.Min(shield, amount);

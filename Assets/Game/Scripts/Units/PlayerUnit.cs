@@ -125,6 +125,52 @@ public class PlayerUnit : Unit
     }
 
     // ============================================================
+    //              思绪 / 耐力 回复（药水、遗物用）
+    // ============================================================
+
+    /// <summary>
+    /// 回复耐力，不会超过上限（"耐力饮料"等）
+    /// </summary>
+    public void RestoreStamina(int amount)
+    {
+        if (amount <= 0) return;
+
+        currentStamina = Mathf.Min(currentStamina + amount, maxStamina);
+        EventManager.Trigger("PlayerResourceChanged", this);
+    }
+
+    /// <summary>
+    /// 回复思绪，不会超过上限（"提神饮料"等）
+    /// </summary>
+    public void RestoreThought(int amount)
+    {
+        if (amount <= 0) return;
+
+        currentThought = Mathf.Min(currentThought + amount, maxThought);
+        EventManager.Trigger("PlayerResourceChanged", this);
+    }
+
+    /// <summary>
+    /// 回复全部耐力和思绪（"精力充沛"遗物）
+    /// </summary>
+    public void RestoreAllResources()
+    {
+        currentStamina = maxStamina;
+        currentThought = maxThought;
+        EventManager.Trigger("PlayerResourceChanged", this);
+    }
+
+    /// <summary>
+    /// 扣光全部耐力和思绪（"劣质混合饮料"第 3 瓶的副作用）
+    /// </summary>
+    public void DrainAllResources()
+    {
+        currentStamina = 0;
+        currentThought = 0;
+        EventManager.Trigger("PlayerResourceChanged", this);
+    }
+
+    // ============================================================
     //                     移动（玩家操作）
     // ============================================================
 

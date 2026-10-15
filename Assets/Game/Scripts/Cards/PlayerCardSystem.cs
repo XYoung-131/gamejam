@@ -429,8 +429,18 @@ public class PlayerCardSystem : MonoBehaviour
             !IsInRange(card, player.GetCoord(), finalTarget.GetCoord()))
             return false;
 
+        // "亲密"（攻击目标限制）：名单里的单位不能被选为攻击目标。
+        // 必须拦在扣费之前，否则会出现"扣了耐力却打不出去"的情况。
+        if (finalTarget != null && finalTarget != player && player.IsAttackTargetForbidden(finalTarget))
+        {
+            Debug.Log($"【{card.cardName}】无法将 {finalTarget.data.unitName} 选为攻击目标");
+            return false;
+        }
+
         // --- 扣资源（思绪 + 耐力一起判断，任一不足则两种都不扣） ---
-        if (!player.TrySpendResource(card.thoughtCost, card.actionCost))
+        // 耐力消耗取"最终值"：虚弱（攻击耐力消耗倍率 1.25）会放大攻击技能的消耗
+        int finalActionCost = card.GetFinalActionCost(player);
+        if (!player.TrySpendResource(card.thoughtCost, finalActionCost))
             return false;
 
         // --- 结算卡牌效果（伤害/buff 都在 CardData.Resolve 里） ---
@@ -471,8 +481,9 @@ public class PlayerCardSystem : MonoBehaviour
         if (!IsInRange(card, player.GetCoord(), obstacle.GetCoord()))
             return false;
 
-        // 扣资源
-        if (!player.TrySpendResource(card.thoughtCost, card.actionCost))
+        // 扣资源（耐力同样走"最终值"，虚弱会放大攻击技能的消耗）
+        int finalActionCost = card.GetFinalActionCost(player);
+        if (!player.TrySpendResource(card.thoughtCost, finalActionCost))
             return false;
 
         // 结算（障碍物专用重载：只吃伤害，不吃负面 buff）
@@ -556,13 +567,15 @@ public class PlayerCardSystem : MonoBehaviour
     /// <summary>
     /// 射程判定：目标坐标与施法者坐标的六边形距离是否在 [minRange, maxRange] 内。
     /// 单位和障碍物共用（两者都有六边形坐标）。
+    /// 最大射程取"最终值"——位移类技能会被敏捷/残废修正（见 CardData.GetEffectiveMaxRange）。
     /// </summary>
     protected virtual bool IsInRange(CardData card, HexCoord from, HexCoord to)
     {
         int distance = from.Distance(to);
-        if (distance < card.minRange || distance > card.maxRange)
+        int maxRange = card.GetEffectiveMaxRange(player);
+        if (distance < card.minRange || distance > maxRange)
         {
-            Debug.Log($"目标距离 {distance} 格，【{card.cardName}】射程为 {card.minRange}~{card.maxRange} 格");
+            Debug.Log($"目标距离 {distance} 格，【{card.cardName}】射程为 {card.minRange}~{maxRange} 格");
             return false;
         }
 
@@ -655,6 +668,7 @@ public class PlayerCardSystem : MonoBehaviour
         foreach (var enemy in allEnemies)
         {
             if (enemy.GetCurrentHealth() <= 0) continue;   // 跳过尸体
+            if (player.IsAttackTargetForbidden(enemy)) continue;  // 亲密：名单里的单位不能被自动索敌选中
 
             int dist = player.GetCoord().Distance(enemy.GetCoord());
             if (dist < minDist)

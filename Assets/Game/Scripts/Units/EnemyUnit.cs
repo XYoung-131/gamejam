@@ -155,12 +155,13 @@ public class EnemyUnit : Unit
                 target = this;
 
             // 攻击/对敌技能射程校验：目标是玩家（不是自己）时检查距离，超出就跳过
+            // 走 CardData 的统一判定，位移类技能会自动算上敏捷/残废
             if (target != this)
             {
-                int distance = GetCoord().Distance(target.GetCoord());
-                if (distance < card.minRange || distance > card.maxRange)
+                if (!card.IsInEffectiveRange(this, GetCoord(), target.GetCoord()))
                 {
-                    Debug.Log($"{data.unitName} 的【{card.cardName}】射程 {card.minRange}~{card.maxRange}，" +
+                    int distance = GetCoord().Distance(target.GetCoord());
+                    Debug.Log($"{data.unitName} 的【{card.cardName}】射程 {card.minRange}~{card.GetEffectiveMaxRange(this)}，" +
                               $"目标距离 {distance}，超出射程，跳过");
                     continue;
                 }
