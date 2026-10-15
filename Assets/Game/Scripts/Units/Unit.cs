@@ -11,6 +11,7 @@ public class BuffInstance
     public BuffData data;              // 引用 buff 配置资产
     public int remainingDuration;      // 剩余持续回合（-1 = 永久）
     public int currentStacks;          // 当前层数
+    public int turnsSinceLastStack;    // 距上次叠层过了几个回合（"中毒"用它判"3 回合没叠就清空"）
 }
 
 /// <summary>
@@ -38,10 +39,10 @@ public enum DisplacementType
 /// 继承 MonoBehaviour，挂在单位 GameObject 上
 /// 
 /// Buff 结算逻辑：
-///   - 伤害类 buff：回合开始时触发效果（流血扣血等）
-///   - 效果类 buff：实时计算（GetAttack、TakeDamage 里叠加）
-///   - 所有 buff 持续时间：回合结束时 -1，过期移除
-///   - 护盾：回合结束时直接清零（特殊类，独立管理）
+///   - 伤害类 buff：回合开始时触发效果（中毒/灼烧/流血扣血）
+///   - 影响类 buff：获得即生效，属性值在 GetAttack / TakeDamage 等方法里实时反查
+///   - 所有 buff 在回合结束时衰减：① 层数（按 BuffData.stackDecay）② 持续时间（-1 = 永久）
+///   - 护盾：回合结束清零（特殊类，独立管理）
 /// </summary>
 public abstract class Unit : MonoBehaviour
 {
@@ -125,20 +126,12 @@ public abstract class Unit : MonoBehaviour
         if (amount <= 0) return;
         if (isDead) return;   // 已死亡的单位不再结算任何伤害
 
-        // 免疫伤害 → 直接返回
+        // 免疫伤害 → 直接返回（放在这里是为了连"受到伤害时"事件一起不触发）
         if (HasEffect(BuffEffectType.免疫伤害))
             return;
 
-        // 受到伤害固定减免。
-        // 注意：查询不限触发时机——策划把效果填成"立即生效"或"受到伤害时"都会算进来，
-        // 避免填错 trigger 就静默失效（查询永远返回 0）。
-        float damageReduce = GetTotalEffectValue(BuffEffectType.受到伤害固定减免);
-        amount = Mathf.Max(0, amount - Mathf.RoundToInt(damageReduce));
-
-        // 受到伤害倍率（易伤 = >1，减伤 = <1），倍率型叠加规则见 GetTotalEffectValue
-        float damageMultiplier = GetTotalEffectValue(BuffEffectType.受到伤害倍率);
-        if (damageMultiplier <= 0) damageMultiplier = 1f;  // 没有该类型 buff 时返回 1，这里再兜底
-        amount = Mathf.CeilToInt(amount * damageMultiplier);   // 向上取整
+        // 固定减免 + 倍率增减（易伤 / 减伤），统一走共享算法
+        amount = CalcIncomingDamage(amount);
 
         // 扣护盾（真实伤害无视护甲）
         if (type != DamageType.真实 && shield > 0)
@@ -155,6 +148,32 @@ public abstract class Unit : MonoBehaviour
         TriggerBuffs(BuffTrigger.受到伤害时);
 
         EventManager.Trigger("UnitDamaged", this);
+    }
+
+    /// <summary>
+    /// 计算"最终要吃下的伤害"：免疫 → 固定减免 → 倍率增减（易伤 / 减伤）。
+    /// 只做数值计算、不扣血，因此不会递归。
+    ///
+    /// 抽出来是为了让【卡牌/普通攻击】和【中毒/灼烧/流血等持续伤害】共用同一套减伤规则——
+    /// DamageType.Buff 的定义明确写了"也受减伤/易伤影响"，而原先 TakeDamageInternal
+    /// 直接"跳过 buff 计算"，导致中了易伤时持续伤害并不会增加，两边对不上。
+    /// 顺带也让"无敌（免疫伤害）"能挡住持续伤害。
+    /// </summary>
+    /// <returns>实际应扣的伤害值（已向上取整，下限 0）</returns>
+    protected int CalcIncomingDamage(int amount)
+    {
+        if (amount <= 0) return 0;
+        if (HasEffect(BuffEffectType.免疫伤害)) return 0;
+
+        // 受到伤害固定减免（殊死一搏 = 3）。不限触发时机，填"立即生效"或"受到伤害时"都算。
+        float damageReduce = GetTotalEffectValue(BuffEffectType.受到伤害固定减免);
+        amount = Mathf.Max(0, amount - Mathf.RoundToInt(damageReduce));
+
+        // 受到伤害倍率（易伤 = 1.25，减伤 < 1），倍率型叠加规则见 GetTotalEffectValue
+        float damageMultiplier = GetTotalEffectValue(BuffEffectType.受到伤害倍率);
+        if (damageMultiplier <= 0) damageMultiplier = 1f;   // 没有该类型 buff 时返回 1，这里再兜底
+
+        return Mathf.CeilToInt(amount * damageMultiplier);   // 向上取整（文档："0.1 也算 1"）
     }
 
     /// <summary>
@@ -200,10 +219,14 @@ public abstract class Unit : MonoBehaviour
     }
 
     /// <summary>
-    /// 治疗
+    /// 治疗。
+    /// 判活：已死亡的单位不能再被治疗——否则会出现 isDead = true 但 currentHealth > 0
+    /// 的"僵尸状态"（Destroy 延迟到帧末，复活类/治疗类调用方可能踩到）。
     /// </summary>
     public virtual void Heal(int amount)
     {
+        if (isDead || amount <= 0) return;
+
         currentHealth = Mathf.Min(currentHealth + amount, data.maxHealth);
         EventManager.Trigger("UnitHealed", this);
     }
@@ -214,6 +237,8 @@ public abstract class Unit : MonoBehaviour
     /// </summary>
     public virtual void AddShield(int amount)
     {
+        if (isDead || amount <= 0) return;
+
         shield += amount;
         EventManager.Trigger("UnitShieldChanged", this);
     }
@@ -238,7 +263,9 @@ public abstract class Unit : MonoBehaviour
     /// <summary>
     /// 施加一个 buff
     /// </summary>
-    public virtual void ApplyBuff(BuffData buffData)
+    /// <param name="buffData">buff 配置</param>
+    /// <param name="stacks">本次施加的层数（默认 1；对精英怪 / BOSS 会自动减半）</param>
+    public virtual void ApplyBuff(BuffData buffData, int stacks = 1)
     {
         if (isDead) return;   // 已死亡的单位不再接受任何 buff
         if (buffData == null) return;
@@ -246,6 +273,14 @@ public abstract class Unit : MonoBehaviour
         // 免疫负面 → 如果是负面 buff 直接跳过
         if (buffData.polarity == BuffPolarity.负面 && HasEffect(BuffEffectType.免疫负面))
             return;
+
+        // "对敌人无效"（力竭 / 混乱）：目标不符合要求就挂不上。
+        // 这一步以前缺失，导致 buff 上 onlyForPlayerUnit 勾了也不起作用。
+        if (!buffData.CanApplyTo(this)) return;
+
+        // 真实层数：残废 / 无力 明确写了"对精英怪和 BOSS 施加时层数减半，单次至少 1 点"。
+        // 这一步以前也缺失，导致精英怪身上的残废层数没打折。
+        int realStacks = buffData.CalcStacksOnApply(this, stacks);
 
         // 查找是否已有同类型 buff
         BuffInstance existing = activeBuffs.Find(b => b.data == buffData);
@@ -260,9 +295,12 @@ public abstract class Unit : MonoBehaviour
             if (buffData.canStack)
             {
                 existing.currentStacks = Mathf.Min(
-                    existing.currentStacks + 1,
+                    existing.currentStacks + realStacks,
                     buffData.maxStack);
             }
+
+            // 又叠上了 → 中毒的"连续未叠层"计数归零
+            existing.turnsSinceLastStack = 0;
         }
         else
         {
@@ -271,7 +309,8 @@ public abstract class Unit : MonoBehaviour
             {
                 data = buffData,
                 remainingDuration = buffData.duration,
-                currentStacks = 1
+                currentStacks = realStacks,
+                turnsSinceLastStack = 0
             };
             activeBuffs.Add(newBuff);
 
@@ -331,9 +370,11 @@ public abstract class Unit : MonoBehaviour
     {
         foreach (var buff in activeBuffs)
         {
+            if (buff == null || buff.data == null) continue;
+
             foreach (var effect in buff.data.effects)
             {
-                if (effect.effectType == effectType)
+                if (effect != null && effect.effectType == effectType)
                     return true;
             }
         }
@@ -431,9 +472,11 @@ public abstract class Unit : MonoBehaviour
     /// </summary>
     protected virtual void TriggerBuffEffects(BuffInstance buff, BuffTrigger trigger)
     {
+        if (buff == null || buff.data == null) return;
+
         foreach (var effect in buff.data.effects)
         {
-            if (effect.trigger != trigger) continue;
+            if (effect == null || effect.trigger != trigger) continue;
 
             switch (effect.effectType)
             {
@@ -468,13 +511,14 @@ public abstract class Unit : MonoBehaviour
     {
         for (int i = activeBuffs.Count - 1; i >= 0; i--)
         {
-            if (activeBuffs[i].data.polarity == BuffPolarity.负面)
+            if (activeBuffs[i] == null || activeBuffs[i].data == null)
             {
-                BuffData data = activeBuffs[i].data;
                 activeBuffs.RemoveAt(i);
-                OnBuffRemoved?.Invoke(this, data);
-                EventManager.Trigger("UnitBuffRemoved", this, data);
+                continue;
             }
+
+            if (activeBuffs[i].data.polarity == BuffPolarity.负面)
+                RemoveBuffInstanceAt(i, "UnitBuffRemoved");
         }
     }
 
@@ -485,14 +529,34 @@ public abstract class Unit : MonoBehaviour
     {
         for (int i = activeBuffs.Count - 1; i >= 0; i--)
         {
-            if (activeBuffs[i].data.polarity == BuffPolarity.正面)
+            if (activeBuffs[i] == null || activeBuffs[i].data == null)
             {
-                BuffData data = activeBuffs[i].data;
                 activeBuffs.RemoveAt(i);
-                OnBuffRemoved?.Invoke(this, data);
-                EventManager.Trigger("UnitBuffRemoved", this, data);
+                continue;
             }
+
+            if (activeBuffs[i].data.polarity == BuffPolarity.正面)
+                RemoveBuffInstanceAt(i, "UnitBuffRemoved");
         }
+    }
+
+    /// <summary>
+    /// 按索引移除一个 buff 实例并广播事件。
+    /// 抽出来是为了让"层数衰减到 0 被移除"和"持续时间到期被移除"走同一套清理逻辑
+    /// （两者的区别只有事件名：前者叫 Expired）。
+    /// </summary>
+    protected void RemoveBuffInstanceAt(int index, string eventName)
+    {
+        if (index < 0 || index >= activeBuffs.Count) return;
+
+        BuffInstance instance = activeBuffs[index];
+        activeBuffs.RemoveAt(index);
+
+        BuffData removed = instance != null ? instance.data : null;
+        if (removed == null) return;
+
+        OnBuffRemoved?.Invoke(this, removed);
+        EventManager.Trigger(eventName, this, removed);
     }
 
     // ============================================================
@@ -506,6 +570,8 @@ public abstract class Unit : MonoBehaviour
     /// </summary>
     public virtual void OnTurnStart()
     {
+        if (isDead) return;   // 已死亡的单位不参与回合结算（TurnManager 已过滤，这里再兜一道）
+
         // 0. 护盾在下个回合开始时消失（文档规则）
         ClearShield();
 
@@ -522,19 +588,28 @@ public abstract class Unit : MonoBehaviour
     /// </summary>
     public virtual void OnTurnEnd()
     {
+        if (isDead) return;   // 已死亡的单位不参与回合结算
+
         // ① 触发"回合结束"时机的 buff 效果
         TriggerBuffs(BuffTrigger.回合结束);
 
         // ② 护盾清零（每回合结束清空，不管剩多少）
         ClearShieldOnTurnEnd();
 
-        // ③ buff 持续时间递减 + 移除过期
+        // ③ 层数 + 持续时间衰减，归零的移除
         TickBuffDuration();
     }
 
     /// <summary>
-    /// buff 持续时间结算：所有 buff 时间 -1，过期的移除
-    /// 从 OnTurnStart 拆出来，统一在回合结束时调用
+    /// 回合结束的 buff 衰减结算，两条线：
+    ///   ① 层数衰减 —— 按 BuffData.stackDecay 走（策划案："负面没特殊标识就是回合结束层数减1"）；
+    ///   ② 持续时间衰减 —— duration 减 1，减到 0 移除（-1 = 永久，不动）。
+    /// 层数或持续时间任一归零 → 移除该 buff。
+    ///
+    /// 注意：对负面 buff 来说"层数"就是它的存活回合数
+    ///（正因如此，"残废/无力对精英怪和 BOSS 层数减半"等价于持续时间减半）。
+    /// 所以做 asset 时负面 buff 的 duration 一般留 -1，靠层数走完生命周期；
+    /// 正面 buff 反之，靠 duration（-1 = 永久）。
     /// </summary>
     public virtual void TickBuffDuration()
     {
@@ -542,17 +617,42 @@ public abstract class Unit : MonoBehaviour
         {
             var buff = activeBuffs[i];
 
-            // 永久 buff 不减时间
-            if (buff.remainingDuration == -1) continue;
+            // 脏数据（配置丢了）直接丢弃，避免后面 NRE
+            if (buff == null || buff.data == null)
+            {
+                activeBuffs.RemoveAt(i);
+                continue;
+            }
+
+            // ---------- ① 层数衰减 ----------
+            bool expired = false;
+
+            if (buff.data.ResolvedDecay == BuffStackDecay.未叠加则清空)
+            {
+                // 中毒：不是每回合掉层，而是"连续 N 回合没再叠层"就整体清空
+                buff.turnsSinceLastStack++;
+                expired = buff.data.ShouldClearForNoStack(buff.turnsSinceLastStack);
+            }
+            else
+            {
+                // 其余全部走统一规则：回合结束减1 / 减半（1 层时清零）/ 消失 / 不减少
+                int newStacks = buff.data.CalcStacksAfterTurnEnd(buff.currentStacks);
+                if (newStacks <= 0) expired = true;
+                else buff.currentStacks = newStacks;
+            }
+
+            if (expired)
+            {
+                RemoveBuffInstanceAt(i, "UnitBuffExpired");
+                continue;
+            }
+
+            // ---------- ② 持续时间衰减 ----------
+            if (buff.remainingDuration == -1) continue;   // 永久 buff 不减时间
 
             buff.remainingDuration--;
             if (buff.remainingDuration <= 0)
-            {
-                BuffData expiredData = buff.data;
-                activeBuffs.RemoveAt(i);
-                OnBuffRemoved?.Invoke(this, expiredData);
-                EventManager.Trigger("UnitBuffExpired", this, expiredData);
-            }
+                RemoveBuffInstanceAt(i, "UnitBuffExpired");
         }
     }
 
@@ -581,8 +681,9 @@ public abstract class Unit : MonoBehaviour
     /// </summary>
     protected virtual void Die()
     {
-        // 防重复：持续伤害打死 + 卡牌打死两条路可能先后到达，
-        // 不拦的话 UnitDied 会发两遍、PlayerUnit 会重复判"全员阵亡"
+        // 防重复：持续伤害打死 + 卡牌打死两条路可能先后到达。
+        // 不拦的话 UnitDied 会发两遍（LootSystem 会掉两次战利品）、
+        // 子类也会重复判"全员阵亡 / 全员胜利"。
         if (isDead) return;
         isDead = true;
 
@@ -601,9 +702,22 @@ public abstract class Unit : MonoBehaviour
         OnUnitDied?.Invoke(this);
         EventManager.Trigger("UnitDied", this);
 
-        // 销毁物体（延迟到帧末；在此之前 isDead 会拦住对本文凭的一切调用）
+        // 子类扩展点（只会在"首次死亡"时走到）
+        OnDeath();
+
+        // 销毁物体（延迟到帧末；在此之前 isDead 会拦住对本单位的一切调用）
         Destroy(gameObject);
     }
+
+    /// <summary>
+    /// 死亡时的子类扩展点——基类保证只在【首次死亡】时被调用一次。
+    ///
+    /// 子类要加死亡逻辑请覆写这里，**不要覆写 Die()**：
+    /// Die() 顶部的 isDead 防重复判断只在基类方法体内生效，
+    /// 覆写 Die() 后子类的代码会绕过它，重复调用时被走两遍
+    /// （典型后果：战斗结算后又被判定一次胜利/失败、尸体重复掉落）。
+    /// </summary>
+    protected virtual void OnDeath() { }
 
     // ============================================================
     //                       移动 + 击退
@@ -665,6 +779,8 @@ public abstract class Unit : MonoBehaviour
     /// </summary>
     public virtual void PushBack(HexCoord fromDirection, int distance)
     {
+        if (isDead) return;   // 已死亡的单位不再被击退
+
         HexCoord dir = new HexCoord(
             currentCoord.q - fromDirection.q,
             currentCoord.r - fromDirection.r);
@@ -719,6 +835,7 @@ public abstract class Unit : MonoBehaviour
     /// </summary>
     public virtual void ApplyDisplacement(DisplacementType type, int distance, Unit reference)
     {
+        if (isDead) return;   // 已死亡的单位不再被位移
         if (type == DisplacementType.传送 || distance <= 0) return;
         if (HexGrid.Instance == null) return;
 
@@ -775,6 +892,7 @@ public abstract class Unit : MonoBehaviour
     /// </summary>
     public virtual void TeleportTo(HexCoord dest)
     {
+        if (isDead) return;   // 已死亡的单位不再传送
         if (HexGrid.Instance == null) return;
 
         HexCell destCell = HexGrid.Instance.GetCell(dest);
@@ -865,6 +983,8 @@ public abstract class Unit : MonoBehaviour
     /// </summary>
     protected virtual void StepTo(HexCoord next)
     {
+        if (isDead) return;   // 位移中途被打死则立刻停下（延迟死亡标记见 pendingDeath）
+
         HexCell oldCell = HexGrid.Instance.GetCell(currentCoord);
         if (oldCell != null)
             oldCell.occupyUnit = null;
@@ -955,12 +1075,21 @@ public abstract class Unit : MonoBehaviour
     // ============================================================
 
     /// <summary>
-    /// 内部扣血（跳过 buff 计算，防止递归）
-    /// 用于中毒/灼烧/流血等持续伤害效果（这些属于 Buff 伤害，可被护盾格挡）
+    /// 内部扣血，用于中毒/灼烧/流血等持续伤害（这些属于 Buff 伤害，可被护盾格挡）。
+    ///
+    /// 与 TakeDamage 的区别只有两点：
+    ///   1. 不触发"受到伤害时"的 buff 效果（那是给"被打"用的，持续伤害不算被打，
+    ///      而且触发链会绕回自己造成递归）；
+    ///   2. 不广播 UnitDamaged 事件。
+    /// 减伤规则本身是共用的 —— 走 CalcIncomingDamage，所以易伤/减伤/免疫伤害对
+    /// 持续伤害同样生效（对应 DamageType.Buff 的定义）。
     /// </summary>
     protected void TakeDamageInternal(int amount)
     {
         if (isDead || amount <= 0) return;
+
+        amount = CalcIncomingDamage(amount);
+        if (amount <= 0) return;   // 被打减免/免疫吃干净了
 
         // 护盾格挡 Buff 伤害（文档："护盾能格挡 buff 伤害"）
         if (shield > 0)

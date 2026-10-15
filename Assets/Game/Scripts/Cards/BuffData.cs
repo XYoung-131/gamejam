@@ -48,6 +48,23 @@ using UnityEngine;
 //  · 查询时机不用纠结：属性类加成走 Unit.GetTotalEffectValue(effectType)（不限 trigger），
 //    无论填"立即生效"还是"攻击时"都算数，不会因为填错时机而静默失效。
 //
+//  · 层数 = 负面 buff 的"存活回合数"。回合结束时层数按 stackDecay 衰减，归零即消失，
+//    所以负面 buff 的 duration 一般留 -1（-1 = 永久），靠层数走完生命周期。
+//    正面 buff 反之：layer 不减少，靠 duration 计命（-1 = 永久）。
+//    这也是"残废/无力对精英怪和 BOSS 层数减半"等价于持续时间减半的原因。
+//
+//  · 这些字段都由运行时自动消费，填了就会生效（对接位置写在括号里）：
+//      onlyForPlayerUnit          → Unit.ApplyBuff 调 CanApplyTo（力竭/混乱对敌人无效）
+//      halveStacksOnEliteAndBoss  → Unit.ApplyBuff 调 CalcStacksOnApply（残废/无力）
+//      stackDecay                 → Unit.TickBuffDuration 调 CalcStacksAfterTurnEnd
+//      clearIfNotStackedTurns     → Unit.TickBuffDuration 调 ShouldClearForNoStack（中毒）
+//      耐力回复倍率 / 思绪回复倍率  → PlayerUnit.OnTurnEnd 的回合回复
+//      移动耐力消耗倍率            → PlayerUnit.TryMoveTo 的移动消耗
+//      攻击伤害加成                → CardData.GetFinalDamage
+//      攻击耐力消耗倍率            → CardData.GetFinalActionCost（虚弱）
+//      移动距离加成                → CardData.GetEffectiveMaxRange（残废/敏捷，不影响传送）
+//      受到伤害倍率 / 受到伤害固定减免 → Unit.CalcIncomingDamage（普攻和持续伤害都算）
+//
 //  ⚠ 已知不一致（待统一）：RelicData 里同名的"技能耐力消耗倍率"用的是【增量】填法
 //    （滑板鞋 -25% 填 -0.25），和这里的【绝对乘数】不一致。二者尚未统一。
 //  ============================================================
@@ -353,6 +370,8 @@ public class BuffData : ScriptableObject
     /// <summary>
     /// 施加时计算真实层数。
     /// "残废""无力"写了：对精英怪和 BOSS 施加时层数减半（向上取整，单次至少 1 点）。
+    ///
+    /// 由 Unit.ApplyBuff 调用（以前没接上，等于这两件 buff 对精英怪没打折）。
     /// </summary>
     /// <param name="target">被施加 buff 的单位</param>
     /// <param name="rawStacks">策划/技能原本要施加的层数</param>
@@ -362,10 +381,8 @@ public class BuffData : ScriptableObject
         if (rawStacks < 1) rawStacks = 1;
         if (!halveStacksOnEliteAndBoss || target == null || target.data == null) return rawStacks;
 
-        // 精英怪：层数减半，向上取整
-        // TODO：UnitGrade 目前只有"小怪 / 精英怪"两档，还没有 BOSS。
-        //       等 UnitData 补上 BOSS 档位后，这里把 BOSS 也一起判进来。
-        if (target.data.grade == UnitGrade.精英怪)
+        // 精英怪 / BOSS：层数减半，向上取整（1 层仍保持 1 层）
+        if (target.data.grade == UnitGrade.精英怪 || target.data.grade == UnitGrade.BOSS)
         {
             return Mathf.Max(1, Mathf.CeilToInt(rawStacks / 2f));
         }

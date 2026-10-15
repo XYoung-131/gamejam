@@ -435,29 +435,30 @@ public class EnemyUnit : Unit
     }
 
     // ============================================================
-    //                       死亡重写
+    //                       死亡扩展
     // ============================================================
 
-    protected override void Die()
+    /// <summary>
+    /// 敌人死亡额外逻辑。
+    /// 走基类的 OnDeath() 扩展点而不是覆写 Die()——基类保证这里
+    /// 只会在"首次死亡"时被调用一次，不会重复判"全员胜利"。
+    /// </summary>
+    protected override void OnDeath()
     {
-        base.Die();   // 先执行基类死亡逻辑
-
         // 敌人死亡：检查是否所有敌人都死了
         EnemyUnit[] allEnemies = FindObjectsOfType<EnemyUnit>();
         bool allDead = true;
         foreach (var e in allEnemies)
         {
-            if (e != this && e.GetCurrentHealth() > 0)
+            // 判 IsDead 而不是只看血量：Destroy 延迟到帧末，同帧内刚死的同伴对象还在
+            if (e != this && !e.IsDead && e.GetCurrentHealth() > 0)
             {
                 allDead = false;
                 break;
             }
         }
 
-        if (allDead)
-        {
-            if (GameManager.Instance != null)
-                GameManager.Instance.OnPlayerVictory();
-        }
+        if (allDead && GameManager.Instance != null)
+            GameManager.Instance.OnPlayerVictory();
     }
 }

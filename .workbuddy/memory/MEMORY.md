@@ -43,12 +43,27 @@ Unity 2022.3.62f3 六边形俯视角战棋游戏（聚光灯 GameJam），纯 C#
 - **层数前提**：`Unit.ApplyBuff` 只在 `buffData.canStack == true` 时才叠加层数，
   而 `canStack` 默认 `false`、`maxStack` 默认 `1`。中毒/灼烧/流血/残废/无力这些按层数结算的 buff，
   做 asset 时必须勾 `canStack` 并把 `maxStack` 调大，否则层数永远停在 1。
+  同理，地形绒毯的"力量"是按 `strengthStacks` 循环 `ApplyBuff` 叠上去的，也依赖 `canStack`。
+- **层数 = 负面 buff 的存活回合数**：回合结束时层数按 `stackDecay` 衰减，归零即消失。
+  所以负面 buff 的 `duration` 一般留 -1（靠层数走完生命周期）；正面 buff 反之靠 `duration` 计命。
+  ⚠ 给负面 buff 同时填 `duration` 和默认衰减，它会在第一个回合结束就消失（层数 1 → 0）。
+- **哪些字段已接运行时**（2026-10-15 补齐，之前有 7 个方法零调用）：
+  `onlyForPlayerUnit` → `ApplyBuff` 调 `CanApplyTo`；`halveStacksOnEliteAndBoss` →
+  `ApplyBuff` 调 `CalcStacksOnApply`；`stackDecay` → `TickBuffDuration` 调 `CalcStacksAfterTurnEnd`；
+  `clearIfNotStackedTurns` → `TickBuffDuration` 调 `ShouldClearForNoStack`；
+  耐力/思绪回复倍率 → `PlayerUnit.OnTurnEnd`；移动耐力消耗倍率 → `PlayerUnit.TryMoveTo`。
 
 ## 死亡判定（不要绕过）
 - `Unit.IsDead` / 内部字段 `isDead`：`Die()` 里置位且**防重复**（避免"持续伤害打死"和
-  "卡牌打死"两条路各跑一次 `Die()`，导致 `UnitDied` 发两遍、`PlayerUnit` 重复判全员阵亡）。
+  "卡牌打死"两条路各跑一次 `Die()`，导致 `UnitDied` 发两遍、`LootSystem` 掉两次战利品、
+  子类重复判胜负）。
 - 原因：Unity `Destroy` **延迟到帧末执行**，`Die()` 之后对象还会被调用若干次。
-- `TakeDamage` / `TakeDamageInternal` / `ApplyBuff` / `MoveTo` 开头已加 `if (isDead) return;`；
+- **子类一律覆写 `OnDeath()`，不要覆写 `Die()`**：`Die()` 顶部的 `if (isDead) return;`
+  只在基类方法体内生效，覆写 `Die()` 的子类代码会绕过它、重复执行。
+  这是 2026-10-15 新引入的扩展点，`PlayerUnit` / `EnemyUnit` 已改造。
+- 判活覆盖面：`TakeDamage` / `TakeDamageInternal` / `ApplyBuff` / `Heal` / `AddShield` /
+  `MoveTo` / `ApplyDisplacement` / `TeleportTo` / `PushBack` / `StepTo` /
+  `OnTurnStart` / `OnTurnEnd` 全部已加 `if (isDead) return;`；
   `CanAttack()` 内含 `!isDead`，所以卡牌结算（`CardData.Resolve`）自动拦截死亡单位。
 - **`CardData.Resolve` 的时序陷阱**：结算顺序是"造成伤害 → 挂 buff"，伤害可能已改变生死局面
   （目标被打死 / 施法者被反伤打死）。buff 循环里必须**每次施加前重新判活**，
@@ -57,16 +72,21 @@ Unity 2022.3.62f3 六边形俯视角战棋游戏（聚光灯 GameJam），纯 C#
 ## 数值结算分工（避免重复计算）
 - **施法方加成**在 `CardData` 算：`GetFinalDamage`（攻击伤害加成）、
   `GetFinalActionCost`（攻击耐力消耗倍率）、`GetEffectiveMaxRange`（位移类受移动距离加成，传送类不修正）。
-- **挨打方减益**在 `Unit.TakeDamage` 算：`受到伤害固定减免`、`受到伤害倍率`。
+- **挨打方减益**在 `Unit.CalcIncomingDamage` 算（`受到伤害固定减免` → `受到伤害倍率`，顺序不能反），
+  `TakeDamage` 与 `TakeDamageInternal`（持续伤害）**共用**这一份。
+  `TakeDamageInternal` 与 `TakeDamage` 的差异只剩：不触发"受到伤害时"事件、不广播 `UnitDamaged`
+  （避免持续伤害递归）。
+  ⚠ 曾经 `TakeDamageInternal` 完全跳过 buff 计算，导致中毒/灼烧/流血不吃易伤、且无敌挡不住 DoT。
 - 两边绝不能各算一次同一个倍率，否则伤害会平方叠加。
 - 射程判定统一走 `CardData.IsInEffectiveRange(caster, from, to)`，玩家侧和敌人侧共用，不要各写一份。
 
 ## 已知缺口
-- `UnitGrade` 只有 小怪 / 精英怪，**没有 BOSS 档位**；而策划案多处提到 BOSS
-  （遗物 BOSS掉落、笑靥排除 BOSS、残废/无力对 BOSS 层数减半）。需要补。
-- **倍率填法不一致（待统一）**：`RelicData.技能耐力消耗倍率` 用【增量】填法
-  （滑板鞋 -25% 填 `-0.25`），`BuffData.攻击耐力消耗倍率` 用【绝对乘数】填法
-  （虚弱 +25% 填 `1.25`）。同一概念两种填法，极易填错。倾向统一为增量填法。
+- `RelicData.技能耐力消耗倍率` 用【增量】填法（滑板鞋 -25% 填 `-0.25`），
+  `BuffData.攻击耐力消耗倍率` 用【绝对乘数】填法（虚弱 +25% 填 `1.25`）。
+  同一概念两种填法，极易填错。倾向统一为增量填法（待策划决定）。
+- 护盾清空时机两处并存（`OnTurnStart` 的 `ClearShield()` + `OnTurnEnd` 的 `ClearShieldOnTurnEnd()`），
+  净行为 = 回合结束清零，`ClearShield()` 实际空转。待定唯一权威时机。
+- 力竭/混乱的资源倍率只作用于`PlayerUnit.OnTurnEnd` 的回合回复，未作用于药水/遗物的即时回复。
 
 ## 飞书策划案
 - 策划案 Base：`https://qcnj9ebuvbz4.feishu.cn/base/UB8AbotC0aFJJwsQFy0cXSIBnkb`

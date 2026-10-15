@@ -275,3 +275,79 @@
   净行为 = 回合结束清零（`ClearShield()` 空转），待策划确认护盾规则的唯一权威时机。
 
 作者：（待填）
+
+## 复查：三个已知问题的修复状态 + buff 结算需求落地（Unit / PlayerUnit / EnemyUnit / BuffData）
+
+### 一、你提的三个问题：已确认修复（合并后未被冲掉）
+
+1. **CardData.Resolve 不读"攻击时"加成** —— 已修。
+   `Resolve` 第 1 步走 `GetFinalDamage(caster)`，查询不限触发时机；打障碍物复用同一公式。
+   即使策划把 `trigger` 填成"攻击时"也照样算数，不会再静默失效。
+2. **倍率被当增量相加** —— 已修。
+   `GetTotalEffectValue` 两个重载都按 `BuffData.IsMultiplierType` 分流：
+   倍率型 `1 + Σ(value-1)×层数`（易伤 2 层 = 1.5），加成型直接累加。
+   5 个倍率型效果（耐力回复/思绪回复/移动耐力消耗/攻击耐力消耗/受到伤害）全部登记在册。
+3. **缺死亡判定** —— 已修，但本次又补齐了 6 处漏网点（见下）。
+
+### 二、本次补充修复
+
+修复
+- `Unit.cs` —— **死亡判定漏网**（`Destroy` 延迟到帧末，`isDead` 之外还有入口没拦）：
+  - `Heal` / `AddShield` 原先无判活 → 已死单位可被治疗/加盾，产生
+    "isDead = true 但 currentHealth > 0"的僵尸状态。两处都已加 `if (isDead || amount <= 0) return;`。
+  - `ApplyDisplacement` / `TeleportTo` / `PushBack` / `StepTo` 加判活。
+  - `OnTurnStart` / `OnTurnEnd` 加判活（TurnManager 已过滤，这里再兜一道）。
+  - `PlayerUnit.TryMoveTo` / `TryAttack` / `UsePotion`、`EnemyUnit` 同步加判活。
+- `Unit.cs` / `PlayerUnit.cs` / `EnemyUnit.cs` —— **子类覆写 `Die()` 会绕过基类的防重复判断**。
+  `Die()` 顶部的 `if (isDead) return;` 只在基类方法体内生效，子类覆写后的代码仍会被走两遍
+  （重复判胜负、`LootSystem` 重复掉落的风险）。
+  改为引入扩展点 `protected virtual void OnDeath()`：`Die()` 只在首次死亡时调用它，
+  子类一律覆写 `OnDeath()`，不再碰 `Die()`。PlayerUnit / EnemyUnit 已同步改造。
+- `Unit.cs` —— **持续伤害不吃减伤/易伤，与 `DamageType.Buff` 的定义矛盾**。
+  该枚举注释写明"中毒/灼烧/流血…也受减伤/易伤影响"，但 `TakeDamageInternal` 原先
+  "跳过 buff 计算"，导致中了易伤时持续伤害并不增加，且"无敌（免疫伤害）"挡不住持续伤害。
+  抽出 `CalcIncomingDamage(amount)`（免疫 → 固定减免 → 倍率增减，只算数值不扣血，不会递归），
+  `TakeDamage` 与 `TakeDamageInternal` 共用。两者的差异只剩"是否触发受到伤害时事件 / 是否广播 UnitDamaged"。
+- `Unit.cs` —— buff 遍历加空值防护（`HasEffect` / `TriggerBuffEffects` /
+  `RemoveAllNegativeBuffs` / `RemoveAllPositiveBuffs` / `TickBuffDuration`），脏数据不再 NRE。
+
+新增
+- `Unit.cs` —— `BuffInstance.turnsSinceLastStack` 字段，支撑"中毒：3 回合没叠层就清空"。
+- `Unit.cs` —— `protected void RemoveBuffInstanceAt(int index, string eventName)`，
+  统一"层数归零移除"与"持续时间到期移除"的清理与事件广播。
+
+修改（让 BuffData 的声明真正跑到运行时）
+- `Unit.ApplyBuff(BuffData, int stacks = 1)` —— 接上两个原先零调用的方法：
+  - `CanApplyTo(this)` → **力竭 / 混乱的"对敌人无效"（onlyForPlayerUnit）现在真的生效**；
+  - `CalcStacksOnApply(this, stacks)` → **残废 / 无力对精英怪和 BOSS 的层数减半现在真的生效**。
+  另：重新叠层时把 `turnsSinceLastStack` 归零。
+- `Unit.TickBuffDuration()` —— 接上层数衰减线（原先只减 `duration`，`stackDecay` 系列字段全是死的）：
+  - `回合结束减1`（灼烧 / 临时力量 / 临时敏捷）、`回合结束减半`（流血，1 层即清零）、
+    `回合结束消失`（亲密）、`不减少`（正面常驻）；
+  - `未叠加则清空`（中毒）走 `ShouldClearForNoStack`；
+  - 层数与持续时间任一归零 → 移除该 buff。
+- `PlayerUnit.OnTurnEnd()` —— 回合资源回复接上 **`力竭` 耐力回复倍率 0.5 / `混乱` 思绪回复倍率 0.5**。
+- `PlayerUnit.TryMoveTo()` —— 移动消耗接上 **`沉重` 移动耐力消耗倍率 1.25**（向上取整）。
+- `BuffData.CalcStacksOnApply()` —— 关闭 BOSS 的 TODO（`UnitGrade.BOSS` 已由 PR#3 补上）。
+
+### 三、"层数 = 存活回合数"这条规则（做 asset 前必须知道）
+
+负面 buff 的层数在回合结束按 `stackDecay` 衰减，归零即消失。所以：
+- **负面 buff 的 `duration` 一般留 -1**，由层数走完生命周期
+  （这也解释了为什么"残废/无力对精英怪层数减半"等价于持续时间减半）；
+- **正面 buff 反之**：层数不减少，靠 `duration` 计命（-1 = 永久）。
+- 反例：给负面 buff 同时填 `duration = 2` 和默认衰减，它会在**第一个回合结束就消失**
+  （层数 1 → 0），`duration` 根本轮不到生效。
+- 同理，地形绒毯的"力量"是靠 `for (i < strengthStacks) ApplyBuff(...)` 叠上去的，
+  **该 buff 资产必须勾 `canStack` 并把 `maxStack` 调够**，否则 `strengthStacks` 白填。
+
+### 四、仍有待确认
+
+- `RelicData` 的"技能耐力消耗倍率"用**增量**填法（滑板鞋 -0.25），
+  `BuffData` 的"攻击耐力消耗倍率"用**绝对乘数**（虚弱 1.25）。同一件事两种填法，建议统一（倾向增量）。
+- 护盾清空现在"回合开始 + 回合结束"两处并存，净行为 = 回合结束清零（`ClearShield()` 空转），
+  待定唯一权威时机。
+- 力竭/混乱的倍率目前只作用于**回合资源回复**，没有作用于药水/遗物的即时回复
+  （策划文案写的是"回合开始时耐力回复减半"，按字面范围实现）。
+
+作者：（待填）

@@ -60,6 +60,8 @@ public class PlayerUnit : Unit
 
     public override void OnTurnStart()
     {
+        if (IsDead) return;   // 已死亡：不再参与回合结算
+
         // 只做 buff 结算和护盾清空，不再回满资源——
         // 资源恢复统一放在"回合结束"（文档：每回合结束恢复 15 点）
         base.OnTurnStart();
@@ -68,11 +70,22 @@ public class PlayerUnit : Unit
 
     public override void OnTurnEnd()
     {
+        if (IsDead) return;   // 已死亡：不再参与回合结算（含资源恢复）
+
         base.OnTurnEnd();
 
-        // 回合结束：恢复思绪/耐力，但不超过上限（文档：每回合结束恢复 15 点）
-        currentThought = Mathf.Min(maxThought, currentThought + thoughtRegenPerTurnEnd);
-        currentStamina = Mathf.Min(maxStamina, currentStamina + staminaRegenPerTurnEnd);
+        // 回合结束恢复思绪/耐力，但不超过上限（文档：每回合结束恢复 15 点）。
+        // 「力竭」耐力回复减半 0.5 /「混乱」思绪回复减半 0.5 在这里生效。
+        // 查询走不限 trigger 的重载：没中这两个 debuff 时返回 1（不变），
+        // 倍率型叠加规则见 Unit.GetTotalEffectValue（力竭 2 层 = 1 + (-0.5)×2 = 0，完全不回）。
+        float staminaRate = GetTotalEffectValue(BuffEffectType.耐力回复倍率);
+        float thoughtRate = GetTotalEffectValue(BuffEffectType.思绪回复倍率);
+
+        int staminaGain = Mathf.FloorToInt(staminaRegenPerTurnEnd * staminaRate);
+        int thoughtGain = Mathf.FloorToInt(thoughtRegenPerTurnEnd * thoughtRate);
+
+        currentStamina = Mathf.Min(maxStamina, currentStamina + staminaGain);
+        currentThought = Mathf.Min(maxThought, currentThought + thoughtGain);
         EventManager.Trigger("PlayerResourceChanged", this);
 
         isSelected = false;
@@ -190,6 +203,8 @@ public class PlayerUnit : Unit
     /// </summary>
     public bool TryMoveTo(HexCoord target)
     {
+        if (IsDead) return false;   // 已死亡：不能移动
+
         if (GameManager.Instance != null && !GameManager.Instance.IsInBattle)
             return false;
 
@@ -212,7 +227,11 @@ public class PlayerUnit : Unit
 
         // 移动距离不能超过耐力（简化：1 耐力 = 走 1 格）
         int moveDistance = path.Count - 1;  // path 包含起点
-        int moveCost = moveDistance;        // 简化：每格消耗 1 耐力
+
+        // 「沉重」：移动技能的耐力消耗增加 25%（倍率 1.25）。倍率型：没中时返回 1（不变），
+        // 消耗向上取整（走 3 格 × 1.25 = 3.75 → 4 点）。「沉重」还写了"不叠加"，做 asset 时取消 canStack。
+        float moveCostRate = GetTotalEffectValue(BuffEffectType.移动耐力消耗倍率);
+        int moveCost = Mathf.CeilToInt(moveDistance * moveCostRate);
 
         // 考虑移动距离加成 buff
         int moveBonus = GetMoveBonus();
@@ -271,6 +290,9 @@ public class PlayerUnit : Unit
     /// </summary>
     public bool TryAttack(Unit target)
     {
+        if (IsDead || target == null) return false;   // 已死亡：不能攻击
+        if (target.IsDead) return false;              // 目标已死：不再打尸体
+
         if (GameManager.Instance != null && !GameManager.Instance.isPlayerTurn)
             return false;
 
@@ -388,6 +410,8 @@ public class PlayerUnit : Unit
     /// </summary>
     public bool UsePotion(int index, Unit target = null)
     {
+        if (IsDead) return false;   // 已死亡：不能用道具
+
         if (index < 0 || index >= potions.Count)
         {
             Debug.Log("药水序号无效");
@@ -446,32 +470,32 @@ public class PlayerUnit : Unit
     }
 
     // ============================================================
-    //                       死亡重写
+    //                       死亡扩展
     // ============================================================
 
-    protected override void Die()
+    /// <summary>
+    /// 玩家死亡额外逻辑。
+    /// 走基类的 OnDeath() 扩展点而不是覆写 Die()——基类保证这里
+    /// 只会在"首次死亡"时被调用一次，不会重复判"全员阵亡"。
+    /// </summary>
+    protected override void OnDeath()
     {
-        base.Die();   // 先执行基类死亡逻辑
+        if (GameManager.Instance == null) return;
 
-        // 玩家死亡额外逻辑
-        if (GameManager.Instance != null)
+        // 检查是否所有玩家都死了
+        var allPlayers = FindObjectsOfType<PlayerUnit>();
+        bool allDead = true;
+        foreach (var p in allPlayers)
         {
-            // 检查是否所有玩家都死了
-            var allPlayers = FindObjectsOfType<PlayerUnit>();
-            bool allDead = true;
-            foreach (var p in allPlayers)
+            // 判 IsDead 而不是只看血量：Destroy 延迟到帧末，同帧内刚死的队友对象还在
+            if (p != this && !p.IsDead && p.GetCurrentHealth() > 0)
             {
-                if (p != this && p.GetCurrentHealth() > 0)
-                {
-                    allDead = false;
-                    break;
-                }
-            }
-
-            if (allDead)
-            {
-                GameManager.Instance.OnPlayerDefeat();
+                allDead = false;
+                break;
             }
         }
+
+        if (allDead)
+            GameManager.Instance.OnPlayerDefeat();
     }
 }
