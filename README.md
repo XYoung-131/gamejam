@@ -351,3 +351,85 @@
   （策划文案写的是"回合开始时耐力回复减半"，按字面范围实现）。
 
 作者：（待填）
+
+## 战斗场景搭建 + 四类特效（地图 / 关卡布阵 / 受击闪红 / 立牌翻转 / buff 套环 / 远程投射物）
+
+### 一、地图与场景
+
+新增
+- `Scenes/Battle.unity` —— 可运行的战斗场景：正交相机（带 `CameraController`）+ `ConceptMap` 地图
+  + `Managers`（挂 `GameManager` / `TurnManager` / `LevelManager`）。关卡图、单位、障碍全部由数据驱动生成。
+- `Scripts/Battle/LevelData.cs` —— 关卡配置表（ScriptableObject）：一关包含若干"变种"，
+  每个变种 = 玩家出生格 + 一批敌人/障碍的格子坐标。布阵数据来自《聚光灯gamejam_关卡示意图》12 张图。
+- `Scripts/Battle/LevelManager.cs` —— 关卡生成器：按上面配置实例化棋子并调用 `Initialize(data, coord)`，
+  严格按"① 先生成格子 → ② 再放棋子 → ③ 最后 `StartBattle()`"的顺序执行，避免坐标和占格登记错位。
+  同时会给生成出来的玩家/敌人自动补上特效组件（已有则不重复加）。
+- `Editor/BuildBattleScene.cs` —— 一键搭建工具（菜单 `Game/搭建战斗场景`）：
+  生成 6 关 × 2 变种（共 60 个棋子）的关卡资产 + `Battle.unity` + 玩家数据，
+  菜单 `Game/检查战斗场景` 可做数据自检（引用是否齐全、棋子坐标是否落在地图内）。
+
+修改
+- `HexGrid.cs` —— `HexToWorld` / `WorldToHex` 现在计入**地图根物体的位置**（新增 `WorldOrigin`），
+  移动整张地图时画稿与格子一起走，不会再出现"画稿跑了、格子留在原地"导致的棋子不在格心；
+  生成格子时顺带校验根物体的缩放与旋转并给出警告。
+- `CameraController.cs` —— 边界改用**真实格子的包围盒**（原是"半径 × 格子大小"估算，且没有算画稿偏移）；
+  视野比地图大时直接居中（原写法会算出 min > max，`Mathf.Clamp` 因此每帧在两端来回跳，画面闪烁）；
+  新增"开局对准地图中心"与按键/摇杆死区。
+- `Units/Unit.cs` —— `TakeDamage` 末尾新增事件 `UnitDamagedDetail(Unit, 减伤后伤害, 真正扣血)`，
+  供"按伤害数值算概率"的特效使用（原有 `UnitDamaged` 不带数值）。
+- `ScriptableObjects/单位/` —— 补 README 约定：**此目录只放敌人**。
+  玩家 unit 数据迁到 `ScriptableObjects/玩家/玩家.asset`。
+
+修复
+- **玩家刷不出来的问题**：`Game/Generate Battle Prefabs` 会把 `单位/` 下每个 UnitData 都当成敌人，
+  生成 `Enemy_<名字>` 预制体并**改写该数据的 `prefab` 字段**。玩家数据之前放在这个目录里，
+  于是 `prefab` 被指向只挂了 `EnemyUnit` 的预制体，`LevelManager` 拿不到 `PlayerUnit`，玩家直接不生成。
+  已把玩家数据迁出该目录、`prefab` 指回 `Player_Template`、删除误建的 `Enemy_玩家.prefab`。
+
+### 二、特效（全部挂在单位预制体上，由 EventManager 事件驱动，不改结算逻辑）
+
+新增
+- `Scripts/FX/Hit/HitFlash.cs`（原受击闪红，移入 `Hit/`）—— 新增 `DelayNextFlash(秒)`：
+  远程攻击时伤害仍**瞬时结算**，但受击闪红延后到投射物命中那一刻再播（方案 C）。
+- `Scripts/FX/Hit/StandeeFlip.cs` —— **立牌翻转**：单次伤害超过"最大血量一半"且 ≥3 点才可能触发，
+  每超过半血 1 点概率 +10%（上限 100%）；表现为整块压成竖线后镜像展开，算"一周"，
+  0.3 秒内连转 4 周并回到原朝向。护盾挡下的部分默认不算伤害（可开关），被这一击打死时默认不播。
+- `Scripts/FX/Buff/BuffRingSweep.cs` —— **buff 套环**：监听 `UnitBuffApplied`，读 `BuffData.IsDebuff`，
+  负面＝红环自上而下、正面＝蓝环自下而上扫过角色；环直径按角色贴图宽度自适应，
+  同一种 buff 0.15 秒内只播一次，环贴图运行时生成（也可指定美术图）。
+- `Scripts/FX/Projectile/ProjectileSpawner.cs` + `ProjectileVFX.cs` —— **远程投射物**：
+  监听 `CardResolved` / `CardResolvedOnObstacle`，判定"攻击卡且 `maxRange > 1`"即投出一枚"粒子源"。
+  - 沿**真抛物线**飞行（`p = Lerp(起, 终, t) + up · 4·apex·t·(1−t)`），飞行中自转；
+  - 粒子系统用 `Simulation Space = Local`，在球体体积内随机生成**灰色正方形粒子**，
+    形成"围着粒子源不规则聚集"的一群方块（贴图 `Art/VFX/ParticleSquare.png`）；
+  - 核心方块可换成 Shader Graph 材质（属性名 `_Glow` / `_GlowColor`，飞行中由脚本驱动发光强度）；
+  - 落点再爆散一次粒子，并把飞行时长同步给目标的 `HitFlash`，让闪红与命中同帧；
+  - 敌人用同一套 `CardData.Resolve`，所以敌人的远程技能（矢驰 / 抛射…）也会飞投射物。
+- `Art/VFX/ParticleSquare.png` —— 正方形贴图（粒子与核心方块共用）。
+- `Shader/VFX/Projectile/ProjectileBlock.shadergraph` + `Shader/Materials/Projectile/*.mat` ——
+  核心方块用的 Shader Graph 与粒子材质（粒子材质 = URP Particles/Unlit + 上面的正方形贴图）。
+- `Editor/FX/ProjectileVFXSetup.cs` —— 菜单 `Game/特效/投射物：准备资源`（贴图导入设置、生成粒子材质、
+  把生成器挂到场景并连好引用）、`Game/特效/投射物：生成预制体（可调参）`（想细调粒子参数时用）。
+- `Editor/FX/ProjectileVFXTest.cs` / `BuffRingTest.cs` —— 两个**批处理冒烟测试**：
+  进 Play、施加 buff / 发射投射物，检查环与投射物是否正常生成、方向、抛物线弧顶与命中爆散。
+
+### 三、目录整理
+
+- 特效脚本按触发类型分目录：`Scripts/FX/Hit`（受击类）、`Scripts/FX/Buff`（状态类）、
+  `Scripts/FX/Projectile`（投射物）；编辑器工具统一收进 `Editor/FX`。
+- 材质按特效分子目录：`Shader/Materials/DamageFlash/`、`Shader/Materials/Projectile/`。
+- 新增 `Scripts/FX/README.md`：列出每个特效的触发事件、所在目录、调参入口，
+  以及 `UnitDamaged` / `UnitDamagedDetail` / `UnitBuffApplied` 三个事件的参数约定。
+- 移动文件时连同 `.meta` 一起搬，**GUID 未变**，场景与预制体里的引用不受影响。
+- 删除不再使用的 AppIcon 图标与生成脚本。
+
+### 四、验证与待做
+
+- 场景自检（菜单 `Game/检查战斗场景` / 批处理 `BuildBattleScene.VerifyBattleScene`）：
+  6 关 12 个变种共 60 个棋子，引用与坐标检查 **0 问题**。
+- 投射物冒烟测试已跑通"远程判定（矢驰 True / 劈砍 False）"与"命中爆散"；
+  弧线断言因测试采样时机写错（飞行仅 0.15 秒却在 0.15 秒后采样）已修正，
+  并把默认飞行手感调为"速度 10、最短 0.25 秒、最长 0.6 秒"，**待 Unity 空闲时复跑一次**。
+- 鼠标点击操作（选人、移动、出牌目标选择）与 UI 仍未接，目前用 `PlayerCardSystem` 的右键测试菜单验证特效。
+
+作者：（待填）
