@@ -33,5 +33,5 @@ MonoBehaviour:
   rarity: 4
   tags: 04000000
   buffs:
-  - {fileID: 11400000, guid: ec28fcbce4a92c3ce35786975af5cfa2, type: 2}
+  - {fileID: 11400000, guid: 6036645b86313be489798beaa6edba9b, type: 2}
   devNotes: "\u8840\u86ED\u6BCF\u96942\u56DE\u5408\u5728\u6280\u80FD\u7EC4\u672B\u5C3E\u52A0\u51651\u4E2A\u672C\u6280\u80FD"

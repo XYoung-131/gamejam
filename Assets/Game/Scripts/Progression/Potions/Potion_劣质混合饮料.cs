@@ -20,26 +20,31 @@ using UnityEngine;
 //  净收益为负。奖励则是战斗结束白送一件遗物【饮料成瘾】。
 //
 //  ── 实现方式（全部走基类，本文件只负责配数值）────────────
+//  本文件只是"数值模板"，实际投入运行的资产是
+//  Assets/Game/ScriptableObjects/药水/劣质混合饮料.asset。
 //
 //    第 1 步  effects 依次结算 → 回 8 耐力、回 8 思绪
-//    第 2 步  ShouldTriggerPenalty(本场第 N 瓶) 判定 N >= penaltyAfterUses(3)
+//    第 2 步  ShouldTriggerPenalty(本场第 N 瓶) 判定
+//             penaltyMode = 仅指定次数触发 → N == penaltyAfterUses(3)
 //             成立则 ApplyPenalty：
 //               ① penaltyDrainResources  → PlayerUnit.DrainAllResources()（耐力思绪清零）
-//               ② penaltyBuff            → ApplyBuff(眩晕)（眩晕 duration = 1 回合）
-//               ③ rewardRelic            → LootSystem.QueueBattleEndRelic(饮料成瘾)
-//    第 3 步  OnPotionResolved（本类覆写，只打日志，给 QA 看"这是第几瓶"）
+//               ② penaltyBuff            → ApplyBuff(眩晕)（眩晕 1 回合）
+//               ③ 广播 "PotionPenaltyTriggered"
+//    第 3 步  战后遗物：LootSystem 监听 "PotionPenaltyTriggered"，
+//             按 rewardCondition = 触发惩罚后 把 rewardRelic(饮料成瘾)
+//             走 QueueBattleEndRelic 登记，战斗胜利时发放。
 //
 //  ⚠ 顺序是"先补给、后扣光"——这是策划明确要求的（第三瓶等于白喝 + 全清）。
 //    基类 Resolve 已经把惩罚放在效果之后，不要调整成反过来。
 //
-//  ⚠ 从第 3 瓶起，第 4、5……瓶会继续触发惩罚（判定用的是 >=，不是 ==）。
-//    策划原文"第3次使用后"按"第 3 次及以后"理解。
+//  ⚠ 触发模式：penaltyMode = 仅指定次数触发（== 3，只在第 3 瓶触发一次）。
+//    若策划想改成"第 3 瓶起每次都罚"，把资产里的 penaltyMode
+//    换成 达到次数后每次触发（>=）即可，代码不用动。
 //
-//  ── 依赖的资产（生成脚本已直接配好引用）────────────────────
+//  ── 依赖的资产（药水/劣质混合饮料.asset 已直接配好引用）──────
 //    ① penaltyBuff   ← Buff/眩晕.asset        ✓ 已配
 //    ② rewardRelic   ← 遗物/饮料成瘾.asset     ✓ 已配
 //  从 Create 菜单新建资产时 Reset() 填不了引用，这两处要手动拖。
-//  脚本生成的资产（饮料/劣质混合饮料.asset）引用已配好，"眩晕"与"白送遗物"都能生效。
 //
 //  ── 使用次数从哪来 ───────────────────────────────────────
 //    PlayerUnit.UsePotion 里维护了一张"本场战斗每瓶饮料各喝了几次"的表，
@@ -48,7 +53,7 @@ using UnityEngine;
 //
 //  ── 建 asset ─────────────────────────────────────────────
 //  编辑器里：Assets 右键 → Create → Game/Potion/劣质混合饮料
-//  建议存放路径：Assets/Game/ScriptableObjects/饮料/劣质混合饮料.asset
+//  建议存放路径：Assets/Game/ScriptableObjects/药水/劣质混合饮料.asset
 // ============================================================
 
 [CreateAssetMenu(fileName = "劣质混合饮料", menuName = "Game/Potion/劣质混合饮料")]
@@ -83,44 +88,23 @@ public class Potion_劣质混合饮料 : PotionData
             value = 8
         });
 
-        // ---- 副作用：本场第 3 瓶起扣光资源 + 眩晕 ----
+        // ---- 副作用：本场第 3 瓶扣光资源 + 眩晕 + 战后送遗物 ----
         penaltyAfterUses = 副作用触发次数;
+        penaltyMode = PotionPenaltyMode.仅指定次数触发;
         penaltyDrainResources = true;
         // penaltyBuff / rewardRelic 是资产引用，Reset 里填不了，
-        // 已在 饮料/劣质混合饮料.asset 里拖好：
+        // 已在 药水/劣质混合饮料.asset 里拖好：
         //   penaltyBuff  ← Buff/眩晕.asset
         //   rewardRelic  ← 遗物/饮料成瘾.asset
+        rewardRelicName = "饮料成瘾";   // 缺引用时的设计名兜底
+        rewardCondition = PotionRewardCondition.触发惩罚后;
 
         maxUsesPerBattle = 0;   // 不限次数（惩罚本身就限制了玩家不会多喝）
 
         devNotes = "策划表原文：效果「回复8点耐力和8点思绪（在同1场战斗中第3次使用后" +
                    "扣除所有耐力和思绪，并眩晕1回合，战斗结束掉落遗物 饮料成瘾）」，" +
                    "稀有度「特殊」。表格补充列注明：括号里面的内容玩家看不到，但是会实装。" +
-                   "penaltyBuff / rewardRelic 已分别指向 Buff/眩晕.asset 与 遗物/饮料成瘾.asset。";
-    }
-
-    /// <summary>
-    /// 结算完成后的收尾：只打日志，方便 QA / 策划在 Console 里确认
-    /// "这是本场第几瓶、副作用有没有触发"。
-    ///
-    /// 副作用本身（扣光资源、眩晕、登记遗物）已经在基类 ApplyPenalty 里做完了，
-    /// 这里不要重复扣一次，否则会多扣。
-    /// </summary>
-    protected override void OnPotionResolved(Unit user, int usedCountThisBattle)
-    {
-        if (!HasPenalty) return;
-
-        int bottlesLeft = penaltyAfterUses - usedCountThisBattle;
-
-        if (bottlesLeft > 0)
-        {
-            Debug.Log($"【{potionName}】本场第 {usedCountThisBattle} 瓶，还没到副作用：" +
-                      $"再喝 {bottlesLeft} 瓶就会触发");
-            return;
-        }
-
-        string relicName = rewardRelic != null ? rewardRelic.relicName : "未配置";
-        Debug.Log($"【{potionName}】本场第 {usedCountThisBattle} 瓶，副作用已触发：" +
-                  $"耐力与思绪清零、眩晕 1 回合，战斗结束时将获得遗物【{relicName}】");
+                   "penaltyBuff / rewardRelic 已分别指向 Buff/眩晕.asset 与 遗物/饮料成瘾.asset。" +
+                   "战后遗物由 LootSystem 监听 PotionPenaltyTriggered 事件发放。";
     }
 }

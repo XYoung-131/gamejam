@@ -13,20 +13,22 @@ MonoBehaviour:
   m_Name: "\u5F00\u609F"
   m_EditorClassIdentifier: 
   buffName: "\u5F00\u609F"
-  description: "\u5F00\u609F\u5C42\u6570\uFF08\u84DD\u8393\u996E\u6599\u83B7\u5F97 3 \u5C42\uFF09"
+  description: "\u601D\u7EEA\u6D88\u8017\u51CF\u5C1125%\uFF0C\u4E0D\u53E0\u52A0\uFF0C\u56DE\u5408\u7ED3\u675F\u5C42\u6570\u51CF1"
+  icon: {fileID: 0}
   polarity: 0
   category: 1
   duration: -1
-  maxStack: 99
   canStack: 1
-  stackDecay: 0
+  maxStack: 99
+  stackDecay: 2
   clearIfNotStackedTurns: 0
   halveStacksOnEliteAndBoss: 0
   onlyForPlayerUnit: 0
   forbiddenAttackTargets: []
+  forbiddenAttackTargetNames: []
   effects:
-  - effectType: 17
-    trigger: 0
-    value: 1
+  - effectType: 19
+    trigger: 8
+    value: 0.75
     isPercent: 0
-  devNotes: "\u26A0 \u5F85\u8865\u89C4\u683C\uFF1A\u7B56\u5212\u8868\u300A\u996E\u6599\u300B\u5F15\u7528\u4E86\u300C\u5F00\u609F\u300D\uFF0C\u4F46 BuffData.cs \u7684 20 \u4E2A buff \u5BF9\u7167\u8868\u91CC\u6CA1\u6709\u5B83\u3002\u5148\u5EFA\u5360\u4F4D\uFF0C\u5177\u4F53\u6548\u679C\u5F85\u7B56\u5212\u8865\u5145\u540E\u56DE\u6765\u586B effects\u3002"
+  devNotes: 

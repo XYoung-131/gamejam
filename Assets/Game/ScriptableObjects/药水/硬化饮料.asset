@@ -9,11 +9,12 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 94a656848b39ef8e51982c7e721d0559, type: 3}
-  m_Name: "\u786C\u5316\u996E\u6599"
+  m_Script: {fileID: 11500000, guid: 36d1fc59a9faa0145bbdd42471f774f5, type: 3}
+  m_Name: "硬化饮料"
   m_EditorClassIdentifier: 
-  potionName: "\u786C\u5316\u996E\u6599"
-  description: "\u83B7\u5F976\u70B9\u62A4\u76FE"
+  potionName: "硬化饮料"
+  description: "获得6点护盾"
+  icon: {fileID: 0}
   rarity: 0
   maxUsesPerBattle: 0
   effects:
@@ -21,9 +22,15 @@ MonoBehaviour:
     targetType: 0
     value: 6
     buff: {fileID: 0}
+    buffStacks: 1
+    requiredBuffName: ""
     skill: {fileID: 0}
   penaltyAfterUses: 0
+  penaltyMode: 0
   penaltyDrainResources: 0
   penaltyBuff: {fileID: 0}
   rewardRelic: {fileID: 0}
-  devNotes: "\u7B56\u5212\u8868\u539F\u6587\uFF1A\u6548\u679C\u300C\u83B7\u5F976\u70B9\u62A4\u76FE\u300D\uFF0C\u7A00\u6709\u5EA6\u300C\u666E\u901A\u300D\u3002"
+  rewardCondition: 0
+  rewardRelicName: ""
+  devNotes: ""
+

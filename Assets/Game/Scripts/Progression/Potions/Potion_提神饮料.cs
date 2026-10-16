@@ -9,9 +9,11 @@ using UnityEngine;
 //    · 补充：（无）
 //
 //  ── 实现方式 ─────────────────────────────────────────────
-//  走 PotionData 基类的「回复思绪」分支，内部调用
-//  PlayerUnit.RestoreThought(20)：
+//  本文件只是"数值模板"：结算逻辑全部在 PotionData 基类
+//  （队员版，数据驱动），子类只在 Reset() 里预填策划数值。
+//  实际投入运行的资产是 Assets/Game/ScriptableObjects/药水/提神饮料.asset。
 //
+//  基类「回复思绪」分支内部调用 PlayerUnit.RestoreThought(20)：
 //    · 思绪 = 卡牌资源，灌注抽卡（5 点/次）和出牌都从这里扣；
 //    · 回复量会被 maxThought 截断（默认 40）；
 //    · 回复后广播 PlayerResourceChanged，UI 资源条自动刷新。
@@ -25,7 +27,7 @@ using UnityEngine;
 //
 //  ── 建 asset ─────────────────────────────────────────────
 //  编辑器里：Assets 右键 → Create → Game/Potion/提神饮料
-//  建议存放路径：Assets/Game/ScriptableObjects/饮料/提神饮料.asset
+//  建议存放路径：Assets/Game/ScriptableObjects/药水/提神饮料.asset
 // ============================================================
 
 [CreateAssetMenu(fileName = "提神饮料", menuName = "Game/Potion/提神饮料")]
@@ -52,9 +54,11 @@ public class Potion_提神饮料 : PotionData
         maxUsesPerBattle = 0;   // 0 = 不限次数
 
         penaltyAfterUses = 0;
+        penaltyMode = PotionPenaltyMode.达到次数后每次触发;
         penaltyDrainResources = false;
         penaltyBuff = null;
         rewardRelic = null;
+        rewardCondition = PotionRewardCondition.使用后;
 
         devNotes = "策划表原文：效果「回复20点思绪」，稀有度「普通」。";
     }

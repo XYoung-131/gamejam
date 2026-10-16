@@ -20,7 +20,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 4e6d5ca2fc80397489831d0ff4d922e7, type: 2}
   - {fileID: 11400000, guid: d8628e512ef58e343838856432917bf6, type: 2}
   strengthStacks: 1
-  strengthBuff: {fileID: 11400000, guid: ec28fcbce4a92c3ce35786975af5cfa2, type: 2}
+  strengthBuff: {fileID: 11400000, guid: 6036645b86313be489798beaa6edba9b, type: 2}
   stacksPerTurnEnd: 1
   burnBuff: {fileID: 0}
   poisonBuff: {fileID: 0}

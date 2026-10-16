@@ -9,18 +9,105 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 93db943863e42e53f79af0853ce86437, type: 3}
+  m_Script: {fileID: 11500000, guid: 8d273b0ed35551c43a87fa9d0ca04062, type: 3}
   m_Name: "\u739B\u5854\u7684\u677F\u7259"
   m_EditorClassIdentifier: 
   relicName: "\u739B\u5854\u7684\u677F\u7259"
-  description: "\u83B7\u5F97\u65F6\u53EF\u5C06\u81F3\u591A3\u4E2A\u653B\u51FB\u6280\u80FD\u53D8\u5316\u4E3A\u5543\u54AC\uFF1B\u5543\u54AC\u7C7B\u6280\u80FD\u57FA\u7840\u4F24\u5BB3\u52A01\uFF1B\u6BCF\u4F7F\u7528\u5543\u54AC\u7C7B\u6280\u80FD\u51FB\u8D2510\u4E2A\u654C\u4EBA\uFF0C\u6240\u6709\u5543\u54AC\u7C7B\u6280\u80FD\u7684\u4F24\u5BB3\u6C38\u4E45\u52A01"
+  description: "\u83B7\u5F97\u65F6\uFF0C\u53EF\u5C06\u81F3\u591A3\u4E2A\u653B\u51FB\u6280\u80FD\u53D8\u5316\u4E3A\u5543\u54AC\uFF1B\u5543\u54AC\u7C7B\u6280\u80FD\u7684\u57FA\u7840\u4F24\u5BB3\u52A01\uFF1B\u6BCF\u4F7F\u7528\u5543\u54AC\u7C7B\u6280\u80FD\u51FB\u8D2510\u4E2A\u654C\u4EBA\uFF0C\u6240\u6709\u5543\u54AC\u7C7B\u6280\u80FD\u7684\u4F24\u5BB3\u6C38\u4E45\u52A01"
+  icon: {fileID: 0}
   relicType: 4
   pool: 0
   effects:
   - trigger: 1
     effectType: 15
     value: 3
+    isPercent: 0
+    scope: 0
+    radius: 1
+    damageSource: 0
+    scaleWithFloor: 0
+    skillTag: 0
+    skillRarity: 0
     skill: {fileID: 11400000, guid: ad55db8715277f4489e464ae77193914, type: 2}
+    buff: {fileID: 0}
+    potion: {fileID: 0}
+    condition: 0
+    healthRatioThreshold: 0.5
+    requiredTargetBuff: {fileID: 0}
+    targetSelection: 0
+    filterBySkillTag: 0
+    filterBySkillRarity: 0
+    limitedUseSkillsOnly: 0
+    filterByPotion: 0
+    adjacentTargetOnly: 0
+    rangedTargetOnly: 0
+    excludedTargetGrades: 
+    negativeTerrainOnly: 0
+    includeIndestructibleObstacles: 0
+    chancePerTarget: 1
+    maxTriggersPerTurn: 0
+    buffStacks: 1
+    buffDurationOverride: 0
+  - trigger: 0
+    effectType: 20
+    value: 1
+    isPercent: 0
+    scope: 0
+    radius: 1
+    damageSource: 0
+    scaleWithFloor: 0
+    skillTag: 8
+    skillRarity: 0
+    skill: {fileID: 0}
+    buff: {fileID: 0}
+    potion: {fileID: 0}
+    condition: 0
+    healthRatioThreshold: 0.5
+    requiredTargetBuff: {fileID: 0}
+    targetSelection: 0
+    filterBySkillTag: 1
+    filterBySkillRarity: 0
+    limitedUseSkillsOnly: 0
+    filterByPotion: 0
+    adjacentTargetOnly: 0
+    rangedTargetOnly: 0
+    excludedTargetGrades: 
+    negativeTerrainOnly: 0
+    includeIndestructibleObstacles: 0
+    chancePerTarget: 1
+    maxTriggersPerTurn: 0
+    buffStacks: 1
+    buffDurationOverride: 0
+  - trigger: 9
+    effectType: 21
+    value: 1
+    isPercent: 0
+    scope: 0
+    radius: 1
+    damageSource: 0
+    scaleWithFloor: 0
+    skillTag: 8
+    skillRarity: 0
+    skill: {fileID: 0}
+    buff: {fileID: 0}
+    potion: {fileID: 0}
+    condition: 0
+    healthRatioThreshold: 0.5
+    requiredTargetBuff: {fileID: 0}
+    targetSelection: 0
+    filterBySkillTag: 1
+    filterBySkillRarity: 0
+    limitedUseSkillsOnly: 0
+    filterByPotion: 0
+    adjacentTargetOnly: 0
+    rangedTargetOnly: 0
+    excludedTargetGrades: 
+    negativeTerrainOnly: 0
+    includeIndestructibleObstacles: 0
+    chancePerTarget: 1
+    maxTriggersPerTurn: 0
+    buffStacks: 1
+    buffDurationOverride: 0
   permanentBuffs: []
   instantEffect: 0
   instantHeal: 0
@@ -29,7 +116,13 @@ MonoBehaviour:
   convertTo: {fileID: 11400000, guid: ad55db8715277f4489e464ae77193914, type: 2}
   convertMaxCount: 3
   convertRequireTags: 
+  convertAttackSkillsOnly: 1
+  conversionOptional: 1
   growthCountSkill: {fileID: 11400000, guid: ad55db8715277f4489e464ae77193914, type: 2}
   growthKillThreshold: 10
-  growthBonusPerStep: 1.0
-  devNotes: "\u83B7\u5F97\u65F6\u53EF\u5C06\u81F3\u591A3\u4E2A\u653B\u51FB\u6280\u80FD\u53D8\u5316\u4E3A\u5543\u54AC\uFF1B\u5543\u54AC\u7C7B\u6280\u80FD\u57FA\u7840\u4F24\u5BB3\u52A01\uFF1B\u6BCF\u4F7F\u7528\u5543\u54AC\u7C7B\u6280\u80FD\u51FB\u8D2510\u4E2A\u654C\u4EBA\uFF0C\u6240\u6709\u5543\u54AC\u7C7B\u6280\u80FD\u7684\u4F24\u5BB3\u6C38\u4E45\u52A01\n\u26A0\u300C\u5543\u54AC\u7C7B\u300D\u8BCD\u6761 CardTag \u91CC\u8FD8\u6CA1\u6709\uFF0C\u57FA\u7840\u4F24\u5BB3 +1 \u4E0E\u6210\u957F\u8BA1\u6570\u6682\u4EE5 devNotes \u8BB0\u5F55\uFF0C\u5F85\u8865\u8BCD\u6761\u540E\u63A5\u5165"
+  growthBonusPerStep: 1
+  growthFilterBySkillTag: 1
+  growthSkillTag: 8
+  growthPersistsAcrossBattles: 1
+  requiresDesignDetails: 0
+  devNotes: 

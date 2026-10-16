@@ -9,13 +9,14 @@ using UnityEngine;
 //    · 补充：（无）
 //
 //  ── 实现方式 ─────────────────────────────────────────────
-//  走 PotionData 基类的「回复耐力」分支，内部调用
-//  PlayerUnit.RestoreStamina(20)：
+//  本文件只是"数值模板"：结算逻辑全部在 PotionData 基类
+//  （队员版，数据驱动），子类只在 Reset() 里预填策划数值。
+//  实际投入运行的资产是 Assets/Game/ScriptableObjects/药水/耐力饮料.asset。
 //
+//  基类「回复耐力」分支内部调用 PlayerUnit.RestoreStamina(20)：
 //    · 耐力 = 行动资源，移动和出牌共用同一个池子（currentStamina）；
 //    · 回复量会被 maxStamina 截断（默认 40），和策划"上限 40"一致；
-//    · 回复后广播 PlayerResourceChanged，UI 资源条自动刷新；
-//    · 不会回复思绪、不影响生命，是纯粹的资源补给。
+//    · 回复后广播 PlayerResourceChanged，UI 资源条自动刷新。
 //
 //  ── 与「力竭」的交互（待策划确认）────────────────────────
 //  策划只写了「力竭：耐力**回复**减半」，没区分"回合回复"和"道具回复"。
@@ -27,7 +28,7 @@ using UnityEngine;
 //  ── 建 asset ─────────────────────────────────────────────
 //  编辑器里：Assets 右键 → Create → Game/Potion/耐力饮料
 //  数值已在 Reset() 里预填，创建出来即可用，无需手填任何字段。
-//  建议存放路径：Assets/Game/ScriptableObjects/饮料/耐力饮料.asset
+//  建议存放路径：Assets/Game/ScriptableObjects/药水/耐力饮料.asset
 // ============================================================
 
 [CreateAssetMenu(fileName = "耐力饮料", menuName = "Game/Potion/耐力饮料")]
@@ -57,9 +58,11 @@ public class Potion_耐力饮料 : PotionData
 
         // 没有副作用机制
         penaltyAfterUses = 0;
+        penaltyMode = PotionPenaltyMode.达到次数后每次触发;
         penaltyDrainResources = false;
         penaltyBuff = null;
         rewardRelic = null;
+        rewardCondition = PotionRewardCondition.使用后;
 
         devNotes = "策划表原文：效果「回复20点耐力」，稀有度「普通」。";
     }

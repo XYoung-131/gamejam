@@ -9,21 +9,28 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3884c7614b953aed11bd81096d5c9916, type: 3}
-  m_Name: "\u63D0\u795E\u996E\u6599"
+  m_Script: {fileID: 11500000, guid: 36d1fc59a9faa0145bbdd42471f774f5, type: 3}
+  m_Name: "蓝莓饮料"
   m_EditorClassIdentifier: 
-  potionName: "\u63D0\u795E\u996E\u6599"
-  description: "\u56DE\u590D20\u70B9\u601D\u7EEA"
-  rarity: 0
+  potionName: "蓝莓饮料"
+  description: "获得3层开悟"
+  icon: {fileID: 0}
+  rarity: 1
   maxUsesPerBattle: 0
   effects:
-  - effectType: 1
+  - effectType: 6
     targetType: 0
-    value: 20
-    buff: {fileID: 0}
+    value: 0
+    buff: {fileID: 11400000, guid: 9e46245259122714e96355701ccf4673, type: 2}
+    buffStacks: 3
+    requiredBuffName: "开悟"
     skill: {fileID: 0}
   penaltyAfterUses: 0
+  penaltyMode: 0
   penaltyDrainResources: 0
   penaltyBuff: {fileID: 0}
   rewardRelic: {fileID: 0}
-  devNotes: "\u7B56\u5212\u8868\u539F\u6587\uFF1A\u6548\u679C\u300C\u56DE\u590D20\u70B9\u601D\u7EEA\u300D\uFF0C\u7A00\u6709\u5EA6\u300C\u666E\u901A\u300D\u3002"
+  rewardCondition: 0
+  rewardRelicName: ""
+  devNotes: ""
+

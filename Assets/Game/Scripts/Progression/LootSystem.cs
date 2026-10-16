@@ -75,7 +75,8 @@ public class LootSystem : MonoBehaviour
 
     /// <summary>
     /// 登记一件"战斗结束时必定发放"的遗物。
-    /// 由 PotionData.ApplyPenalty 调用（"劣质混合饮料"触发副作用时）。
+    /// 由本系统的药水事件监听调用（PotionData 基类广播
+    /// PotionUsed / PotionPenaltyTriggered，按 rewardCondition 对号入座）。
     /// 只登记、不立即发放；同一件重复登记只算一次。
     /// </summary>
     public static void QueueBattleEndRelic(RelicData relic)
@@ -113,12 +114,47 @@ public class LootSystem : MonoBehaviour
 
         // 监听战斗结束：发放登记好的"战斗结束奖励遗物"
         EventManager.AddListener<GameState>("GameStateChanged", HandleGameStateChanged);
+
+        // 监听药水：按 rewardCondition 登记"战斗结束必给"的遗物
+        //（如"劣质混合饮料"触发副作用后送【饮料成瘾】）
+        EventManager.AddListener<PotionData, Unit>("PotionUsed", HandlePotionUsed);
+        EventManager.AddListener<PotionData, Unit>("PotionPenaltyTriggered", HandlePotionPenalty);
     }
 
     private void OnDisable()
     {
         EventManager.RemoveListener<Unit>("UnitDied", HandleUnitDied);
         EventManager.RemoveListener<GameState>("GameStateChanged", HandleGameStateChanged);
+        EventManager.RemoveListener<PotionData, Unit>("PotionUsed", HandlePotionUsed);
+        EventManager.RemoveListener<PotionData, Unit>("PotionPenaltyTriggered", HandlePotionPenalty);
+    }
+
+    // ============================================================
+    //          药水的"战斗结束必给遗物"（事件驱动）
+    // ============================================================
+
+    /// <summary>
+    /// PotionData 基类只广播事件、不发奖；遗物发放由本系统对号入座：
+    ///   rewardCondition = 使用后     → 每次喝下都会广播 PotionUsed；
+    ///   rewardCondition = 触发惩罚后 → 只在 ApplyPenalty 里广播 PotionPenaltyTriggered。
+    /// 同一件遗物重复登记会被 QueueBattleEndRelic 去重，多喝几次只算一件。
+    /// </summary>
+    private void HandlePotionUsed(PotionData potion, Unit user)
+    {
+        TryQueuePotionRelic(potion, PotionRewardCondition.使用后);
+    }
+
+    private void HandlePotionPenalty(PotionData potion, Unit user)
+    {
+        TryQueuePotionRelic(potion, PotionRewardCondition.触发惩罚后);
+    }
+
+    /// <summary>条件对上了才登记，登记本身走统一的静态入口。</summary>
+    private void TryQueuePotionRelic(PotionData potion, PotionRewardCondition expected)
+    {
+        if (potion == null || potion.rewardRelic == null) return;
+        if (potion.rewardCondition != expected) return;
+        QueueBattleEndRelic(potion.rewardRelic);
     }
 
     // ============================================================

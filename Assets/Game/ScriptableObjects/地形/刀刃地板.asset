@@ -21,6 +21,6 @@ MonoBehaviour:
   stacksPerTurnEnd: 1
   burnBuff: {fileID: 0}
   poisonBuff: {fileID: 0}
-  bleedBuff: {fileID: 11400000, guid: 9fa6b7dfa9aec6e528414cc061f6a02c, type: 2}
+  bleedBuff: {fileID: 11400000, guid: 3060afe6ee59a914b879ec8073ce8ba5, type: 2}
   smokeInterval: 1
   trueDamagePerTurnEnd: 1

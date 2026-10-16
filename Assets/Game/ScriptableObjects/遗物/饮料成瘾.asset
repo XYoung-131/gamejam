@@ -9,17 +9,105 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 93db943863e42e53f79af0853ce86437, type: 3}
-  m_Name: "\u996E\u6599\u6210\u763E"
+  m_Script: {fileID: 11500000, guid: 8d273b0ed35551c43a87fa9d0ca04062, type: 3}
+  m_Name: "饮料成瘾"
   m_EditorClassIdentifier: 
-  relicName: "\u996E\u6599\u6210\u763E"
-  description: "\u52A3\u8D28\u6DF7\u5408\u996E\u6599\u989D\u5916\u56DE\u590D2\u70B9\u8010\u529B\u548C2\u70B9\u601D\u7EEA\uFF0C\u514D\u75AB\u52A3\u8D28\u6DF7\u5408\u996E\u6599\u7684\u8D1F\u9762\u6548\u679C"
+  relicName: "饮料成瘾"
+  description: "劣质混合饮料额外回复2点耐力和2点思绪，并免疫劣质混合饮料的负面效果"
+  icon: {fileID: 0}
   relicType: 0
   pool: 0
   effects:
+  - trigger: 15
+    effectType: 6
+    value: 2
+    isPercent: 0
+    scope: 0
+    radius: 1
+    damageSource: 0
+    scaleWithFloor: 0
+    skillTag: 0
+    skillRarity: 0
+    skill: {fileID: 0}
+    buff: {fileID: 0}
+    potion: {fileID: 11400000, guid: 1000000000000000000000000000000b, type: 2}
+    condition: 0
+    healthRatioThreshold: 0.5
+    requiredTargetBuff: {fileID: 0}
+    targetSelection: 0
+    filterBySkillTag: 0
+    filterBySkillRarity: 0
+    limitedUseSkillsOnly: 0
+    filterByPotion: 1
+    adjacentTargetOnly: 0
+    rangedTargetOnly: 0
+    excludedTargetGrades: []
+    negativeTerrainOnly: 0
+    includeIndestructibleObstacles: 0
+    chancePerTarget: 1
+    maxTriggersPerTurn: 0
+    buffStacks: 1
+    buffDurationOverride: 0
+  - trigger: 15
+    effectType: 7
+    value: 2
+    isPercent: 0
+    scope: 0
+    radius: 1
+    damageSource: 0
+    scaleWithFloor: 0
+    skillTag: 0
+    skillRarity: 0
+    skill: {fileID: 0}
+    buff: {fileID: 0}
+    potion: {fileID: 11400000, guid: 1000000000000000000000000000000b, type: 2}
+    condition: 0
+    healthRatioThreshold: 0.5
+    requiredTargetBuff: {fileID: 0}
+    targetSelection: 0
+    filterBySkillTag: 0
+    filterBySkillRarity: 0
+    limitedUseSkillsOnly: 0
+    filterByPotion: 1
+    adjacentTargetOnly: 0
+    rangedTargetOnly: 0
+    excludedTargetGrades: []
+    negativeTerrainOnly: 0
+    includeIndestructibleObstacles: 0
+    chancePerTarget: 1
+    maxTriggersPerTurn: 0
+    buffStacks: 1
+    buffDurationOverride: 0
   - trigger: 0
-    effectType: 16
-    value: 1
+    effectType: 17
+    value: 0
+    isPercent: 0
+    scope: 0
+    radius: 1
+    damageSource: 0
+    scaleWithFloor: 0
+    skillTag: 0
+    skillRarity: 0
+    skill: {fileID: 0}
+    buff: {fileID: 0}
+    potion: {fileID: 11400000, guid: 1000000000000000000000000000000b, type: 2}
+    condition: 0
+    healthRatioThreshold: 0.5
+    requiredTargetBuff: {fileID: 0}
+    targetSelection: 0
+    filterBySkillTag: 0
+    filterBySkillRarity: 0
+    limitedUseSkillsOnly: 0
+    filterByPotion: 1
+    adjacentTargetOnly: 0
+    rangedTargetOnly: 0
+    excludedTargetGrades: []
+    negativeTerrainOnly: 0
+    includeIndestructibleObstacles: 0
+    chancePerTarget: 1
+    maxTriggersPerTurn: 0
+    buffStacks: 1
+    buffDurationOverride: 0
   permanentBuffs: []
   instantEffect: 0
   instantHeal: 0
@@ -27,8 +115,15 @@ MonoBehaviour:
   convertFrom: []
   convertTo: {fileID: 0}
   convertMaxCount: 0
-  convertRequireTags: 
+  convertRequireTags: []
+  convertAttackSkillsOnly: 0
+  conversionOptional: 0
   growthCountSkill: {fileID: 0}
   growthKillThreshold: 0
-  growthBonusPerStep: 0.0
-  devNotes: "\u52A3\u8D28\u6DF7\u5408\u996E\u6599\u989D\u5916\u56DE\u590D2\u70B9\u8010\u529B\u548C2\u70B9\u601D\u7EEA\uFF0C\u514D\u75AB\u52A3\u8D28\u6DF7\u5408\u996E\u6599\u7684\u8D1F\u9762\u6548\u679C\n\u26A0 \u4E0E\u300C\u52A3\u8D28\u6DF7\u5408\u996E\u6599\u300D\u8054\u52A8\uFF0C\u4EE3\u7801\u91CC\u5355\u72EC\u5904\u7406"
+  growthBonusPerStep: 0
+  growthFilterBySkillTag: 0
+  growthSkillTag: 0
+  growthPersistsAcrossBattles: 0
+  requiresDesignDetails: 0
+  devNotes: ""
+

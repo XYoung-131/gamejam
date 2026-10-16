@@ -13,20 +13,23 @@ MonoBehaviour:
   m_Name: "\u6D41\u8840"
   m_EditorClassIdentifier: 
   buffName: "\u6D41\u8840"
-  description: "\u56DE\u5408\u5F00\u59CB\u53D7\u5230 1\u00D7\u5C42\u6570 \u70B9\u6301\u7EED\u4F24\u5BB3\uFF1B\u56DE\u5408\u7ED3\u675F\u5C42\u6570\u51CF\u534A\uFF081 \u5C42\u65F6\u76F4\u63A5\u6D88\u5931\uFF09"
+  description: "\u76EE\u6807\u56DE\u5408\u5F00\u59CB\u65F6\u53D7\u5230\u7B49\u4E8E\u5F53\u524D\u5C42\u6570\u7684\u6301\u7EED\u4F24\u5BB3\u3002\u56DE\u5408\u7ED3\u675F\u5C42\u6570\u51CF\u534A\u3001\u5411\u4E0A\u53D6\u6574\uFF1B\u53EA\u6709
+    1 \u5C42\u65F6\u76F4\u63A5\u6D88\u5931\u3002"
+  icon: {fileID: 0}
   polarity: 1
   category: 0
   duration: -1
-  maxStack: 99
   canStack: 1
+  maxStack: 99
   stackDecay: 3
   clearIfNotStackedTurns: 0
   halveStacksOnEliteAndBoss: 0
   onlyForPlayerUnit: 0
   forbiddenAttackTargets: []
+  forbiddenAttackTargetNames: []
   effects:
   - effectType: 8
     trigger: 1
     value: 1
     isPercent: 0
-  devNotes: "\u4F24\u5BB3\u7C7B\uFF1A\u5411\u4E0A\u53D6\u6574\uFF0C1 \u5C42\u6E05\u96F6"
+  devNotes: 

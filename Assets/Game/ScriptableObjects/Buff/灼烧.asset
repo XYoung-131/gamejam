@@ -13,20 +13,23 @@ MonoBehaviour:
   m_Name: "\u707C\u70E7"
   m_EditorClassIdentifier: 
   buffName: "\u707C\u70E7"
-  description: "\u56DE\u5408\u5F00\u59CB\u53D7\u5230 1\u00D7\u5C42\u6570 \u70B9\u6301\u7EED\u4F24\u5BB3\uFF1B\u56DE\u5408\u7ED3\u675F\u5C42\u6570 -1"
+  description: "\u76EE\u6807\u56DE\u5408\u5F00\u59CB\u65F6\u53D7\u5230\u7B49\u4E8E\u5F53\u524D\u5C42\u6570\u7684\u6301\u7EED\u4F24\u5BB3\uFF0C\u56DE\u5408\u7ED3\u675F\u65F6\u5C42\u6570\u51CF
+    1\u3002"
+  icon: {fileID: 0}
   polarity: 1
   category: 0
   duration: -1
-  maxStack: 99
   canStack: 1
-  stackDecay: 0
+  maxStack: 99
+  stackDecay: 2
   clearIfNotStackedTurns: 0
   halveStacksOnEliteAndBoss: 0
   onlyForPlayerUnit: 0
   forbiddenAttackTargets: []
+  forbiddenAttackTargetNames: []
   effects:
   - effectType: 8
     trigger: 1
     value: 1
     isPercent: 0
-  devNotes: "\u4F24\u5BB3\u7C7B\uFF1A\u9ED8\u8BA4\u8870\u51CF = \u56DE\u5408\u7ED3\u675F\u51CF 1\uFF08\u8D1F\u9762\uFF09"
+  devNotes: 

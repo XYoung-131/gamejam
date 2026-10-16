@@ -220,6 +220,33 @@ public class PlayerCardSystem : MonoBehaviour
     }
 
     // ============================================================
+    //          与饮料（药水）系统的接线（事件驱动）
+    // ============================================================
+
+    private void OnEnable()
+    {
+        // "快走饮料"等免费技能：PotionData 基类广播 FreeSkillGranted(喝的人, 技能)，
+        // 这里翻译成"免费卡"额度——不占槽位、不耗资源、用完即走。
+        EventManager.AddListener<Unit, CardData>("FreeSkillGranted", HandleFreeSkillGranted);
+    }
+
+    private void OnDisable()
+    {
+        EventManager.RemoveListener<Unit, CardData>("FreeSkillGranted", HandleFreeSkillGranted);
+    }
+
+    /// <summary>
+    /// 收到"免费使用技能"事件 → 发一条免费额度。
+    /// 次数固定 1 次（策划原文"免费使用1次快走"）；
+    /// 出牌时的射程 / 目标 / 视线校验照走，只是不扣思绪和耐力。
+    /// </summary>
+    private void HandleFreeSkillGranted(Unit user, CardData skill)
+    {
+        if (skill == null) return;
+        GrantFreeCard(skill, 1, "饮料");
+    }
+
+    // ============================================================
     //          方式 A：抽卡灌注（攻击/防御牌库，6 选 3 再选 1）
     //
     //  完整调用链（由 UI 按钮驱动）：

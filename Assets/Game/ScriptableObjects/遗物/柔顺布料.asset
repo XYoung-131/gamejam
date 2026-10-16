@@ -9,22 +9,75 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 93db943863e42e53f79af0853ce86437, type: 3}
-  m_Name: "\u67D4\u987A\u5E03\u6599"
+  m_Script: {fileID: 11500000, guid: 8d273b0ed35551c43a87fa9d0ca04062, type: 3}
+  m_Name: "柔顺布料"
   m_EditorClassIdentifier: 
-  relicName: "\u67D4\u987A\u5E03\u6599"
-  description: "\u514D\u75AB\u7206\u70B8\u6548\u679C\uFF0C\u53D7\u5230\u7684\u975E\u7269\u7406\u4F24\u5BB3\u51CF1"
+  relicName: "柔顺布料"
+  description: "免疫爆炸效果，受到的非物理伤害减1"
+  icon: {fileID: 0}
   relicType: 2
   pool: 1
   effects:
   - trigger: 0
     effectType: 10
-    value: 1
+    value: 0
+    isPercent: 0
+    scope: 0
+    radius: 1
     damageSource: 5
+    scaleWithFloor: 0
+    skillTag: 0
+    skillRarity: 0
+    skill: {fileID: 0}
+    buff: {fileID: 0}
+    potion: {fileID: 0}
+    condition: 0
+    healthRatioThreshold: 0.5
+    requiredTargetBuff: {fileID: 0}
+    targetSelection: 0
+    filterBySkillTag: 0
+    filterBySkillRarity: 0
+    limitedUseSkillsOnly: 0
+    filterByPotion: 0
+    adjacentTargetOnly: 0
+    rangedTargetOnly: 0
+    excludedTargetGrades: []
+    negativeTerrainOnly: 0
+    includeIndestructibleObstacles: 0
+    chancePerTarget: 1
+    maxTriggersPerTurn: 0
+    buffStacks: 1
+    buffDurationOverride: 0
   - trigger: 0
     effectType: 2
     value: 1
+    isPercent: 0
+    scope: 0
+    radius: 1
     damageSource: 4
+    scaleWithFloor: 0
+    skillTag: 0
+    skillRarity: 0
+    skill: {fileID: 0}
+    buff: {fileID: 0}
+    potion: {fileID: 0}
+    condition: 0
+    healthRatioThreshold: 0.5
+    requiredTargetBuff: {fileID: 0}
+    targetSelection: 0
+    filterBySkillTag: 0
+    filterBySkillRarity: 0
+    limitedUseSkillsOnly: 0
+    filterByPotion: 0
+    adjacentTargetOnly: 0
+    rangedTargetOnly: 0
+    excludedTargetGrades: []
+    negativeTerrainOnly: 0
+    includeIndestructibleObstacles: 0
+    chancePerTarget: 1
+    maxTriggersPerTurn: 0
+    buffStacks: 1
+    buffDurationOverride: 0
   permanentBuffs: []
   instantEffect: 0
   instantHeal: 0
@@ -32,8 +85,15 @@ MonoBehaviour:
   convertFrom: []
   convertTo: {fileID: 0}
   convertMaxCount: 0
-  convertRequireTags: 
+  convertRequireTags: []
+  convertAttackSkillsOnly: 0
+  conversionOptional: 0
   growthCountSkill: {fileID: 0}
   growthKillThreshold: 0
-  growthBonusPerStep: 0.0
-  devNotes: "\u514D\u75AB\u7206\u70B8\u6548\u679C\uFF0C\u53D7\u5230\u7684\u975E\u7269\u7406\u4F24\u5BB3\u51CF1"
+  growthBonusPerStep: 0
+  growthFilterBySkillTag: 0
+  growthSkillTag: 0
+  growthPersistsAcrossBattles: 0
+  requiresDesignDetails: 0
+  devNotes: ""
+

@@ -9,26 +9,35 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4dc8dc9b556c31da6c65444de0acf7ca, type: 3}
-  m_Name: "\u6DF7\u5408\u996E\u6599"
+  m_Script: {fileID: 11500000, guid: 36d1fc59a9faa0145bbdd42471f774f5, type: 3}
+  m_Name: "橘子饮料"
   m_EditorClassIdentifier: 
-  potionName: "\u6DF7\u5408\u996E\u6599"
-  description: "\u56DE\u590D10\u70B9\u8010\u529B\u548C10\u70B9\u601D\u7EEA"
-  rarity: 0
+  potionName: "橘子饮料"
+  description: "恢复1点血量，移除自身所有负面状态"
+  icon: {fileID: 0}
+  rarity: 1
   maxUsesPerBattle: 0
   effects:
-  - effectType: 0
+  - effectType: 2
     targetType: 0
-    value: 10
+    value: 1
     buff: {fileID: 0}
+    buffStacks: 1
+    requiredBuffName: ""
     skill: {fileID: 0}
-  - effectType: 1
+  - effectType: 7
     targetType: 0
-    value: 10
+    value: 0
     buff: {fileID: 0}
+    buffStacks: 1
+    requiredBuffName: ""
     skill: {fileID: 0}
   penaltyAfterUses: 0
+  penaltyMode: 0
   penaltyDrainResources: 0
   penaltyBuff: {fileID: 0}
   rewardRelic: {fileID: 0}
-  devNotes: "\u7B56\u5212\u8868\u539F\u6587\uFF1A\u6548\u679C\u300C\u56DE\u590D10\u70B9\u8010\u529B\u548C10\u70B9\u601D\u7EEA\u300D\uFF0C\u7A00\u6709\u5EA6\u300C\u666E\u901A\u300D\u3002"
+  rewardCondition: 0
+  rewardRelicName: ""
+  devNotes: ""
+

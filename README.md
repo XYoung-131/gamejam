@@ -352,107 +352,69 @@
 
 ---
 
-## 药水（饮料）逐个实现 —— `Assets/Game/Scripts/Progression/Potions/`
+## 药水（药水/）—— 采用队友版数据，逻辑收敛到 PotionData 基类
 
-按飞书《饮料（药水）及效果一览》把 **11 瓶**饮料**逐瓶一个文件**落地。
-每个文件都是一个继承 `PotionData` 的 `ScriptableObject` 子类，
-文件头注释写清了策划原文、实现方式、依赖资产和待办，
-`Reset()` 里预填了全部数值 —— 在编辑器里 `Create → Game/Potion/<饮料名>`
-建出来的资产**开箱即用，不用手填**。
+**2026-10-16 第二次调整**：Buff / 遗物 / 药水三块数据**整体改用队员（鱼丸）创建的版本**，
+我方脚本直出的 `饮料/` 目录已删除，统一走 `ScriptableObjects/药水/`（11 瓶）。
+`Buff/`（23 个，含耐性）与 `遗物/`（22 个）同样替换为队友版，全项目引用已重接线。
 
-| 文件 | 饮料 | 稀有度 | 效果 | 特殊之处 |
-|---|---|---|---|---|
-| `Potion_耐力饮料.cs` | 耐力饮料 | 普通 | 回复 20 点耐力 | 走 `PlayerUnit.RestoreStamina`，受 40 上限截断 |
-| `Potion_提神饮料.cs` | 提神饮料 | 普通 | 回复 20 点思绪 | 与耐力饮料同档，一个补行动资源一个补卡牌资源 |
-| `Potion_混合饮料.cs` | 混合饮料 | 普通 | 回复 10 耐力 + 10 思绪 | 一条 `effects` 挂两条效果，按顺序结算 |
-| `Potion_劣质混合饮料.cs` | 劣质混合饮料 | 特殊 | 回复 8 耐力 + 8 思绪（**副作用隐藏**） | 本场第 3 瓶起：扣光耐力思绪 + 眩晕 1 回合 + 战斗结束掉落遗物【饮料成瘾】 |
-| `Potion_快走饮料.cs` | 快走饮料 | 普通 | 免费使用 1 次「快走」 | 发一张"免费技能"额度，不占槽位、不扣资源 |
-| `Potion_打嗝饮料.cs` | 打嗝饮料 | 普通 | 将所有相邻目标推远 1 格 | 覆写 `PushNeighborsAway`，改走位移系统（含碰撞伤害） |
-| `Potion_青柠饮料.cs` | 青柠饮料 | 稀有 | 恢复所有技能全部使用次数 | 走 `PlayerCardSystem.RestoreAllSkillUses`，把有限次技能回满 |
-| `Potion_蓝莓饮料.cs` | 蓝莓饮料 | 稀有 | 获得 3 层开悟 | 层数写在 `PotionEffect.value`，由基类传给 `Unit.ApplyBuff(buff, stacks)` |
-| `Potion_橘子饮料.cs` | 橘子饮料 | 稀有 | 恢复 1 点生命 + 移除自身所有负面状态 | 两条效果：先治疗、再清负面 |
-| `Potion_桃子饮料.cs` | 桃子饮料 | 稀有 | 获得 3 层轻盈 | 同蓝莓，3 层靠 `ApplyBuff(buff, 3)` |
-| `Potion_硬化饮料.cs` | 硬化饮料 | 普通 | 获得 6 点护盾 | 走 `Unit.AddShield`（护盾在回合结束清零） |
+当前分工：
+- **数据与结算逻辑**：队友版 `PotionData.cs`（数据驱动）+ `药水/*.asset`。
+  基类能力：效果列表逐条结算、`buffStacks` 传层数、`penaltyMode`（达到次数后每次触发 /
+  仅指定次数触发）、`rewardCondition`（使用后 / 触发惩罚后）、恢复所有技能使用次数。
+- **子类文件 `Potions/Potion_*.cs`（11 个）**：降级为**纯数值模板**——只在 `Reset()`
+  里预填策划数值供编辑器新建用，**不再覆写任何结算方法**（旧版覆写的
+  `OnPotionResolved` / `PushNeighborsAway` / `GrantFreeSkill` 已随基类换代移除）。
 
-### 配套改动（让上面 6 瓶真的跑起来）
+| 文件 | 资产 | 稀有度 | 效果 |
+|---|---|---|---|
+| `Potion_耐力饮料.cs` | 药水/耐力饮料 | 普通 | 回复 20 点耐力 |
+| `Potion_提神饮料.cs` | 药水/提神饮料 | 普通 | 回复 20 点思绪 |
+| `Potion_混合饮料.cs` | 药水/混合饮料 | 普通 | 回复 10 耐力 + 10 思绪 |
+| `Potion_劣质混合饮料.cs` | 药水/劣质混合饮料 | 特殊 | 回复 8+8（**副作用隐藏**）：第 3 瓶扣光资源 + 眩晕 + 战后送遗物【饮料成瘾】 |
+| `Potion_快走饮料.cs` | 药水/快走饮料 | 普通 | 免费使用 1 次「快走」 |
+| `Potion_打嗝饮料.cs` | 药水/打嗝饮料 | 普通 | 将相邻目标推远 1 格 |
+| `Potion_青柠饮料.cs` | 药水/青柠饮料 | 稀有 | 恢复所有技能全部使用次数 |
+| `Potion_蓝莓饮料.cs` | 药水/蓝莓饮料 | 稀有 | 获得 3 层开悟（`buffStacks = 3`） |
+| `Potion_橘子饮料.cs` | 药水/橘子饮料 | 稀有 | 治疗 1 点 + 移除自身所有负面状态 |
+| `Potion_桃子饮料.cs` | 药水/桃子饮料 | 稀有 | 获得 3 层轻盈（`buffStacks = 3`） |
+| `Potion_硬化饮料.cs` | 药水/硬化饮料 | 普通 | 获得 6 点护盾 |
 
-- `Progression/PotionData.cs` —— 基类补齐：
-  - `相邻目标` 的挂 buff 真正实现（原先被简化成"挂给自己"）；
-  - `免费使用技能` 从"只广播事件"改为真接线 `PlayerCardSystem.GrantFreeCard`；
-  - 惩罚结算时把 `rewardRelic` 登记进 `LootSystem.QueueBattleEndRelic`（原先这个字段没人消费）；
-  - 新增 `OnPotionResolved` 收尾钩子、`CanUseThisBattle` / `HasBattleUseLimit` 查询。
-- `Cards/PlayerCardSystem.cs` —— 新增"免费技能"通道：
-  - `FreeCardCharge` + `FreeCards` / `HasFreeCard`；`GrantFreeCard()` / `UseFreeCard()`；
-  - 抽出 `ValidateCardTarget` / `ValidateCardTargeting`，让免费技能与槽位技能共用同一套
-    目标类型 / 射程 / 亲密 / 视线校验，避免两套规则跑偏。
-- `Units/PlayerUnit.cs` —— `UsePotion` 现在会：
-  - 维护"本场战斗每瓶饮料各喝了几次"（`potionUseCount`，战斗开始时清空），
-    并传给 `Resolve`，这是"劣质混合饮料第 3 瓶"的判定依据；
-  - 真正执行 `maxUsesPerBattle` 上限（原先这个字段只有声明、没人检查）；
-  - 新增 `GetPotionUseCount()` 供 UI 显示"已用 N/M"。
-- `Progression/LootSystem.cs` —— 新增"战斗结束必定发放"的遗物通道：
-  `QueueBattleEndRelic()` 静态登记 + 监听 `GameStateChanged`，胜利时 `FlushBattleEndRelics()` 统一发放，
-  失败则作废（不走随机池，用于策划点名的固定奖励）。
+### 事件接线（配合队友版基类的两个"只广播事件"的点）
 
-### 资产引用：已由生成脚本直出，无需手动拖
+队友版基类把两处逻辑留成了事件，本项目在消费侧接好：
 
-`Reset()` 填不了资产引用，但 `Assets/Game/ScriptableObjects/饮料/` 下的 11 个 `.asset`
-是脚本按表直出的，引用已全部配好（脚本内按逻辑名两段查表解析）：
+- **免费技能**：基类广播 `FreeSkillGranted(喝的人, 技能)` →
+  `PlayerCardSystem` 监听后调 `GrantFreeCard(skill, 1, "饮料")`，
+  发一张不占槽位、不耗资源的"免费卡"（与槽位技能共用同一套目标/射程校验）。
+- **战后必给遗物**：基类广播 `PotionUsed` / `PotionPenaltyTriggered` →
+  `LootSystem` 按 `rewardCondition` 对号入座（使用后 / 触发惩罚后），
+  调 `QueueBattleEndRelic` 登记，战斗胜利时发放、失败作废（重复登记自动去重）。
 
-1. `劣质混合饮料.penaltyBuff` → `Buff/眩晕.asset` ✓
-2. `劣质混合饮料.rewardRelic` → `遗物/饮料成瘾.asset` ✓
-3. `快走饮料.effects[0].skill` → `技能/防御技能/快走.asset` ✓
-4. `蓝莓饮料.effects[0].buff` → `Buff/开悟.asset`、`桃子饮料.effects[0].buff` → `Buff/轻盈.asset` ✓
+### 队友版 buff 资产的补丁（替换时一并修）
 
-从 `Create` 菜单新建资产时 `Reset()` 仍填不了引用，需手动拖这四处（脚本生成的资产不受影响）。
-
-存放路径：`Assets/Game/ScriptableObjects/饮料/<饮料名>.asset`
+- 全部 `canStack = 1` 的 buff（中毒/灼烧/流血/眩晕/力量/敏捷/易伤/残废/无力/力竭/
+  临时力量/临时敏捷/混乱/荧光/耐性）补了 `maxStack: 99` —— 他的资产是在"无 maxStack
+  字段"的旧版脚本下做的，配回现行 `BuffData`（层数上限钳制）后不补会永远卡在 1 层；
+- `开悟` / `轻盈` 原是 `canStack = 0`，但蓝莓/桃子要挂 3 层 → 改为
+  `canStack = 1 / maxStack = 99`；
+- 13 个引用旧 Buff GUID 的资产（地形 4 + 技能 9）已重接到队友 GUID；
+- `RelicData.cs.meta` 改用队友 GUID（`8d273b0e...`，22 个遗物资产都指向它），
+  我方无任何资产引用旧 GUID，切换零损。
 
 ### 已知依赖与待办
 
 - **位移类卡牌的移动结算还没实现**：`CardData.Resolve` 只处理伤害 / 护盾 / 治疗 / buff，
   带 `CardTag.位移` 的牌不会真的把角色挪走。所以"快走饮料"发的免费按钮现在能点、会扣次数，
   但角色不动 —— 等位移卡牌系统落地后自动生效，药水文件不用再改。
-- **打嗝饮料改走正式位移系统**后有行为差别：把敌人推进障碍物会结算碰撞伤害
-  （基类原来的 `PushBack` 简化版不会）。若策划要"纯位移、无任何伤害"，
-  删掉该类里的 `PushNeighborsAway` 覆写即可退回基类行为。
+- **打嗝饮料走基类 `PushBack` 简化位移**（不结算碰撞伤害），与技能击退的
+  `ApplyDisplacement`（有碰撞）是两套判定；若要统一，把基类
+  `PushNeighborsAway` 里的 `PushBack` 换成 `ApplyDisplacement` 即可，一处改全局生效。
 - **力竭/混乱不作用于药水的即时回复**：只作用于回合结束的 15 点回复，待策划确认范围。
 - 策划表里"劣质混合饮料"括号内内容明确"玩家看不到但会实装"，
   所以 `description` 只写了补给部分，副作用写在 `devNotes`。
-
-## 药水逻辑核对与修正（对照新生成的 .asset，2026-10-16）
-
-按"**逐瓶逻辑 ↔ 资产 ↔ 飞书表**"三方核对，发现并修掉 4 类问题：
-
-### 修正 1：基类挂 buff 丢层数（真 bug）
-`PotionData.ApplyBuffEffect` 原先调 `ApplyBuff(buff)` 用默认 **1 层**，
-导致"蓝莓 / 桃子饮料"策划写明各挂 **3 层**、实际只挂上 1 层。
-现改为 `ApplyBuff(buff, GetBuffStacks(effect))`，层数取自 `PotionEffect.value`
-（没填按 1 层兜底）；`ApplyBuffToNeighbors` 同步加 `stacks` 参数，
-"全场敌人 / 相邻目标 / 自身"三路一并传，避免只修一半。
-
-> 前提：目标 buff 必须 `canStack = true` 且 `maxStack >= 3`。
-> `轻盈 / 开悟` 两个占位 buff 已按 `canStack = true / maxStack = 99` 配好，所以 3 层能叠上。
-
-### 修正 2：`PotionRarity` 档位不足
-表里稀有度有 **3 档**（普通 / 特殊 / 稀有），代码原先只有 2 档。
-新增 `稀有`，**追加在枚举末尾** —— 老资产 `劣质混合饮料.asset` 存的 `rarity: 1 = 特殊`
-不受影响（Unity 按成员序号序列化，插队会让它变成"稀有"）。
-
-### 修正 3：4 瓶稀有度写成「普通」
-青柠 / 蓝莓 / 橘子 / 桃子 表里是「**稀有**」，但资产与代码里都错写成了「普通」：
-- 资产：`rarity: 0 → 2`（青柠 / 蓝莓 / 橘子 / 桃子）
-- 代码：`Reset()` 里 `PotionRarity.普通 → PotionRarity.稀有`
-
-### 修正 4：过时的注释与路径
-- 6 个子类头部注释里的资产路径 `ScriptableObjects/药水/` → `ScriptableObjects/饮料/`；
-- 删掉"PotionRarity 只有 普通/特殊 两档，稀有暂按普通存"这句已失效的说明；
-- 劣质混合饮料 / 快走饮料的"待办：需要手动拖 XXX 资产"已过时（资产已建、引用已配），改为陈述现状。
-
-### 终检结果
-三方（飞书表 / `.asset` / `.cs`）逐瓶比对：**稀有度 11/11 一致、效果条数 11/11 一致**。
-运行时接口签名（`ApplyDisplacement` / `ApplyBuff(buff, stacks)` / `GrantFreeCard` /
-`RestoreAllSkillUses` / `RestoreStamina` 等）全部对得上。
+- `penaltyMode = 仅指定次数触发`（== 3，只在第 3 瓶罚一次）；若策划要"第 3 瓶起每次都罚"，
+  改资产里的 `penaltyMode` 即可，代码不用动。
 
 ## 资产补齐（飞书策划表 → .asset，2026-10-16）
 
@@ -468,8 +430,11 @@
 | `技能/防御技能/` | 29 | 防御技能大全全量 |
 | `遗物/` | 22 | 思维碎片（遗物）大全全量 |
 | `障碍物/` | 10 | 障碍物大全全量 |
-| `饮料/` | 11 | 饮料（药水）及效果一览全量 |
 | **合计** | **170** | 字段名与 GUID 引用已由脚本校验，全部通过 |
+
+> ⚠ 2026-10-16 第二次调整：其中 `Buff/`（23）、`遗物/`（22）、饮料三块**已整体改用
+> 队友创建的版本**，我方直出的 `饮料/` 目录删除、统一走 `药水/`；详见上方药水章节。
+> 保留我方版本的：单位 / 地形 / 技能 / 障碍物。
 
 生成用一次性脚本按"表 → YAML"直出，枚举按 Unity 的小端 int32 十六进制规则序列化，
 引用关系在脚本内按逻辑名两段解析（先按分类键、再按资产路径），避免手拖漏拖。
@@ -489,11 +454,9 @@
   现统一覆盖 灼热（灼烧）/ 剧毒（中毒）/ **刀刃（流血）** / 吸血（真实伤害）。
 - **`Progression/PotionData.cs`** —— 新增 `PotionEffectType.恢复技能使用次数`（**追加在枚举末尾**），
   对应 `RestoreSkillUses()` 虚方法，供"青柠饮料"实现。
+  （⚠ 已被覆盖：该文件现采用队友版，见上方药水章节。）
 - **`Cards/PlayerCardSystem.cs`** —— 新增 `RestoreAllSkillUses()`，遍历槽位把有限次技能
   `remainingUses` 回满，并广播 `CardUsesRestored`。
-- **`Progression/Potions/Potion_{青柠/蓝莓/橘子/桃子/硬化}饮料.cs`（新增 5 个类）**，
-  与既有 6 个类合计 11 个，覆盖饮料表全量，每个都是 `PotionData` 子类 +
-  `[CreateAssetMenu(menuName="Game/Potion/<名>")]`，`Reset()` 预填数值。
 
 ### 特殊地形规格（表外，由策划直接提供）
 

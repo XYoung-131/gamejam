@@ -9,11 +9,12 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 864aa3206f054e0a7ed744f55863a305, type: 3}
-  m_Name: "\u6253\u55DD\u996E\u6599"
+  m_Script: {fileID: 11500000, guid: 36d1fc59a9faa0145bbdd42471f774f5, type: 3}
+  m_Name: "打嗝饮料"
   m_EditorClassIdentifier: 
-  potionName: "\u6253\u55DD\u996E\u6599"
-  description: "\u5C06\u6240\u6709\u76F8\u90BB\u76EE\u6807\u63A8\u8FDC1\u683C"
+  potionName: "打嗝饮料"
+  description: "将所有相邻目标推远1格"
+  icon: {fileID: 0}
   rarity: 0
   maxUsesPerBattle: 0
   effects:
@@ -21,9 +22,15 @@ MonoBehaviour:
     targetType: 1
     value: 1
     buff: {fileID: 0}
+    buffStacks: 1
+    requiredBuffName: ""
     skill: {fileID: 0}
   penaltyAfterUses: 0
+  penaltyMode: 0
   penaltyDrainResources: 0
   penaltyBuff: {fileID: 0}
   rewardRelic: {fileID: 0}
-  devNotes: "\u7B56\u5212\u8868\u539F\u6587\uFF1A\u6548\u679C\u300C\u5C06\u6240\u6709\u76F8\u90BB\u76EE\u6807\u63A8\u8FDC1\u683C\u300D\uFF0C\u7A00\u6709\u5EA6\u300C\u666E\u901A\u300D\u3002"
+  rewardCondition: 0
+  rewardRelicName: ""
+  devNotes: ""
+

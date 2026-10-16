@@ -8,12 +8,13 @@ using UnityEngine;
 //    · 稀有度：普通
 //
 //  ── 实现方式 ─────────────────────────────────────────────
-//  走 PotionData 基类的数据驱动分支，效果写在 effects 列表里，
-//  子类只负责预填数值，不重复实现结算。
+//  本文件只是"数值模板"：结算逻辑全部在 PotionData 基类
+//  （队员版，数据驱动），子类只在 Reset() 里预填策划数值。
+//  实际投入运行的资产是 Assets/Game/ScriptableObjects/药水/硬化饮料.asset。
 //
 //  ── 建 asset ─────────────────────────────────────────────
 //  编辑器里：Assets 右键 → Create → Game/Potion/硬化饮料
-//  存放路径：Assets/Game/ScriptableObjects/饮料/硬化饮料.asset
+//  存放路径：Assets/Game/ScriptableObjects/药水/硬化饮料.asset
 // ============================================================
 
 [CreateAssetMenu(fileName = "硬化饮料", menuName = "Game/Potion/硬化饮料")]
@@ -40,9 +41,11 @@ public class Potion_硬化饮料 : PotionData
         maxUsesPerBattle = 0;   // 0 = 不限次数
 
         penaltyAfterUses = 0;
+        penaltyMode = PotionPenaltyMode.达到次数后每次触发;
         penaltyDrainResources = false;
         penaltyBuff = null;
         rewardRelic = null;
+        rewardCondition = PotionRewardCondition.使用后;
 
         devNotes = "策划表原文：效果「获得6点护盾」，稀有度「普通」。";
     }

@@ -9,8 +9,11 @@ using UnityEngine;
 //    · 补充：（无）
 //
 //  ── 实现方式 ─────────────────────────────────────────────
-//  一个 PotionData 可以挂多条 effect，这瓶就是两条：
+//  本文件只是"数值模板"：结算逻辑全部在 PotionData 基类
+//  （队员版，数据驱动），子类只在 Reset() 里预填策划数值。
+//  实际投入运行的资产是 Assets/Game/ScriptableObjects/药水/混合饮料.asset。
 //
+//  一个 PotionData 可以挂多条 effect，这瓶就是两条：
 //    effects[0] 回复耐力 自身 10   → PlayerUnit.RestoreStamina(10)
 //    effects[1] 回复思绪 自身 10   → PlayerUnit.RestoreThought(10)
 //
@@ -24,7 +27,7 @@ using UnityEngine;
 //
 //  ── 建 asset ─────────────────────────────────────────────
 //  编辑器里：Assets 右键 → Create → Game/Potion/混合饮料
-//  建议存放路径：Assets/Game/ScriptableObjects/饮料/混合饮料.asset
+//  建议存放路径：Assets/Game/ScriptableObjects/药水/混合饮料.asset
 // ============================================================
 
 [CreateAssetMenu(fileName = "混合饮料", menuName = "Game/Potion/混合饮料")]
@@ -57,9 +60,11 @@ public class Potion_混合饮料 : PotionData
         maxUsesPerBattle = 0;   // 0 = 不限次数
 
         penaltyAfterUses = 0;
+        penaltyMode = PotionPenaltyMode.达到次数后每次触发;
         penaltyDrainResources = false;
         penaltyBuff = null;
         rewardRelic = null;
+        rewardCondition = PotionRewardCondition.使用后;
 
         devNotes = "策划表原文：效果「回复10点耐力和10点思绪」，稀有度「普通」。" +
                    "和「劣质混合饮料」是同一套效果，数值更高且没有副作用。";

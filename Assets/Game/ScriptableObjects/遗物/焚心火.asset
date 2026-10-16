@@ -9,17 +9,45 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 93db943863e42e53f79af0853ce86437, type: 3}
-  m_Name: "\u711A\u5FC3\u706B"
+  m_Script: {fileID: 11500000, guid: 8d273b0ed35551c43a87fa9d0ca04062, type: 3}
+  m_Name: "焚心火"
   m_EditorClassIdentifier: 
-  relicName: "\u711A\u5FC3\u706B"
-  description: "\u5904\u5728\u707C\u70E7\u72B6\u6001\u7684\u654C\u4EBA\u9020\u6210\u4F24\u5BB3\u51CF1"
+  relicName: "焚心火"
+  description: "处在灼烧状态的敌人造成的伤害减1"
+  icon: {fileID: 0}
   relicType: 2
   pool: 1
   effects:
   - trigger: 0
-    effectType: 16
+    effectType: 2
     value: 1
+    isPercent: 0
+    scope: 0
+    radius: 1
+    damageSource: 0
+    scaleWithFloor: 0
+    skillTag: 0
+    skillRarity: 0
+    skill: {fileID: 0}
+    buff: {fileID: 0}
+    potion: {fileID: 0}
+    condition: 2
+    healthRatioThreshold: 0.5
+    requiredTargetBuff: {fileID: 11400000, guid: 016c2cc6573ba764e9dfd695fcb6736f, type: 2}
+    targetSelection: 0
+    filterBySkillTag: 0
+    filterBySkillRarity: 0
+    limitedUseSkillsOnly: 0
+    filterByPotion: 0
+    adjacentTargetOnly: 0
+    rangedTargetOnly: 0
+    excludedTargetGrades: []
+    negativeTerrainOnly: 0
+    includeIndestructibleObstacles: 0
+    chancePerTarget: 1
+    maxTriggersPerTurn: 0
+    buffStacks: 1
+    buffDurationOverride: 0
   permanentBuffs: []
   instantEffect: 0
   instantHeal: 0
@@ -27,8 +55,15 @@ MonoBehaviour:
   convertFrom: []
   convertTo: {fileID: 0}
   convertMaxCount: 0
-  convertRequireTags: 
+  convertRequireTags: []
+  convertAttackSkillsOnly: 0
+  conversionOptional: 0
   growthCountSkill: {fileID: 0}
   growthKillThreshold: 0
-  growthBonusPerStep: 0.0
-  devNotes: "\u5904\u5728\u707C\u70E7\u72B6\u6001\u7684\u654C\u4EBA\u9020\u6210\u4F24\u5BB3\u51CF1\n\u26A0 \u9700\u8981\u67E5\u8BE2\u300C\u76EE\u6807\u8EAB\u4E0A\u662F\u5426\u6709\u707C\u70E7\u300D\uFF0C\u4EE3\u7801\u91CC\u5355\u72EC\u5904\u7406"
+  growthBonusPerStep: 0
+  growthFilterBySkillTag: 0
+  growthSkillTag: 0
+  growthPersistsAcrossBattles: 0
+  requiresDesignDetails: 0
+  devNotes: ""
+
