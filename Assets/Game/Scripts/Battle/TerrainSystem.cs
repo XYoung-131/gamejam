@@ -7,7 +7,7 @@ using UnityEngine;
 //  结算时机（与设计文档"行动顺序：回合开始—…—结算所有 buff—…—回合结束"一致）：
 //  - 回合开始：刷新"克勒妮绒毯"的力量加成（站在上面才给，离开就移除）；
 //  - 单位移动后：立刻重新判定该单位脚下的绒毯加成；
-//  - 所有 buff 结算时（TurnManager 抛 BuffsSettled）：结算灼热/剧毒/吸血地板，
+//  - 所有 buff 结算时（TurnManager 抛 BuffsSettled）：结算灼热/剧毒/刀刃/吸血地板，
 //    并推进烟雾地板的喷烟计时。
 //
 //  挂载位置：场景里任意一个常驻 GameObject（和 TurnManager 类似，全场景唯一）。
@@ -123,14 +123,14 @@ public class TerrainSystem : MonoBehaviour
         }
     }
 
-    /// <summary>单位名字是否符合该地形的受益名单（名单为空 = 全部受益）</summary>
+    /// <summary>单位是否符合该地形的受益名单（名单为空 = 全部受益）</summary>
     private bool IsEligible(TerrainData terrain, Unit unit)
     {
-        if (terrain.grantedUnitNames == null || terrain.grantedUnitNames.Count == 0)
+        if (terrain.grantedUnits == null || terrain.grantedUnits.Count == 0)
             return true;
 
         if (unit.data == null) return false;
-        return terrain.grantedUnitNames.Contains(unit.data.unitName);
+        return terrain.grantedUnits.Contains(unit.data);
     }
 
     // ============================================================
@@ -145,31 +145,33 @@ public class TerrainSystem : MonoBehaviour
         AdvanceSmoke();
     }
 
-    /// <summary>灼热/剧毒/吸血地板：回合结束对上面的单位生效</summary>
+    /// <summary>灼热/剧毒/刀刃/吸血地板：回合结束对上面的单位生效</summary>
     private void ApplyDamageFloors()
     {
-        foreach (var cell in GetTerrainCells(TerrainType.灼热地板))
-        {
-            if (cell.occupyUnit == null) continue;
-            TerrainData t = cell.terrain;
-            if (t.burnBuff != null)
-                ApplyStacks(cell.occupyUnit, t.burnBuff, t.stacksPerTurnEnd);
-        }
+        // ---------- 挂 buff 的三块地板 ----------
+        ApplyBuffFloor(TerrainType.灼热地板, t => t.burnBuff);
+        ApplyBuffFloor(TerrainType.剧毒地板, t => t.poisonBuff);
+        ApplyBuffFloor(TerrainType.刀刃地板, t => t.bleedBuff);
 
-        foreach (var cell in GetTerrainCells(TerrainType.剧毒地板))
-        {
-            if (cell.occupyUnit == null) continue;
-            TerrainData t = cell.terrain;
-            if (t.poisonBuff != null)
-                ApplyStacks(cell.occupyUnit, t.poisonBuff, t.stacksPerTurnEnd);
-        }
-
+        // ---------- 吸血地板：直接造成真实伤害 ----------
         foreach (var cell in GetTerrainCells(TerrainType.吸血地板))
         {
             if (cell.occupyUnit == null) continue;
             TerrainData t = cell.terrain;
             // 文档：对上面的所有单位造成真实伤害
             cell.occupyUnit.TakeDamage(t.trueDamagePerTurnEnd, DamageType.真实);
+        }
+    }
+
+    /// <summary>给地板上站着的单位挂 buff（对应的 buff 资产没配就整块跳过）</summary>
+    private void ApplyBuffFloor(TerrainType type, System.Func<TerrainData, BuffData> pickBuff)
+    {
+        foreach (var cell in GetTerrainCells(type))
+        {
+            if (cell.occupyUnit == null) continue;
+            BuffData buff = pickBuff(cell.terrain);
+            if (buff != null)
+                ApplyStacks(cell.occupyUnit, buff, cell.terrain.stacksPerTurnEnd);
         }
     }
 

@@ -1,0 +1,42 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 93db943863e42e53f79af0853ce86437, type: 3}
+  m_Name: "\u7B11\u9765"
+  m_EditorClassIdentifier: 
+  relicName: "\u7B11\u9765"
+  description: "\u56DE\u5408\u5F00\u59CB\u65F6\u5BF9\u76F8\u90BB2\u683C\u5185\u7684\u6240\u6709\u76EE\u6807\u65BD\u52A01\u5C42\u6613\u4F24\uFF1B\u8FDC\u7A0B\u5355\u4F4D\uFF08\u4E0D\u5305\u62EC\u7CBE\u82F1\u602A\u548CBOSS\uFF09\u5165\u573A\u540E\u4F1A\u7729\u66551\u56DE\u5408"
+  relicType: 4
+  pool: 0
+  effects:
+  - trigger: 4
+    effectType: 12
+    value: 1
+    scope: 2
+    radius: 2
+    buff: {fileID: 11400000, guid: 4c822cbe4f6b48957d53b75db2e81291, type: 2}
+  - trigger: 13
+    effectType: 12
+    value: 1
+    scope: 3
+    buff: {fileID: 11400000, guid: b276910cd5ff4e090940a73025c614cb, type: 2}
+  permanentBuffs: []
+  instantEffect: 0
+  instantHeal: 0
+  instantBuffs: []
+  convertFrom: []
+  convertTo: {fileID: 0}
+  convertMaxCount: 0
+  convertRequireTags: 
+  growthCountSkill: {fileID: 0}
+  growthKillThreshold: 0
+  growthBonusPerStep: 0.0
+  devNotes: "\u56DE\u5408\u5F00\u59CB\u65F6\u5BF9\u76F8\u90BB2\u683C\u5185\u7684\u6240\u6709\u76EE\u6807\u65BD\u52A01\u5C42\u6613\u4F24\uFF1B\u8FDC\u7A0B\u5355\u4F4D\uFF08\u4E0D\u5305\u62EC\u7CBE\u82F1\u602A\u548CBOSS\uFF09\u5165\u573A\u540E\u4F1A\u7729\u66551\u56DE\u5408\n\u26A0\u300C\u8FDC\u7A0B\u5355\u4F4D\u4E14\u975E\u7CBE\u82F1/BOSS\u300D\u7684\u8FC7\u6EE4\u6761\u4EF6\u5F85\u8865"

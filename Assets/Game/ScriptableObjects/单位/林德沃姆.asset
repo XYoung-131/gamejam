@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 00bca2f6a565a374da8b0d1304cc43ea, type: 3}
+  m_Name: "\u6797\u5FB7\u6C83\u59C6"
+  m_EditorClassIdentifier: 
+  unitName: "\u6797\u5FB7\u6C83\u59C6"
+  maxHealth: 12
+  grade: 1
+  passiveAbility: "\u4F1A\u653B\u51FB\u53CB\u65B9\u5355\u4F4D\uFF0C\u51FB\u6740\u81F3\u5C113\u540D\u53CB\u65B9\u5355\u4F4D\u540E\u83B7\u5F971\u70B9\u529B\u91CF\u548C1\u70B9\u654F\u6377\uFF0C\u6B7B\u4EA1\u540E\u5206\u88C2\u4E3A \u6797\u5FB7\u6C83\u59C6-\u8EAF\u4F53 \u548C \u6797\u5FB7\u6C83\u59C6-\u5C3E\u5DF4"
+  aiLogic: ""
+  skillGroup1:
+  - {fileID: 11400000, guid: c4d3f6affd88ea745a9b6e0440bc4975, type: 2}
+  - {fileID: 11400000, guid: 1783be519a124a64c9a6ffdf881f06f7, type: 2}
+  - {fileID: 11400000, guid: 98c2e8508556a0c48a4444728ee03836, type: 2}
+  - {fileID: 11400000, guid: 667772554bc77c641a819ca182044246, type: 2}
+  skillGroup2: []
+  skillGroup3: []

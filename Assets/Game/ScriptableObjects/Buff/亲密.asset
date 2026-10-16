@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7522e959658a2794587e24d1a5052587, type: 3}
+  m_Name: "\u4EB2\u5BC6"
+  m_EditorClassIdentifier: 
+  buffName: "\u4EB2\u5BC6"
+  description: "\u65E0\u6CD5\u5C06\u5927\u62B1\u62B1 / \u5C0F\u62B1\u62B1 / \u9EDB\u4E9A / \u666E\u5170\u9009\u4E3A\u653B\u51FB\u76EE\u6807"
+  polarity: 1
+  category: 1
+  duration: -1
+  maxStack: 1
+  canStack: 0
+  stackDecay: 4
+  clearIfNotStackedTurns: 0
+  halveStacksOnEliteAndBoss: 0
+  onlyForPlayerUnit: 0
+  forbiddenAttackTargets:
+  - {fileID: 11400000, guid: 4238993568728ae4bf992f4ac99ac12f, type: 2}
+  - {fileID: 11400000, guid: 25bc9e03166119ebd1e6d3dff96040af, type: 2}
+  - {fileID: 11400000, guid: 2cf0020d1b38e8f79ebf2a3a4c05d5c9, type: 2}
+  - {fileID: 11400000, guid: ca9cd7a59b363c30c1388330d68502cd, type: 2}
+  effects:
+  - effectType: 16
+    trigger: 0
+    value: 1
+    isPercent: 0
+  devNotes: "\u56DE\u5408\u7ED3\u675F\u76F4\u63A5\u6D88\u5931\uFF1B\u540D\u5355\u89C1 forbiddenAttackTargets"

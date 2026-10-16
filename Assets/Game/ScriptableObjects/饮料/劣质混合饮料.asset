@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0762a5b91480b371bbb1543f9a5812a9, type: 3}
+  m_Name: "\u52A3\u8D28\u6DF7\u5408\u996E\u6599"
+  m_EditorClassIdentifier: 
+  potionName: "\u52A3\u8D28\u6DF7\u5408\u996E\u6599"
+  description: "\u56DE\u590D8\u70B9\u8010\u529B\u548C8\u70B9\u601D\u7EEA\uFF08\u540C1\u573A\u6218\u6597\u4E2D\u7B2C3\u6B21\u4F7F\u7528\u540E\u6263\u9664\u6240\u6709\u8010\u529B\u548C\u601D\u7EEA\uFF0C\u5E76\u7729\u66551\u56DE\u5408\uFF0C\u6218\u6597\u7ED3\u675F\u6389\u843D\u9057\u7269 \u996E\u6599\u6210\u763E\uFF09"
+  rarity: 1
+  maxUsesPerBattle: 0
+  effects:
+  - effectType: 0
+    targetType: 0
+    value: 8
+    buff: {fileID: 0}
+    skill: {fileID: 0}
+  - effectType: 1
+    targetType: 0
+    value: 8
+    buff: {fileID: 0}
+    skill: {fileID: 0}
+  penaltyAfterUses: 3
+  penaltyDrainResources: 1
+  penaltyBuff: {fileID: 11400000, guid: b276910cd5ff4e090940a73025c614cb, type: 2}
+  rewardRelic: {fileID: 11400000, guid: 6217be3cd1950aed1d37df9807cd11e3, type: 2}
+  devNotes: "\u7B56\u5212\u8868\u539F\u6587\uFF1A\u6548\u679C\u300C\u56DE\u590D8\u70B9\u8010\u529B\u548C8\u70B9\u601D\u7EEA\uFF08\u540C1\u573A\u6218\u6597\u4E2D\u7B2C3\u6B21\u4F7F\u7528\u540E\u6263\u9664\u6240\u6709\u8010\u529B\u548C\u601D\u7EEA\uFF0C\u5E76\u7729\u66551\u56DE\u5408\uFF0C\u6218\u6597\u7ED3\u675F\u6389\u843D\u9057\u7269 \u996E\u6599\u6210\u763E\uFF09\u300D\uFF0C\u7A00\u6709\u5EA6\u300C\u7279\u6B8A\u300D\u3002"

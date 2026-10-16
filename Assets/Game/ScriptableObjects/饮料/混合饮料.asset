@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4dc8dc9b556c31da6c65444de0acf7ca, type: 3}
+  m_Name: "\u6DF7\u5408\u996E\u6599"
+  m_EditorClassIdentifier: 
+  potionName: "\u6DF7\u5408\u996E\u6599"
+  description: "\u56DE\u590D10\u70B9\u8010\u529B\u548C10\u70B9\u601D\u7EEA"
+  rarity: 0
+  maxUsesPerBattle: 0
+  effects:
+  - effectType: 0
+    targetType: 0
+    value: 10
+    buff: {fileID: 0}
+    skill: {fileID: 0}
+  - effectType: 1
+    targetType: 0
+    value: 10
+    buff: {fileID: 0}
+    skill: {fileID: 0}
+  penaltyAfterUses: 0
+  penaltyDrainResources: 0
+  penaltyBuff: {fileID: 0}
+  rewardRelic: {fileID: 0}
+  devNotes: "\u7B56\u5212\u8868\u539F\u6587\uFF1A\u6548\u679C\u300C\u56DE\u590D10\u70B9\u8010\u529B\u548C10\u70B9\u601D\u7EEA\u300D\uFF0C\u7A00\u6709\u5EA6\u300C\u666E\u901A\u300D\u3002"

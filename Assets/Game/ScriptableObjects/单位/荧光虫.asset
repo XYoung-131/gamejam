@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 00bca2f6a565a374da8b0d1304cc43ea, type: 3}
+  m_Name: "\u8367\u5149\u866B"
+  m_EditorClassIdentifier: 
+  unitName: "\u8367\u5149\u866B"
+  maxHealth: 4
+  grade: 0
+  passiveAbility: "\u6D6E\u7A7A\uFF0C\u514D\u75AB\u5730\u5F62\u6548\u679C / \u4F7F\u7528\u6280\u80FD\u8367\u5149\u6C47\u805A\u540E\uFF0C\u4F1A\u5438\u6536\u76F8\u90BB\u7684\u8367\u5149\u866B\uFF0C\u83B7\u5F97\u7B49\u91CF\u7684\u8840\u91CF\u548C\u8840\u4E0A\u9650\u4E0E\u5B83\u8EAB\u4E0A\u7684\u8367\u5149\u6548\u679C"
+  aiLogic: "\u76F8\u90BB3\u683C\u5185\u6CA1\u6709\u73A9\u5BB6\u65F6\uFF0C\u4F7F\u7528 \u5FEB\u8D70 \u671D\u73A9\u5BB6\u79FB\u52A8\uFF0C\u6B63\u597D3\u683C\u5185\u6709\u73A9\u5BB6\u65F6\uFF0C\u4F7F\u7528 \u72D9\u6740 \uFF08\u8BE5\u653B\u51FB\u67091\u56DE\u5408\u51B7\u5374\uFF09\uFF0C\u5982\u679C\u73A9\u5BB6\u5728\u76F8\u90BB\u683C\uFF0C\u5219\u4F7F\u7528 \u5FEB\u8D70 \u8FDC\u79BB\u73A9\u5BB6\uFF1B\u76F8\u90BB2\u683C\u5185\u6709 \u8367\u5149\u5C42\u6570\u4F4E\u4E8E\u81EA\u8EAB \u4E14 \u5927\u4E8E\u7B49\u4E8E4 \u4E14 \u8840\u91CF\u4E0D\u6EE1\u7684\u8367\u5149\u866B\u65F6\uFF0C\u4F7F\u7528\u5FEB\u8D70\u671D\u8367\u5149\u866B\u79FB\u52A8\uFF0C\u8BE5\u4F18\u5148\u7EA7\u5927\u4E8E\u5411\u73A9\u5BB6\u79FB\u52A8 / \u81EA\u8EAB\u8367\u5149\u5C42\u6570\u4E0D\u4F4E\u4E8E8\u65F6\uFF0C\u53EA\u4F1A\u4F7F\u7528\u6280\u80FD\u8367\u5149\u7206"
+  skillGroup1:
+  - {fileID: 11400000, guid: 98c87e898682ade7bb7b1500c99f4d5e, type: 2}
+  skillGroup2:
+  - {fileID: 11400000, guid: 98c2e8508556a0c48a4444728ee03836, type: 2}
+  - {fileID: 11400000, guid: 076a48becdf4886c1dfb0cb8d9294602, type: 2}
+  skillGroup3:
+  - {fileID: 11400000, guid: 0c3a80713a11948d9880463ad4f49e73, type: 2}
+  - {fileID: 11400000, guid: 076a48becdf4886c1dfb0cb8d9294602, type: 2}

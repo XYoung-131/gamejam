@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 93db943863e42e53f79af0853ce86437, type: 3}
+  m_Name: "X\u836F"
+  m_EditorClassIdentifier: 
+  relicName: "X\u836F"
+  description: "\u81EA\u8EAB\u6240\u6709\u7684\u6B21\u6570\u7C7B\u6280\u80FD\u6B21\u6570\u52A01"
+  relicType: 1
+  pool: 0
+  effects:
+  - trigger: 0
+    effectType: 5
+    value: 1
+  permanentBuffs: []
+  instantEffect: 0
+  instantHeal: 0
+  instantBuffs: []
+  convertFrom: []
+  convertTo: {fileID: 0}
+  convertMaxCount: 0
+  convertRequireTags: 
+  growthCountSkill: {fileID: 0}
+  growthKillThreshold: 0
+  growthBonusPerStep: 0.0
+  devNotes: "\u81EA\u8EAB\u6240\u6709\u7684\u6B21\u6570\u7C7B\u6280\u80FD\u6B21\u6570\u52A01"
