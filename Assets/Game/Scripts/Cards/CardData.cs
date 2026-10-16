@@ -47,7 +47,8 @@ public enum CardTag
     特技,
     传送,
     需要瞄准,
-    需要准备
+    需要准备,
+    啃咬类
 }
 
 /// <summary>
