@@ -12,6 +12,10 @@ public class CameraController : MonoBehaviour
     public float panSpeed = 1f;
     [Tooltip("键盘移动速度")]
     public float keyPanSpeed = 10f;
+    [Tooltip("按键/摇杆的死区：低于这个值当作没输入，避免手柄漂移让相机自己慢慢跑")]
+    public float panDeadzone = 0.15f;
+    [Tooltip("开局把相机对准地图中心（推荐开着；关掉就保持场景里摆的位置）")]
+    public bool centerOnMapAtStart = true;
 
     [Header("缩放")]
     [Tooltip("最小缩放（拉近）")]
@@ -34,6 +38,9 @@ public class CameraController : MonoBehaviour
     private bool isDragging = false;
     private Vector3 lastMousePosition;
 
+    // 边界是否已经按真实格子算好（格子在 LevelManager.Start 里生成，可能比本脚本的 Start 晚）
+    private bool boundsReady = false;
+
     // ============================================================
     //                     初始化
     // ============================================================
@@ -45,11 +52,7 @@ public class CameraController : MonoBehaviour
 
     private void Start()
     {
-        // 如果 HexGrid 存在，自动设置边界
-        if (HexGrid.Instance != null)
-        {
-            AutoSetBounds();
-        }
+        AutoSetBounds();
     }
 
     // ============================================================
@@ -61,6 +64,10 @@ public class CameraController : MonoBehaviour
         // 暂停时不响应输入
         if (GameManager.Instance != null && GameManager.Instance.IsPaused)
             return;
+
+        // 格子可能是后生成的，还没拿到真实边界前每帧重试一次
+        if (!boundsReady)
+            AutoSetBounds();
 
         HandleZoom();
         HandleDragPan();
@@ -133,6 +140,10 @@ public class CameraController : MonoBehaviour
         float horizontal = Input.GetAxis("Horizontal"); // A/D 或 左右箭头
         float vertical = Input.GetAxis("Vertical");     // W/S 或 上下箭头
 
+        // 死区：Input.GetAxis 会把摇杆的微小漂移也算进来，不加这个相机会自己慢慢移动
+        if (Mathf.Abs(horizontal) < panDeadzone) horizontal = 0f;
+        if (Mathf.Abs(vertical) < panDeadzone) vertical = 0f;
+
         if (Mathf.Abs(horizontal) > 0.01f || Mathf.Abs(vertical) > 0.01f)
         {
             Vector3 move = new Vector3(horizontal, vertical, 0f) * keyPanSpeed * Time.deltaTime;
@@ -152,8 +163,15 @@ public class CameraController : MonoBehaviour
         float viewHalfHeight = cam.orthographic ? cam.orthographicSize : 5f;
         float viewHalfWidth = viewHalfHeight * cam.aspect;
 
-        pos.x = Mathf.Clamp(pos.x, minBounds.x + viewHalfWidth, maxBounds.x - viewHalfWidth);
-        pos.y = Mathf.Clamp(pos.y, minBounds.y + viewHalfHeight, maxBounds.y - viewHalfHeight);
+        float minX = minBounds.x + viewHalfWidth;
+        float maxX = maxBounds.x - viewHalfWidth;
+        float minY = minBounds.y + viewHalfHeight;
+        float maxY = maxBounds.y - viewHalfHeight;
+
+        // 视野比地图还大时上下限会算反，Mathf.Clamp 会因此每帧在两端来回跳（画面闪烁）；
+        // 这种情况下直接把相机放到地图中心。
+        pos.x = minX <= maxX ? Mathf.Clamp(pos.x, minX, maxX) : (minBounds.x + maxBounds.x) * 0.5f;
+        pos.y = minY <= maxY ? Mathf.Clamp(pos.y, minY, maxY) : (minBounds.y + maxBounds.y) * 0.5f;
 
         transform.position = pos;
     }
@@ -169,6 +187,27 @@ public class CameraController : MonoBehaviour
     {
         if (HexGrid.Instance == null) return;
 
+        // 优先用真实格子的包围盒（考虑了画稿的偏移、纵向压缩和自定义形状）
+        if (HexGrid.Instance.TryGetWorldBounds(out Bounds mapBounds))
+        {
+            minBounds = new Vector2(mapBounds.min.x, mapBounds.min.y);
+            maxBounds = new Vector2(mapBounds.max.x, mapBounds.max.y);
+            if (!boundsReady)
+            {
+                boundsReady = true;
+                Vector3 center = new Vector3(mapBounds.center.x, mapBounds.center.y, transform.position.z);
+                if (centerOnMapAtStart)
+                {
+                    transform.position = center;
+                    FocusOn(center);
+                }
+                Debug.Log($"[CameraController] 地图边界 = x[{minBounds.x:F2}, {maxBounds.x:F2}] " +
+                          $"y[{minBounds.y:F2}, {maxBounds.y:F2}]，相机对到中心 ({center.x:F2}, {center.y:F2})");
+            }
+            return;
+        }
+
+        // 格子还没生成：先按网格参数估一个，等真实格子出现后会覆盖
         float hexSize = HexGrid.Instance.hexSize;
         int radius = HexGrid.Instance.gridRadius;
 
