@@ -291,7 +291,7 @@ public abstract class Unit : MonoBehaviour
             if (existing.remainingDuration != -1 && buffData.duration != -1)
                 existing.remainingDuration += buffData.duration;
 
-            // 可叠加层数
+            // 可叠加层数（不超过 maxStack 上限）
             if (buffData.canStack)
             {
                 existing.currentStacks = Mathf.Min(
