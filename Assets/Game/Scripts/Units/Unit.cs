@@ -132,6 +132,7 @@ public abstract class Unit : MonoBehaviour
 
         // 固定减免 + 倍率增减（易伤 / 减伤），统一走共享算法
         amount = CalcIncomingDamage(amount);
+        int incomingDamage = amount;   // 减免/易伤之后、扣护盾之前的伤害
 
         // 扣护盾（真实伤害无视护甲）
         if (type != DamageType.真实 && shield > 0)
@@ -142,12 +143,15 @@ public abstract class Unit : MonoBehaviour
         }
 
         // 扣血（统一走 ApplyHealthLoss，内部处理免疫死亡 + 位移延迟死亡）
+        int healthDamage = amount;     // 真正扣掉的血量（护盾挡掉的不算）
         ApplyHealthLoss(amount);
 
         // 触发"受到伤害时"的 buff 效果
         TriggerBuffs(BuffTrigger.受到伤害时);
 
         EventManager.Trigger("UnitDamaged", this);
+        // 带数值的版本：立牌翻转这类按"伤害多少"算概率的特效用它
+        EventManager.Trigger("UnitDamagedDetail", this, incomingDamage, healthDamage);
     }
 
     /// <summary>

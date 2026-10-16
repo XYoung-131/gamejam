@@ -33,6 +33,12 @@ public class LevelManager : MonoBehaviour
     [Tooltip("布阵完成后自动开始战斗（关掉的话可以手动调 StartBattle 测试）")]
     public bool startBattleAfterSpawn = true;
 
+    [Tooltip("给生成出来的玩家/敌人自动补上立牌翻转特效（预制体上已经有的不会重复加）")]
+    public bool addFlipEffect = true;
+
+    [Tooltip("给生成出来的玩家/敌人自动补上 buff 套环特效（预制体上已经有的不会重复加）")]
+    public bool addBuffRing = true;
+
     /// <summary>当前场上的玩家（外部只读）</summary>
     public PlayerUnit Player { get; private set; }
 
@@ -116,6 +122,9 @@ public class LevelManager : MonoBehaviour
             cards = go.AddComponent<PlayerCardSystem>();
         if (attackPool.Count > 0) cards.attackPool = new List<CardData>(attackPool);
         if (defensePool.Count > 0) cards.defensePool = new List<CardData>(defensePool);
+
+        EnsureFlipEffect(go);
+        EnsureBuffRing(go);
     }
 
     private void SpawnOne(LevelData.Spawn spawn)
@@ -148,6 +157,8 @@ public class LevelManager : MonoBehaviour
 
             enemy.Initialize(spawn.unit, spawn.coord);
             enemies.Add(enemy);
+            EnsureFlipEffect(go);
+            EnsureBuffRing(go);
             return;
         }
 
@@ -174,6 +185,22 @@ public class LevelManager : MonoBehaviour
     // ============================================================
     //                     Inspector 右键测试
     // ============================================================
+
+    /// <summary>没挂立牌翻转特效的单位，生成时补一个</summary>
+    private void EnsureFlipEffect(GameObject go)
+    {
+        if (!addFlipEffect) return;
+        if (go.GetComponent<StandeeFlip>() == null)
+            go.AddComponent<StandeeFlip>();
+    }
+
+    /// <summary>没挂 buff 套环特效的单位，生成时补一个</summary>
+    private void EnsureBuffRing(GameObject go)
+    {
+        if (!addBuffRing) return;
+        if (go.GetComponent<BuffRingSweep>() == null)
+            go.AddComponent<BuffRingSweep>();
+    }
 
     /// <summary>清掉场上的敌人和障碍物（调试用）</summary>
     [ContextMenu("清空场上棋子（不含玩家）")]

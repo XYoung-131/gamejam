@@ -26,7 +26,9 @@ public static class BuildBattleScene
     private const string UnitFolder = Root + "/ScriptableObjects/单位";
     private const string ObstacleFolder = Root + "/ScriptableObjects/障碍物";
     private const string SkillFolder = Root + "/ScriptableObjects/技能";
-    private const string PlayerDataPath = UnitFolder + "/玩家.asset";
+    // 玩家数据单独放一层：单位/ 目录是给敌人用的，生成器会把它下面的每个 UnitData 都当成敌人建预制体
+    private const string PlayerFolder = Root + "/ScriptableObjects/玩家";
+    private const string PlayerDataPath = PlayerFolder + "/玩家.asset";
     private const string PlayerPrefabPath = Root + "/Prefabs/Units/Player_Template.prefab";
     private const string MapPrefabPath = Root + "/Prefabs/Board/ConceptMap.prefab";
 
@@ -149,6 +151,7 @@ public static class BuildBattleScene
     public static void Build()
     {
         EnsureFolder(Root + "/ScriptableObjects", "关卡");
+        EnsureFolder(Root + "/ScriptableObjects", "玩家");
 
         UnitData playerData = CreateOrUpdatePlayerData();
         List<LevelData> levels = CreateOrUpdateLevels();
