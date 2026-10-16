@@ -117,6 +117,53 @@ public class EnemyUnit : Unit
 
         for (int i = 0; i < skillsPerTurn; i++)
             plannedSkills.Add(group[Random.Range(0, group.Count)]);
+
+        // 按"怪物行动顺序"给预告技能排序（文档：瞄准 → 带位移的攻击 → 位移 → 特技 → 纯攻击）
+        ReorderByPriority();
+
+        // 打印带序号的预告，方便实战对照 UI 上的行动顺序数字
+        string orderText = "";
+        for (int i = 0; i < plannedSkills.Count; i++)
+            orderText += $"{i + 1}.{plannedSkills[i].cardName} ";
+        Debug.Log($"{data.unitName} 行动顺序：{orderText}");
+    }
+
+    /// <summary>
+    /// 按卡牌的 SkillPriority 给预告技能排序；同一优先级内部随机打乱。
+    /// 做法：按优先级从 0 到 4 分组，每组内部先洗牌再依次拼接——
+    /// 这样既保证优先级顺序，又实现"同种情况随机"。
+    /// </summary>
+    protected virtual void ReorderByPriority()
+    {
+        List<CardData> ordered = new List<CardData>();
+
+        for (int priority = 0; priority <= 4; priority++)
+        {
+            List<CardData> samePriority = new List<CardData>();
+            foreach (var card in plannedSkills)
+            {
+                if (card != null && card.SkillPriority == priority)
+                    samePriority.Add(card);
+            }
+
+            ShuffleList(samePriority);
+            ordered.AddRange(samePriority);
+        }
+
+        plannedSkills.Clear();
+        plannedSkills.AddRange(ordered);
+    }
+
+    /// <summary>Fisher-Yates 洗牌（同优先级随机用）</summary>
+    protected static void ShuffleList(List<CardData> list)
+    {
+        for (int i = list.Count - 1; i > 0; i--)
+        {
+            int j = Random.Range(0, i + 1);
+            CardData temp = list[i];
+            list[i] = list[j];
+            list[j] = temp;
+        }
     }
 
     /// <summary>
@@ -155,12 +202,13 @@ public class EnemyUnit : Unit
                 target = this;
 
             // 攻击/对敌技能射程校验：目标是玩家（不是自己）时检查距离，超出就跳过
+            // 走 CardData 的统一判定，位移类技能会自动算上敏捷/残废
             if (target != this)
             {
-                int distance = GetCoord().Distance(target.GetCoord());
-                if (distance < card.minRange || distance > card.maxRange)
+                if (!card.IsInEffectiveRange(this, GetCoord(), target.GetCoord()))
                 {
-                    Debug.Log($"{data.unitName} 的【{card.cardName}】射程 {card.minRange}~{card.maxRange}，" +
+                    int distance = GetCoord().Distance(target.GetCoord());
+                    Debug.Log($"{data.unitName} 的【{card.cardName}】射程 {card.minRange}~{card.GetEffectiveMaxRange(this)}，" +
                               $"目标距离 {distance}，超出射程，跳过");
                     continue;
                 }
@@ -387,29 +435,30 @@ public class EnemyUnit : Unit
     }
 
     // ============================================================
-    //                       死亡重写
+    //                       死亡扩展
     // ============================================================
 
-    protected override void Die()
+    /// <summary>
+    /// 敌人死亡额外逻辑。
+    /// 走基类的 OnDeath() 扩展点而不是覆写 Die()——基类保证这里
+    /// 只会在"首次死亡"时被调用一次，不会重复判"全员胜利"。
+    /// </summary>
+    protected override void OnDeath()
     {
-        base.Die();   // 先执行基类死亡逻辑
-
         // 敌人死亡：检查是否所有敌人都死了
         EnemyUnit[] allEnemies = FindObjectsOfType<EnemyUnit>();
         bool allDead = true;
         foreach (var e in allEnemies)
         {
-            if (e != this && e.GetCurrentHealth() > 0)
+            // 判 IsDead 而不是只看血量：Destroy 延迟到帧末，同帧内刚死的同伴对象还在
+            if (e != this && !e.IsDead && e.GetCurrentHealth() > 0)
             {
                 allDead = false;
                 break;
             }
         }
 
-        if (allDead)
-        {
-            if (GameManager.Instance != null)
-                GameManager.Instance.OnPlayerVictory();
-        }
+        if (allDead && GameManager.Instance != null)
+            GameManager.Instance.OnPlayerVictory();
     }
 }

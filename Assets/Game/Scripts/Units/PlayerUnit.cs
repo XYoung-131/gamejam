@@ -8,12 +8,18 @@ using System.Collections.Generic;
 public class PlayerUnit : Unit
 {
     [Header("玩家特有")]
-    [Tooltip("每回合思绪上限")]
-    public int maxThought = 20;
-    [Tooltip("每回合耐力上限（耐力 = 行动资源，移动和出牌共用）")]
-    public int maxStamina = 3;
-    [Tooltip("每回合抽卡数")]
-    public int drawPerTurn = 5;
+    [Tooltip("思绪上限（文档：耐力和思绪上限都是 40）")]
+    public int maxThought = 40;
+    [Tooltip("耐力上限（耐力 = 行动资源，移动和出牌共用）")]
+    public int maxStamina = 40;
+    [Tooltip("战斗开始时的思绪（文档：战斗开始时有 20 点）")]
+    public int startThought = 20;
+    [Tooltip("战斗开始时的耐力（文档：战斗开始时有 20 点）")]
+    public int startStamina = 20;
+    [Tooltip("每回合结束时恢复的思绪（文档：每回合结束恢复 15 点）")]
+    public int thoughtRegenPerTurnEnd = 15;
+    [Tooltip("每回合结束时恢复的耐力（文档：每回合结束恢复 15 点）")]
+    public int staminaRegenPerTurnEnd = 15;
 
     // 运行时状态
     protected int currentThought;
@@ -42,8 +48,9 @@ public class PlayerUnit : Unit
     public override void Initialize(UnitData unitData, HexCoord startCoord)
     {
         base.Initialize(unitData, startCoord);
-        currentThought = maxThought;
-        currentStamina = maxStamina;
+        // 战斗开始时按配置给初始资源（文档：开局 20 点）
+        currentThought = startThought;
+        currentStamina = startStamina;
         hasActedThisTurn = false;
     }
 
@@ -53,17 +60,34 @@ public class PlayerUnit : Unit
 
     public override void OnTurnStart()
     {
-        base.OnTurnStart();  // 先执行基类的 buff 结算
+        if (IsDead) return;   // 已死亡：不再参与回合结算
 
-        // 回合开始：补满思绪和耐力
-        currentThought = maxThought;
-        currentStamina = maxStamina;
+        // 只做 buff 结算和护盾清空，不再回满资源——
+        // 资源恢复统一放在"回合结束"（文档：每回合结束恢复 15 点）
+        base.OnTurnStart();
         hasActedThisTurn = false;
     }
 
     public override void OnTurnEnd()
     {
+        if (IsDead) return;   // 已死亡：不再参与回合结算（含资源恢复）
+
         base.OnTurnEnd();
+
+        // 回合结束恢复思绪/耐力，但不超过上限（文档：每回合结束恢复 15 点）。
+        // 「力竭」耐力回复减半 0.5 /「混乱」思绪回复减半 0.5 在这里生效。
+        // 查询走不限 trigger 的重载：没中这两个 debuff 时返回 1（不变），
+        // 倍率型叠加规则见 Unit.GetTotalEffectValue（力竭 2 层 = 1 + (-0.5)×2 = 0，完全不回）。
+        float staminaRate = GetTotalEffectValue(BuffEffectType.耐力回复倍率);
+        float thoughtRate = GetTotalEffectValue(BuffEffectType.思绪回复倍率);
+
+        int staminaGain = Mathf.FloorToInt(staminaRegenPerTurnEnd * staminaRate);
+        int thoughtGain = Mathf.FloorToInt(thoughtRegenPerTurnEnd * thoughtRate);
+
+        currentStamina = Mathf.Min(maxStamina, currentStamina + staminaGain);
+        currentThought = Mathf.Min(maxThought, currentThought + thoughtGain);
+        EventManager.Trigger("PlayerResourceChanged", this);
+
         isSelected = false;
     }
 
@@ -125,6 +149,52 @@ public class PlayerUnit : Unit
     }
 
     // ============================================================
+    //              思绪 / 耐力 回复（药水、遗物用）
+    // ============================================================
+
+    /// <summary>
+    /// 回复耐力，不会超过上限（"耐力饮料"等）
+    /// </summary>
+    public void RestoreStamina(int amount)
+    {
+        if (amount <= 0) return;
+
+        currentStamina = Mathf.Min(currentStamina + amount, maxStamina);
+        EventManager.Trigger("PlayerResourceChanged", this);
+    }
+
+    /// <summary>
+    /// 回复思绪，不会超过上限（"提神饮料"等）
+    /// </summary>
+    public void RestoreThought(int amount)
+    {
+        if (amount <= 0) return;
+
+        currentThought = Mathf.Min(currentThought + amount, maxThought);
+        EventManager.Trigger("PlayerResourceChanged", this);
+    }
+
+    /// <summary>
+    /// 回复全部耐力和思绪（"精力充沛"遗物）
+    /// </summary>
+    public void RestoreAllResources()
+    {
+        currentStamina = maxStamina;
+        currentThought = maxThought;
+        EventManager.Trigger("PlayerResourceChanged", this);
+    }
+
+    /// <summary>
+    /// 扣光全部耐力和思绪（"劣质混合饮料"第 3 瓶的副作用）
+    /// </summary>
+    public void DrainAllResources()
+    {
+        currentStamina = 0;
+        currentThought = 0;
+        EventManager.Trigger("PlayerResourceChanged", this);
+    }
+
+    // ============================================================
     //                     移动（玩家操作）
     // ============================================================
 
@@ -133,6 +203,8 @@ public class PlayerUnit : Unit
     /// </summary>
     public bool TryMoveTo(HexCoord target)
     {
+        if (IsDead) return false;   // 已死亡：不能移动
+
         if (GameManager.Instance != null && !GameManager.Instance.IsInBattle)
             return false;
 
@@ -155,7 +227,11 @@ public class PlayerUnit : Unit
 
         // 移动距离不能超过耐力（简化：1 耐力 = 走 1 格）
         int moveDistance = path.Count - 1;  // path 包含起点
-        int moveCost = moveDistance;        // 简化：每格消耗 1 耐力
+
+        // 「沉重」：移动技能的耐力消耗增加 25%（倍率 1.25）。倍率型：没中时返回 1（不变），
+        // 消耗向上取整（走 3 格 × 1.25 = 3.75 → 4 点）。「沉重」还写了"不叠加"，做 asset 时取消 canStack。
+        float moveCostRate = GetTotalEffectValue(BuffEffectType.移动耐力消耗倍率);
+        int moveCost = Mathf.CeilToInt(moveDistance * moveCostRate);
 
         // 考虑移动距离加成 buff
         int moveBonus = GetMoveBonus();
@@ -214,6 +290,9 @@ public class PlayerUnit : Unit
     /// </summary>
     public bool TryAttack(Unit target)
     {
+        if (IsDead || target == null) return false;   // 已死亡：不能攻击
+        if (target.IsDead) return false;              // 目标已死：不再打尸体
+
         if (GameManager.Instance != null && !GameManager.Instance.isPlayerTurn)
             return false;
 
@@ -290,37 +369,133 @@ public class PlayerUnit : Unit
         {
             HexCell cell = HexGrid.Instance.GetCell(coord);
             if (cell != null && cell.isWalkable && cell.occupyUnit == null)
-                cell.SetHighlight(true);
+                cell.SetMoveRangeHighlight(true);   // 文档：可到达格子变绿
         }
     }
 
     // ============================================================
-    //                       死亡重写
+    //                    药水 / 遗物
     // ============================================================
 
-    protected override void Die()
+    [Header("药水与遗物")]
+    [Tooltip("药水持有上限（文档：上限 3 个）")]
+    public int maxPotions = 3;
+
+    // 持有的药水（按顺序排列）
+    protected readonly List<PotionData> potions = new List<PotionData>();
+    // 已获得的遗物（永久生效的 buff 已经挂到身上，这里只做记录）
+    protected readonly List<RelicData> relics = new List<RelicData>();
+
+    /// <summary>当前持有的药水（UI 只读）</summary>
+    public IReadOnlyList<PotionData> Potions => potions;
+
+    /// <summary>已获得的遗物（UI 只读）</summary>
+    public IReadOnlyList<RelicData> Relics => relics;
+
+    /// <summary>
+    /// 获得一瓶药水。背包已满则拿不到（返回 false）。
+    /// </summary>
+    public bool AddPotion(PotionData potion)
     {
-        base.Die();   // 先执行基类死亡逻辑
+        if (potion == null || potions.Count >= maxPotions) return false;
 
-        // 玩家死亡额外逻辑
-        if (GameManager.Instance != null)
+        potions.Add(potion);
+        EventManager.Trigger("PotionChanged", this);
+        return true;
+    }
+
+    /// <summary>
+    /// 使用第 index 瓶药水。文档：只能在玩家的行动阶段使用。
+    /// 只能对自己使用（target 传 null 即自己）。
+    /// </summary>
+    public bool UsePotion(int index, Unit target = null)
+    {
+        if (IsDead) return false;   // 已死亡：不能用道具
+
+        if (index < 0 || index >= potions.Count)
         {
-            // 检查是否所有玩家都死了
-            var allPlayers = FindObjectsOfType<PlayerUnit>();
-            bool allDead = true;
-            foreach (var p in allPlayers)
-            {
-                if (p != this && p.GetCurrentHealth() > 0)
-                {
-                    allDead = false;
-                    break;
-                }
-            }
+            Debug.Log("药水序号无效");
+            return false;
+        }
 
-            if (allDead)
+        if (!CanActNow())
+        {
+            Debug.Log("不是玩家行动阶段，不能使用药水");
+            return false;
+        }
+
+        PotionData potion = potions[index];
+        potions.RemoveAt(index);
+
+        // 药水效果：默认作用在自己身上
+        potion.Resolve(target != null ? target : this);
+        EventManager.Trigger("PotionChanged", this);
+        return true;
+    }
+
+    /// <summary>
+    /// 获得遗物：记录进列表，并立刻应用它的效果（永久 buff / 即时效果）。
+    /// </summary>
+    public bool AddRelic(RelicData relic)
+    {
+        // 已经持有过同一件遗物就直接跳过（掉落去重）
+        if (relic == null || HasRelic(relic)) return false;
+
+        relics.Add(relic);
+        relic.Apply(this);
+        EventManager.Trigger("RelicChanged", this);
+        return true;
+    }
+
+    /// <summary>
+    /// 是否已经持有这件遗物（掉落池去重、UI 显示已拥有用）。
+    /// </summary>
+    public bool HasRelic(RelicData relic)
+    {
+        return relic != null && relics.Contains(relic);
+    }
+
+    /// <summary>
+    /// 现在能不能进行主动操作（用药水等）。
+    /// 优先看 TurnManager 的精确阶段；没有 TurnManager 时退回 GameManager。
+    /// </summary>
+    protected bool CanActNow()
+    {
+        if (TurnManager.Instance != null)
+            return TurnManager.Instance.Phase == TurnPhase.玩家行动;
+
+        return GameManager.Instance != null &&
+               GameManager.Instance.IsInBattle &&
+               GameManager.Instance.isPlayerTurn;
+    }
+
+    // ============================================================
+    //                       死亡扩展
+    // ============================================================
+
+    /// <summary>
+    /// 玩家死亡额外逻辑。
+    /// 走基类的 OnDeath() 扩展点而不是覆写 Die()——基类保证这里
+    /// 只会在"首次死亡"时被调用一次，不会重复判"全员阵亡"。
+    /// </summary>
+    protected override void OnDeath()
+    {
+        if (GameManager.Instance == null) return;
+
+        // 检查是否所有玩家都死了
+        var allPlayers = FindObjectsOfType<PlayerUnit>();
+        bool allDead = true;
+        foreach (var p in allPlayers)
+        {
+            // 判 IsDead 而不是只看血量：Destroy 延迟到帧末，同帧内刚死的队友对象还在
+            if (p != this && !p.IsDead && p.GetCurrentHealth() > 0)
             {
-                GameManager.Instance.OnPlayerDefeat();
+                allDead = false;
+                break;
             }
         }
+
+        if (allDead)
+            GameManager.Instance.OnPlayerDefeat();
     }
 }
