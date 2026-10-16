@@ -1,0 +1,68 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8d273b0ed35551c43a87fa9d0ca04062, type: 3}
+  m_Name: "\u6B21\u5143\u62B9\u6740"
+  m_EditorClassIdentifier: 
+  relicName: "\u6B21\u5143\u62B9\u6740"
+  description: "\u56DE\u5408\u7ED3\u675F\u65F6\uFF0C\u5BF91\u4E2A\u8840\u91CF\u6700\u5C11\u7684\u654C\u4EBA\u9020\u62102\xD7\u5F53\u524D\u697C\u5C42\u6570\u70B9\u7269\u7406\u4F24\u5BB3"
+  icon: {fileID: 0}
+  relicType: 1
+  pool: 0
+  effects:
+  - trigger: 5
+    effectType: 13
+    value: 2
+    isPercent: 0
+    scope: 3
+    radius: 1
+    damageSource: 0
+    scaleWithFloor: 1
+    skillTag: 0
+    skillRarity: 0
+    skill: {fileID: 0}
+    buff: {fileID: 0}
+    potion: {fileID: 0}
+    condition: 0
+    healthRatioThreshold: 0.5
+    requiredTargetBuff: {fileID: 0}
+    targetSelection: 1
+    filterBySkillTag: 0
+    filterBySkillRarity: 0
+    limitedUseSkillsOnly: 0
+    filterByPotion: 0
+    adjacentTargetOnly: 0
+    rangedTargetOnly: 0
+    excludedTargetGrades: 
+    negativeTerrainOnly: 0
+    includeIndestructibleObstacles: 0
+    chancePerTarget: 1
+    maxTriggersPerTurn: 0
+    buffStacks: 1
+    buffDurationOverride: 0
+  permanentBuffs: []
+  instantEffect: 0
+  instantHeal: 0
+  instantBuffs: []
+  convertFrom: []
+  convertTo: {fileID: 0}
+  convertMaxCount: 0
+  convertRequireTags: 
+  convertAttackSkillsOnly: 0
+  conversionOptional: 0
+  growthCountSkill: {fileID: 0}
+  growthKillThreshold: 0
+  growthBonusPerStep: 0
+  growthFilterBySkillTag: 0
+  growthSkillTag: 0
+  growthPersistsAcrossBattles: 0
+  requiresDesignDetails: 0
+  devNotes: "\u697C\u5C42\u6307\u7AE0\u8282\uFF0C\u7B2C1\u7AE0\u5C31\u662F1\u5C42\r\n\u591A\u4E2A\u654C\u4EBA\u8840\u91CF\u90FD\u6700\u5C11\u4F1A\u968F\u673A\u90091\u4E2A"

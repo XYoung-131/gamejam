@@ -64,7 +64,10 @@ public enum RelicTrigger
     击破障碍物时,
     使用技能时,
     移动时,
-    敌人入场时
+    敌人入场时,
+    最后一波开始 = 14,
+    使用药水时 = 15,
+    受到攻击前 = 16
 }
 
 /// <summary>
@@ -96,7 +99,12 @@ public enum RelicEffectType
     造成伤害,               // 次元抹杀（2 × 当前楼层数）
     掉落物品,               // 劣质饮料机（掉饮料）
     技能转换,               // 玛塔的板牙（攻击技能 → 啃咬）
-    特殊机制                // 反射神经、垃圾毁灭者、笑靥——代码里单独处理
+    特殊机制,               // 保留原编号 16
+    免疫指定药水副作用 = 17,
+    一击摧毁障碍物 = 18,
+    自动闪避到安全格 = 19,
+    技能基础伤害加成 = 20,
+    永久技能伤害成长 = 21
 }
 
 /// <summary>
@@ -109,7 +117,22 @@ public enum RelicTargetScope
     范围内目标,  // 配合 radius 使用（笑靥 = 2 格）
     全场敌人,
     全场友军,
-    全场
+    全场,
+    事件目标 = 6           // 入场单位、被命中单位等，由调用方提供
+}
+
+public enum RelicTargetSelection
+{
+    范围内全部 = 0,
+    最低当前生命敌人 = 1
+}
+
+public enum RelicCondition
+{
+    无 = 0,
+    持有者生命比例高于 = 1,
+    目标具有指定Buff = 2,
+    目标没有指定Buff = 3
 }
 
 /// <summary>
@@ -169,6 +192,28 @@ public class RelicEffect
 
     [Header("掉落物引用（effectType = 掉落物品）")]
     public PotionData potion;
+
+    [Header("条件配置（由遗物运行时结合事件上下文消费）")]
+    public RelicCondition condition;
+    [Range(0f, 1f)] public float healthRatioThreshold = 0.5f;
+    public BuffData requiredTargetBuff;
+    public RelicTargetSelection targetSelection;
+    [Tooltip("启用后才按 skillTag 过滤，避免默认的近战枚举意外限制其他效果。")]
+    public bool filterBySkillTag;
+    public bool filterBySkillRarity;
+    public bool limitedUseSkillsOnly;
+    [Tooltip("药水字段既可表示掉落物，也可表示此效果限定的药水；后者须勾选此项。")]
+    public bool filterByPotion;
+    public bool adjacentTargetOnly;
+    public bool rangedTargetOnly;
+    public List<UnitGrade> excludedTargetGrades = new List<UnitGrade>();
+    public bool negativeTerrainOnly;
+    public bool includeIndestructibleObstacles;
+    [Range(0f, 1f)] public float chancePerTarget = 1f;
+    [Min(0)] public int maxTriggersPerTurn;
+    [Min(1)] public int buffStacks = 1;
+    [Tooltip("0=沿用 Buff 配置；正数=本次施加的目标回合数。需要运行时创建实例时消费。")]
+    [Min(0)] public int buffDurationOverride;
 }
 
 [CreateAssetMenu(fileName = "NewRelic", menuName = "Game/Relic Data")]
@@ -217,6 +262,10 @@ public class RelicData : ScriptableObject
     [Tooltip("被转的技能必须带这个标签（玛塔的板牙填 近战 / 远程 都可以，留空 = 不限）")]
     public List<CardTag> convertRequireTags = new List<CardTag>();
 
+    public bool convertAttackSkillsOnly;
+    [Tooltip("允许玩家选择 0 到 convertMaxCount 个技能，而非强制转换。")]
+    public bool conversionOptional;
+
     // ========================================================
     //     成长计数配置（"玛塔的板牙"：击杀累计 → 永久加伤）
     // ========================================================
@@ -228,6 +277,15 @@ public class RelicData : ScriptableObject
     public int growthKillThreshold = 0;
     [Tooltip("每成长一次加多少伤害（玛塔的板牙 = 1）")]
     public float growthBonusPerStep = 0f;
+
+    [Tooltip("按技能族计数，玛塔的板牙覆盖所有带啃咬标签的技能，不限 growthCountSkill 单张卡。")]
+    public bool growthFilterBySkillTag;
+    public CardTag growthSkillTag;
+    public bool growthPersistsAcrossBattles;
+
+    [Header("文档完整性")]
+    [Tooltip("文档效果被截断或缺失，资产已创建但不能视为完整配置。")]
+    public bool requiresDesignDetails;
 
     [Header("内部备注")]
     [TextArea] public string devNotes;   // 策划备注，玩家看不到的内容写这里

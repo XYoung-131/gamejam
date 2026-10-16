@@ -21,8 +21,9 @@ using System.Collections.Generic;
 /// </summary>
 public enum PotionRarity
 {
-    普通,
-    特殊
+    普通 = 0,
+    稀有 = 1,
+    特殊 = 2
 }
 
 /// <summary>
@@ -31,14 +32,28 @@ public enum PotionRarity
 /// </summary>
 public enum PotionEffectType
 {
-    回复耐力,       // 加行动资源（PlayerUnit 的耐力，移动和出牌共用）
-    回复思绪,       // 加思绪（PlayerUnit 的思绪）
-    治疗,           // 回血（调用 Unit.Heal）
-    获得护盾,       // 加护盾（调用 Unit.AddShield）
-    免费使用技能,   // 不消耗资源地直接放出一次指定技能
-    击退相邻目标,   // 把相邻格的目标往外推开
-    施加Buff,       // 给自身或敌方挂 buff
-    清除负面状态    // 移除自身所有负面 buff
+    回复耐力 = 0,
+    回复思绪 = 1,
+    治疗 = 2,
+    获得护盾 = 3,
+    免费使用技能 = 4,
+    击退相邻目标 = 5,
+    施加Buff = 6,
+    清除负面状态 = 7,
+    恢复所有技能使用次数 = 8
+}
+
+public enum PotionPenaltyMode
+{
+    达到次数后每次触发 = 0,
+    仅指定次数触发 = 1
+}
+
+/// <summary>配置战后奖励的资格；实际发放由战斗/掉落系统负责。</summary>
+public enum PotionRewardCondition
+{
+    使用后 = 0,
+    触发惩罚后 = 1
 }
 
 /// <summary>
@@ -46,9 +61,9 @@ public enum PotionEffectType
 /// </summary>
 public enum PotionTargetType
 {
-    自身,        // 喝饮料的人自己
-    相邻目标,    // 喝饮料的人周围 1 格内的所有单位
-    全场敌人     // 地图上所有敌方单位
+    自身 = 0,
+    相邻目标 = 1,
+    全场敌人 = 2
 }
 
 /// <summary>
@@ -69,6 +84,10 @@ public class PotionEffect
 
     [Header("施加 Buff 时填（effectType = 施加Buff）")]
     public BuffData buff;
+
+    [Min(1)] public int buffStacks = 1;
+    [Tooltip("配置所需的 Buff 名称，便于补齐缺失引用；不会按名字自动生成效果。")]
+    public string requiredBuffName;
 
     [Header("免费使用技能时填（effectType = 免费使用技能）")]
     public CardData skill;
@@ -100,14 +119,20 @@ public class PotionData : ScriptableObject
     [Tooltip("同一场战斗内累计使用达到这个次数后触发惩罚。0 或负数 = 没有惩罚机制")]
     public int penaltyAfterUses = 0;
 
+    public PotionPenaltyMode penaltyMode;
+
     [Tooltip("触发惩罚时，是否把耐力和思绪全部扣光")]
     public bool penaltyDrainResources = true;
 
     [Tooltip("触发惩罚时附加的负面 buff（如眩晕 1 回合）")]
     public BuffData penaltyBuff;
 
-    [Tooltip("携带这瓶饮料时，战斗结束后额外发放的遗物（如 饮料成瘾）")]
+    [Tooltip("符合 rewardCondition 后，战斗结束时掉落的遗物。需由战斗/掉落系统接入。")]
     public RelicData rewardRelic;
+
+    public PotionRewardCondition rewardCondition;
+    [Tooltip("缺少遗物资产时记录设计名称；不能替代实际遗物引用。")]
+    public string rewardRelicName;
 
     [Header("内部备注")]
     [TextArea] public string devNotes;   // 策划备注，括号里玩家看不到的内容写这里
@@ -132,7 +157,10 @@ public class PotionData : ScriptableObject
     /// </summary>
     public bool ShouldTriggerPenalty(int usedCountThisBattle)
     {
-        return HasPenalty && usedCountThisBattle >= penaltyAfterUses;
+        if (!HasPenalty) return false;
+        return penaltyMode == PotionPenaltyMode.仅指定次数触发
+            ? usedCountThisBattle == penaltyAfterUses
+            : usedCountThisBattle >= penaltyAfterUses;
     }
 
     // ============================================================
@@ -235,7 +263,24 @@ public class PotionData : ScriptableObject
                 Debug.Log($"{user.data.unitName} 喝下【{potionName}】，获得 1 次免费使用【" +
                           $"{(effect.skill != null ? effect.skill.cardName : "未指定技能")}】");
                 break;
+
+            case PotionEffectType.恢复所有技能使用次数:
+                RestoreSkillUses(user);
+                break;
         }
+    }
+
+    /// <summary>恢复当前仍在槽位中的有限次数技能；已被卡牌系统移除的技能不凭空重建。</summary>
+    protected virtual void RestoreSkillUses(Unit user)
+    {
+        var cards = user.GetComponent<PlayerCardSystem>();
+        if (cards == null) return;
+        foreach (var slot in cards.Slots)
+        {
+            if (slot != null && !slot.IsEmpty && slot.card.maxUses > 0)
+                slot.remainingUses = slot.card.maxUses;
+        }
+        EventManager.Trigger("SlotChanged", cards);
     }
 
     /// <summary>
@@ -278,13 +323,13 @@ public class PotionData : ScriptableObject
             foreach (var enemy in FindObjectsOfType<EnemyUnit>())
             {
                 if (enemy.GetCurrentHealth() > 0)
-                    enemy.ApplyBuff(effect.buff);
+                    enemy.ApplyBuff(effect.buff, Mathf.Max(1, effect.buffStacks));
             }
         }
         else
         {
             // 自身 / 相邻目标：MVP 先简化成给自己
-            user.ApplyBuff(effect.buff);
+            user.ApplyBuff(effect.buff, Mathf.Max(1, effect.buffStacks));
         }
     }
 

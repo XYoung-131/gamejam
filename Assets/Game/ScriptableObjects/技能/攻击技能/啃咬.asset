@@ -26,6 +26,6 @@ MonoBehaviour:
   defenseTargetTypes: 01000000
   library: 0
   rarity: 0
-  tags: 00000000
+  tags: 0000000008000000
   buffs: []
   devNotes: 
