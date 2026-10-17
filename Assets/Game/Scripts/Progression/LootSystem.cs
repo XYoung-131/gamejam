@@ -13,7 +13,10 @@ using UnityEngine;
 //  遗物：
 //  - 通用池来自事件/商店/普通掉落；
 //  - 精英/BOSS 有专属池，专属遗物的选中概率是同类遗物的 exclusiveWeightMultiplier 倍
-//    （文档：2 倍）。
+//    （文档：2 倍）；
+//  - 另外还负责"战斗结束必定发放"的遗物（策划点名的固定奖励，不走随机池）：
+//    由道具方（如"劣质混合饮料"触发副作用时）调 QueueBattleEndRelic 登记，
+//    战斗胜利时统一发给玩家。
 //
 //  挂载位置：场景里任意一个常驻 GameObject（全场景唯一）。
 //  数值/掉落池全部在 Inspector 配置，不写死。
@@ -58,6 +61,36 @@ public class LootSystem : MonoBehaviour
     /// <summary>当前连续没掉药水的关卡数（UI 可读）</summary>
     public int ConsecutivePotionMisses => consecutivePotionMisses;
 
+    // ============================================================
+    //       战斗结束必定发放的遗物（"劣质混合饮料" → 饮料成瘾）
+    //
+    //  策划写的是"战斗结束掉落遗物 饮料成瘾"，不是当场给。
+    //  触发时机在 PotionData.ApplyPenalty，而 PotionData 是
+    //  ScriptableObject 资产、全场景共享一份，存不了运行时状态，
+    //  所以改用一句静态登记表：药水那边 call QueueBattleEndRelic，
+    //  这边在战斗胜利时统一发。
+    // ============================================================
+
+    private static readonly List<RelicData> pendingBattleEndRelics = new List<RelicData>();
+
+    /// <summary>
+    /// 登记一件"战斗结束时必定发放"的遗物。
+    /// 由本系统的药水事件监听调用（PotionData 基类广播
+    /// PotionUsed / PotionPenaltyTriggered，按 rewardCondition 对号入座）。
+    /// 只登记、不立即发放；同一件重复登记只算一次。
+    /// </summary>
+    public static void QueueBattleEndRelic(RelicData relic)
+    {
+        if (relic == null) return;
+        if (pendingBattleEndRelics.Contains(relic)) return;
+
+        pendingBattleEndRelics.Add(relic);
+        Debug.Log($"已登记战斗结束奖励遗物【{relic.relicName}】，将在战斗胜利时发放");
+    }
+
+    /// <summary>当前登记的待发放遗物数量（测试 / UI 用）</summary>
+    public static int PendingBattleEndRelicCount => pendingBattleEndRelics.Count;
+
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -78,11 +111,100 @@ public class LootSystem : MonoBehaviour
     {
         // 监听单位死亡：精英/BOSS 倒下时自动掷遗物掉落
         EventManager.AddListener<Unit>("UnitDied", HandleUnitDied);
+
+        // 监听战斗结束：发放登记好的"战斗结束奖励遗物"
+        EventManager.AddListener<GameState>("GameStateChanged", HandleGameStateChanged);
+
+        // 监听药水：按 rewardCondition 登记"战斗结束必给"的遗物
+        //（如"劣质混合饮料"触发副作用后送【饮料成瘾】）
+        EventManager.AddListener<PotionData, Unit>("PotionUsed", HandlePotionUsed);
+        EventManager.AddListener<PotionData, Unit>("PotionPenaltyTriggered", HandlePotionPenalty);
     }
 
     private void OnDisable()
     {
         EventManager.RemoveListener<Unit>("UnitDied", HandleUnitDied);
+        EventManager.RemoveListener<GameState>("GameStateChanged", HandleGameStateChanged);
+        EventManager.RemoveListener<PotionData, Unit>("PotionUsed", HandlePotionUsed);
+        EventManager.RemoveListener<PotionData, Unit>("PotionPenaltyTriggered", HandlePotionPenalty);
+    }
+
+    // ============================================================
+    //          药水的"战斗结束必给遗物"（事件驱动）
+    // ============================================================
+
+    /// <summary>
+    /// PotionData 基类只广播事件、不发奖；遗物发放由本系统对号入座：
+    ///   rewardCondition = 使用后     → 每次喝下都会广播 PotionUsed；
+    ///   rewardCondition = 触发惩罚后 → 只在 ApplyPenalty 里广播 PotionPenaltyTriggered。
+    /// 同一件遗物重复登记会被 QueueBattleEndRelic 去重，多喝几次只算一件。
+    /// </summary>
+    private void HandlePotionUsed(PotionData potion, Unit user)
+    {
+        TryQueuePotionRelic(potion, PotionRewardCondition.使用后);
+    }
+
+    private void HandlePotionPenalty(PotionData potion, Unit user)
+    {
+        TryQueuePotionRelic(potion, PotionRewardCondition.触发惩罚后);
+    }
+
+    /// <summary>条件对上了才登记，登记本身走统一的静态入口。</summary>
+    private void TryQueuePotionRelic(PotionData potion, PotionRewardCondition expected)
+    {
+        if (potion == null || potion.rewardRelic == null) return;
+        if (potion.rewardCondition != expected) return;
+        QueueBattleEndRelic(potion.rewardRelic);
+    }
+
+    // ============================================================
+    //          战斗结束奖励（"劣质混合饮料"的遗物在这里落地）
+    // ============================================================
+
+    /// <summary>
+    /// 游戏状态变化时：打赢了就发放登记的奖励遗物；打输了就作废。
+    /// （输了这一局都重开了，登记的东西不该带出去。）
+    /// </summary>
+    private void HandleGameStateChanged(GameState state)
+    {
+        if (state == GameState.Victory)
+        {
+            FlushBattleEndRelics();
+        }
+        else if (state == GameState.Defeat)
+        {
+            if (pendingBattleEndRelics.Count > 0)
+                Debug.Log($"战斗失败，{pendingBattleEndRelics.Count} 件战斗结束奖励作废");
+            pendingBattleEndRelics.Clear();
+        }
+    }
+
+    /// <summary>
+    /// 结算战斗结束奖励：把登记的遗物逐个发给玩家，然后清空登记表。
+    /// 已经持有过的（同一件遗物不重复获得）会跳过。
+    /// </summary>
+    public void FlushBattleEndRelics()
+    {
+        if (pendingBattleEndRelics.Count == 0) return;
+
+        PlayerUnit player = FindObjectOfType<PlayerUnit>();
+
+        foreach (RelicData relic in pendingBattleEndRelics)
+        {
+            if (relic == null || player == null) continue;
+
+            if (player.HasRelic(relic))
+            {
+                Debug.Log($"玩家已持有【{relic.relicName}】，本次战斗结束奖励作废");
+                continue;
+            }
+
+            player.AddRelic(relic);
+            EventManager.Trigger("RelicDropped", relic);
+            Debug.Log($"战斗结束奖励：获得遗物【{relic.relicName}】");
+        }
+
+        pendingBattleEndRelics.Clear();
     }
 
     // ============================================================

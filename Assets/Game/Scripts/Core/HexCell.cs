@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 /// <summary>
 /// 六边形格子——地图的最小单元
@@ -126,20 +127,80 @@ public class HexCell : MonoBehaviour
         return coord.Distance(otherCoord);
     }
 
+    // ============================================================
+    //            通行判定（寻路 / 移动 / 位移 / 高亮 全走这里）
+    // ============================================================
+
     /// <summary>
-    /// 格子是否"空"（可通行 + 没单位 + 没障碍物）
+    /// 格子上的障碍物是否阻挡移动。
+    /// 交给 Obstacle.BlocksMovement() 决定：柱子/石堆挡路，炸药桶这类可以走过去踩爆的不挡。
+    /// 没有挂 Obstacle 脚本的装饰性物体不算阻挡（obstacle 字段为 null）。
     /// </summary>
-    public bool IsEmpty()
+    public bool IsBlockedByObstacle()
     {
-        return isWalkable && occupyUnit == null && obstacle == null;
+        return obstacle != null && obstacle.BlocksMovement();
     }
 
     /// <summary>
-    /// 格子是否被占用（有单位或有障碍物）
+    /// 指定单位能否"进入"这个格子。
+    /// 三个条件：① 可行走 ② 没有阻挡移动的障碍物 ③ 没有别的活着的单位。
+    ///
+    /// mover 传 null 表示"不关心是谁"（纯地形判定）。
+    /// 已经 Die() 但还没被 Destroy 的单位不占位——Unity 的 Destroy 延迟到帧末，
+    /// 不判 IsDead 的话会出现"打死了但格子还是占着，谁都走不进去"。
+    /// </summary>
+    public bool CanEnter(Unit mover = null)
+    {
+        if (!isWalkable) return false;
+        if (IsBlockedByObstacle()) return false;
+
+        if (occupyUnit != null && occupyUnit != mover && !occupyUnit.IsDead)
+            return false;
+
+        return true;
+    }
+
+    /// <summary>
+    /// 能否"停留"在这里。
+    /// 现在和 CanEnter 等价，单独留一个方法是为了以后加"可以穿过但不能停"的地形
+    /// （比如尖刺/传送带）时只改这一处。
+    /// </summary>
+    public bool CanStopOn(Unit mover = null)
+    {
+        return CanEnter(mover);
+    }
+
+    /// <summary>
+    /// 格子是否"空"（可通行 + 没活单位 + 没阻挡障碍物）
+    /// </summary>
+    public bool IsEmpty()
+    {
+        return CanEnter(null);
+    }
+
+    /// <summary>
+    /// 格子是否被占用（有活单位，或有阻挡移动的障碍物）
     /// </summary>
     public bool IsOccupied()
     {
-        return occupyUnit != null || obstacle != null;
+        return (occupyUnit != null && !occupyUnit.IsDead) || IsBlockedByObstacle();
+    }
+
+    /// <summary>
+    /// 获取 6 个相邻格子（越界的自动跳过）。
+    /// 返回的是 HexCell 而不是 HexCoord，省掉调用方每层都 GetCell 一次。
+    /// </summary>
+    public List<HexCell> GetNeighborCells()
+    {
+        List<HexCell> result = new List<HexCell>(6);
+        if (HexGrid.Instance == null) return result;
+
+        for (int i = 0; i < 6; i++)
+        {
+            HexCell cell = HexGrid.Instance.GetCell(coord.GetNeighbor(i));
+            if (cell != null) result.Add(cell);
+        }
+        return result;
     }
 
     /// <summary>

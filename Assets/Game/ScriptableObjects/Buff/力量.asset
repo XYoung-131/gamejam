@@ -19,6 +19,7 @@ MonoBehaviour:
   category: 1
   duration: -1
   canStack: 1
+  maxStack: 99
   stackDecay: 1
   clearIfNotStackedTurns: 0
   halveStacksOnEliteAndBoss: 0

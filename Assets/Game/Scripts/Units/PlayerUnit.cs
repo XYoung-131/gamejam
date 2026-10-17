@@ -52,6 +52,10 @@ public class PlayerUnit : Unit
         currentThought = startThought;
         currentStamina = startStamina;
         hasActedThisTurn = false;
+
+        // 新的战斗，清空"每瓶饮料喝了几次"的计数
+        // （否则上一场的第 3 瓶会带到这一场，一喝就触发副作用）
+        potionUseCount.Clear();
     }
 
     // ============================================================
@@ -225,8 +229,8 @@ public class PlayerUnit : Unit
             return false;
         }
 
-        // 移动距离不能超过耐力（简化：1 耐力 = 走 1 格）
-        int moveDistance = path.Count - 1;  // path 包含起点
+        // 移动距离不能超过耐力（按每格 moveCost 累加，沼泽/难走地形更费耐力）
+        int moveDistance = HexPathfinding.GetPathCost(path);  // path 含起点，代价不含起点
 
         // 「沉重」：移动技能的耐力消耗增加 25%（倍率 1.25）。倍率型：没中时返回 1（不变），
         // 消耗向上取整（走 3 格 × 1.25 = 3.75 → 4 点）。「沉重」还写了"不叠加"，做 asset 时取消 canStack。
@@ -386,6 +390,14 @@ public class PlayerUnit : Unit
     // 已获得的遗物（永久生效的 buff 已经挂到身上，这里只做记录）
     protected readonly List<RelicData> relics = new List<RelicData>();
 
+    // 本场战斗中"每瓶饮料各自被喝了几次"。
+    // 存在的意义：PotionData 是 ScriptableObject 资产，全场景共享一份，
+    // 没法在它身上存运行时状态，所以计数放在玩家身上。
+    // 用途：① "劣质混合饮料"靠它判断是不是第 3 瓶（触发副作用）；
+    //       ② maxUsesPerBattle 的次数限制靠它判断。
+    // 战斗开始时（Initialize）清空，跨战斗不会串味。
+    protected readonly Dictionary<PotionData, int> potionUseCount = new Dictionary<PotionData, int>();
+
     /// <summary>当前持有的药水（UI 只读）</summary>
     public IReadOnlyList<PotionData> Potions => potions;
 
@@ -405,8 +417,14 @@ public class PlayerUnit : Unit
     }
 
     /// <summary>
-    /// 使用第 index 瓶药水。文档：只能在玩家的行动阶段使用。
-    /// 只能对自己使用（target 传 null 即自己）。
+    /// 使用第 index 瓶药水。文档：只能在玩家的行动阶段使用，只能对自己使用。
+    ///
+    /// 这里负责三件事（药水效果本身交给 PotionData.Resolve）：
+    /// ① 阶段 / 序号 / 死亡校验；
+    /// ② 每场战斗的使用次数限制（maxUsesPerBattle）——超了就不让喝，
+    ///    免得出现"道具被吃掉但没有任何效果"；
+    /// ③ 维护"本场战斗这瓶饮料喝了几次"的计数，并传给 Resolve。
+    ///    这是"劣质混合饮料"第 3 瓶触发副作用的判定依据。
     /// </summary>
     public bool UsePotion(int index, Unit target = null)
     {
@@ -425,12 +443,39 @@ public class PlayerUnit : Unit
         }
 
         PotionData potion = potions[index];
+
+        // 本场已经喝过几瓶（含这一次）
+        int usedBefore = GetPotionUseCount(potion);
+        int usedCount = usedBefore + 1;
+
+        // 次数上限校验：放在"把道具从背包里拿掉"之前，
+        // 否则会被白白吃掉一瓶却不生效。
+        // 约定：maxUsesPerBattle 0 或负数 = 不限次数；正数 N = 每场最多喝 N 瓶
+        if (potion.maxUsesPerBattle > 0 && usedCount > potion.maxUsesPerBattle)
+        {
+            Debug.Log($"【{potion.potionName}】本场战斗最多喝 {potion.maxUsesPerBattle} 瓶，已经喝过了");
+            return false;
+        }
+
+        // 真正消耗道具：先记数，再移除
+        potionUseCount[potion] = usedCount;
         potions.RemoveAt(index);
 
-        // 药水效果：默认作用在自己身上
-        potion.Resolve(target != null ? target : this);
+        // 药水效果：默认作用在自己身上。
+        // 传 usedCount 进去——"劣质混合饮料"靠它判断是不是第 3 瓶。
+        potion.Resolve(target != null ? target : this, usedCount);
         EventManager.Trigger("PotionChanged", this);
         return true;
+    }
+
+    /// <summary>
+    /// 本场战斗这瓶饮料已经喝了几次（没喝过返回 0）。
+    /// UI 可以用它显示"已用 N/M"。
+    /// </summary>
+    public int GetPotionUseCount(PotionData potion)
+    {
+        if (potion == null) return 0;
+        return potionUseCount.TryGetValue(potion, out int count) ? count : 0;
     }
 
     /// <summary>

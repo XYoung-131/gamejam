@@ -244,6 +244,9 @@ public class BuffData : ScriptableObject
     [Tooltip("能不能叠层。沉重、虚弱明确写了'不叠加'，这两件要取消勾选")]
     public bool canStack = false;
 
+    [Tooltip("叠层上限。canStack = true 时生效；中毒/灼烧/流血/轻盈/开悟等按层数结算的 buff 要填够大（如 99），否则层数永远停在 1")]
+    public int maxStack = 1;
+
     [Tooltip("层数衰减方式。留'默认'即按极性走：负面回合结束减1，正面不减少")]
     public BuffStackDecay stackDecay = BuffStackDecay.默认;
 
@@ -317,8 +320,8 @@ public class BuffData : ScriptableObject
     /// <summary>是不是控制类（眩晕这种不能动）</summary>
     public bool IsControl => HasEffectType(BuffEffectType.禁止行动);
 
-    /// <summary>能不能叠层</summary>
-    public bool CanStack => canStack;
+    /// <summary>能不能叠层（需 canStack = true 且上限 &gt; 1）</summary>
+    public bool CanStack => canStack && maxStack > 1;
 
     /// <summary>
     /// 实际生效的层数衰减方式。

@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ed92a0a7f31f8a141bb6e09597cf5c87, type: 3}
+  m_Name: "\u8840\u76C6\u5DE8\u53E3"
+  m_EditorClassIdentifier: 
+  cardName: "\u8840\u76C6\u5DE8\u53E3"
+  description: "\u9009\u62E91\u4E2A\u76F8\u90BB\u76EE\u6807\uFF0C\u9020\u62102\u70B9\u7269\u7406\u4F24\u5BB3\uFF0C\u65BD\u52A03\u5C42\u6D41\u8840\uFF0C\u51FB\u6740\u654C\u4EBA\u540E\u83B7\u5F971\u70B9\u529B\u91CF\uFF0C\u6700\u591A\u53E0\u52A02\u70B9"
+  thoughtCost: 20
+  actionCost: 15
+  maxUses: 2
+  minRange: 0
+  maxRange: 1
+  damage: 2
+  damageType: 0
+  targetTypes: 00000000
+  causesDisplacement: 0
+  displacementType: 0
+  displacementDistance: 1
+  displaceSelf: 0
+  defenseEffectType: 1
+  defenseValue: 0
+  defenseTargetTypes: 01000000
+  library: 0
+  rarity: 3
+  tags: 00000000
+  buffs:
+  - {fileID: 11400000, guid: 3060afe6ee59a914b879ec8073ce8ba5, type: 2}
+  devNotes: "\u26A0\u300C\u5543\u54AC\u7C7B\u300D\u8BCD\u6761\u7F3A\uFF1Bbuffs \u53EA\u627F\u8F7D\u5230\u300C\u6302\u54EA\u51E0\u4E2A buff\u300D\uFF0C\u5C42\u6570(3)\u5728\u5361\u724C\u4E0A\u65E0\u5904\u5B58"

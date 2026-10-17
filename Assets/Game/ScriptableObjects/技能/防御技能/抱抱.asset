@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ed92a0a7f31f8a141bb6e09597cf5c87, type: 3}
+  m_Name: "\u62B1\u62B1"
+  m_EditorClassIdentifier: 
+  cardName: "\u62B1\u62B1"
+  description: "\u9009\u62E91\u4E2A\u76F8\u90BB\u76EE\u6807\uFF0C\u4E0B\u56DE\u5408\u65BD\u52A01\u5C42 \u4EB2\u5BC6"
+  thoughtCost: 1
+  actionCost: 1
+  maxUses: 1
+  minRange: 0
+  maxRange: 1
+  damage: 0
+  damageType: 0
+  targetTypes: 
+  causesDisplacement: 0
+  displacementType: 0
+  displacementDistance: 1
+  displaceSelf: 0
+  defenseEffectType: 1
+  defenseValue: 0
+  defenseTargetTypes: 00000000
+  library: 1
+  rarity: 4
+  tags: 04000000
+  buffs:
+  - {fileID: 11400000, guid: ac7af3ac46d7e454e8e70f6e7d36c285, type: 2}
+  devNotes: "\u6548\u679C\u4E0D\u53EF\u53E0\u52A0\uFF1B\u300C\u4E0B\u56DE\u5408\u65BD\u52A0\u300D\u7684\u5EF6\u8FDF\u5F85\u8865"

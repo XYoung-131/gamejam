@@ -42,6 +42,26 @@ public class CardSlot
 }
 
 /// <summary>
+/// 一次"免费使用技能"的运行时状态（药水 / 遗物发进来的，如"快走饮料"）。
+///
+/// 和 CardSlot 的区别：
+/// - 不占技能槽位（不需要空的槽位，也不会把槽位挤掉）；
+/// - 不用灌注、不用付思绪；
+/// - 用的时候不扣思绪和耐力；
+/// - 用完 remainingUses 次就整条消失。
+/// </summary>
+[System.Serializable]
+public class FreeCardCharge
+{
+    public CardData card;          // 免费技能；为 null 表示这条已作废
+    public int remainingUses;      // 还剩几次免费
+    public string source;          // 来源说明（UI 上显示"来自【快走饮料】"）
+
+    /// <summary>这条免费额度是不是已经用完（没技能 或 次数归零）</summary>
+    public bool IsEmpty => card == null || remainingUses <= 0;
+}
+
+/// <summary>
 /// 当前灌注选择的来源——相当于一次灌注操作的"状态标记"，
 /// 用来防止玩家在选择过程中又发起另一次抽卡。
 /// </summary>
@@ -92,6 +112,10 @@ public class PlayerCardSystem : MonoBehaviour
     // 玩家 ConfirmInfuse 选一张，或 AbandonInfuse 全放弃，之后这个列表会清空
     protected readonly List<CardData> currentChoices = new List<CardData>();
 
+    // 药水 / 遗物塞进来的"免费技能"（不占槽位、不花资源）。
+    // 目前只有"快走饮料"在用：免费使用 1 次"快走"。
+    protected readonly List<FreeCardCharge> freeCards = new List<FreeCardCharge>();
+
     /// <summary>
     /// 当前选择来源（无 = 不在灌注流程中）。
     /// public get + protected set：外部只读，只有本类能修改。
@@ -101,8 +125,53 @@ public class PlayerCardSystem : MonoBehaviour
     /// <summary>槽位列表（只读暴露给 UI 渲染，UI 不能直接改）</summary>
     public IReadOnlyList<CardSlot> Slots => slots;
 
+    /// <summary>
+    /// 把所有槽位技能的使用次数补满到卡牌配置的上限（「青柠饮料」用）。
+    ///
+    /// 规则：
+    ///  - 空槽位跳过；
+    ///  - maxUses &lt;= 0（不限次数）的技能无所谓"用完"，跳过；
+    ///  - 已经满次数的槽位不动，只统计真正被补过的。
+    /// </summary>
+    /// <returns>被补满的槽位数量</returns>
+    public int RestoreAllSkillUses()
+    {
+        int restored = 0;
+        foreach (CardSlot slot in slots)
+        {
+            if (slot == null || slot.IsEmpty) continue;
+            if (slot.card == null || slot.card.maxUses <= 0) continue;
+            if (slot.remainingUses >= slot.card.maxUses) continue;
+
+            slot.remainingUses = slot.card.maxUses;
+            restored++;
+        }
+
+        if (restored > 0)
+            EventManager.Trigger("CardUsesRestored", restored);
+
+        return restored;
+    }
+
     /// <summary>当前待选卡牌（只读暴露给 UI 渲染）</summary>
     public IReadOnlyList<CardData> CurrentChoices => currentChoices;
+
+    /// <summary>
+    /// 当前持有的"免费技能"额度（只读暴露给 UI 渲染）。
+    /// 药水 / 遗物发放，不需要占技能槽位，用掉一次就少一条。
+    /// </summary>
+    public IReadOnlyList<FreeCardCharge> FreeCards => freeCards;
+
+    /// <summary>还有没有免费技能可用（UI 用它决定要不要显示"免费技能"按钮）</summary>
+    public bool HasFreeCard
+    {
+        get
+        {
+            foreach (var charge in freeCards)
+                if (!charge.IsEmpty) return true;
+            return false;
+        }
+    }
 
     /// <summary>
     /// 是否存在空槽位。
@@ -148,6 +217,33 @@ public class PlayerCardSystem : MonoBehaviour
             PutIntoFirstEmptySlot(card);
 
         EventManager.Trigger("SlotChanged", this);
+    }
+
+    // ============================================================
+    //          与饮料（药水）系统的接线（事件驱动）
+    // ============================================================
+
+    private void OnEnable()
+    {
+        // "快走饮料"等免费技能：PotionData 基类广播 FreeSkillGranted(喝的人, 技能)，
+        // 这里翻译成"免费卡"额度——不占槽位、不耗资源、用完即走。
+        EventManager.AddListener<Unit, CardData>("FreeSkillGranted", HandleFreeSkillGranted);
+    }
+
+    private void OnDisable()
+    {
+        EventManager.RemoveListener<Unit, CardData>("FreeSkillGranted", HandleFreeSkillGranted);
+    }
+
+    /// <summary>
+    /// 收到"免费使用技能"事件 → 发一条免费额度。
+    /// 次数固定 1 次（策划原文"免费使用1次快走"）；
+    /// 出牌时的射程 / 目标 / 视线校验照走，只是不扣思绪和耐力。
+    /// </summary>
+    private void HandleFreeSkillGranted(Unit user, CardData skill)
+    {
+        if (skill == null) return;
+        GrantFreeCard(skill, 1, "饮料");
     }
 
     // ============================================================
@@ -380,67 +476,9 @@ public class PlayerCardSystem : MonoBehaviour
         // 确定最终目标（攻击卡/对敌防御卡→敌人；自身防御卡→自己）
         Unit finalTarget = ResolveTarget(card, target);
 
-        if (card.IsAttack)
-        {
-            // ---------- 攻击卡 ----------
-            if (finalTarget == null)
-            {
-                Debug.Log("没有可攻击的目标");
-                return false;
-            }
-
-            if (!card.CanTargetUnit)
-            {
-                Debug.Log($"【{card.cardName}】不能以敌方单位为目标");
-                return false;
-            }
-        }
-        else
-        {
-            // ---------- 防御卡 ----------
-            if (finalTarget == player)
-            {
-                // 目标是自己：必须勾了"自身"
-                if (!card.CanDefenseSelf)
-                {
-                    Debug.Log($"【{card.cardName}】不能对自身使用");
-                    return false;
-                }
-            }
-            else if (finalTarget != null)
-            {
-                // 目标是敌人：必须勾了"敌方单位"（精神压制、绊倒等）
-                if (!card.CanDefenseEnemy)
-                {
-                    Debug.Log($"【{card.cardName}】不能以敌方单位为目标");
-                    return false;
-                }
-            }
-            else
-            {
-                Debug.Log($"【{card.cardName}】没有可用的目标类型");
-                return false;
-            }
-        }
-
-        // 射程校验：只要目标是"别人"（攻击卡打敌人 / 防御卡给敌人挂 debuff）就检查距离；
-        // 对自己用的卡（距离 0）不需要射程
-        if (finalTarget != null && finalTarget != player &&
-            !IsInRange(card, player.GetCoord(), finalTarget.GetCoord()))
-            return false;
-
-        // "亲密"（攻击目标限制）：名单里的单位不能被选为攻击目标。
-        // 必须拦在扣费之前，否则会出现"扣了耐力却打不出去"的情况。
-        if (finalTarget != null && finalTarget != player && player.IsAttackTargetForbidden(finalTarget))
-        {
-            Debug.Log($"【{card.cardName}】无法将 {finalTarget.data.unitName} 选为攻击目标");
-            return false;
-        }
-
-        // 视线校验：远程技能要求中间没有单位/障碍物，且目标不在烟雾里
-        if (finalTarget != null && finalTarget != player &&
-            !IsTargetReachable(card, player.GetCoord(), finalTarget.GetCoord()))
-            return false;
+        // 目标类型 + 射程/亲密/视线三道校验（和免费技能共用，见 ValidateCardTarget 注释）
+        if (!ValidateCardTarget(card, finalTarget)) return false;
+        if (!ValidateCardTargeting(card, finalTarget)) return false;
 
         // --- 扣资源（思绪 + 耐力一起判断，任一不足则两种都不扣） ---
         // 耐力消耗取"最终值"：虚弱（攻击耐力消耗倍率 1.25）会放大攻击技能的消耗
@@ -525,6 +563,192 @@ public class PlayerCardSystem : MonoBehaviour
         }
 
         EventManager.Trigger("SlotChanged", this);   // 通知 UI 刷新次数显示
+    }
+
+    /// <summary>
+    /// 目标类型校验：这张牌能不能对"最终选中的这个目标"用。
+    ///   · 攻击卡：必须有目标（没目标就没得打），且 targetTypes 里勾了"敌方单位"；
+    ///   · 防御卡：目标是自己是必须勾"自身"；目标是敌人必须勾"敌方单位"；
+    ///             两边都没勾、目标也是空 → 这张牌没有可用目标类型。
+    ///
+    /// 抽出来是因为"槽位里的技能"和"药水发的免费技能"必须用同一套规则，
+    /// 否则会出现"免费技能能打到槽位技能打不到的东西"这种怪事。
+    /// </summary>
+    protected virtual bool ValidateCardTarget(CardData card, Unit finalTarget)
+    {
+        if (card.IsAttack)
+        {
+            // ---------- 攻击卡 ----------
+            if (finalTarget == null)
+            {
+                Debug.Log("没有可攻击的目标");
+                return false;
+            }
+
+            if (!card.CanTargetUnit)
+            {
+                Debug.Log($"【{card.cardName}】不能以敌方单位为目标");
+                return false;
+            }
+
+            return true;
+        }
+
+        // ---------- 防御卡 ----------
+        if (finalTarget == player)
+        {
+            // 目标是自己：必须勾了"自身"
+            if (!card.CanDefenseSelf)
+            {
+                Debug.Log($"【{card.cardName}】不能对自身使用");
+                return false;
+            }
+
+            return true;
+        }
+
+        if (finalTarget != null)
+        {
+            // 目标是敌人：必须勾了"敌方单位"（精神压制、绊倒等）
+            if (!card.CanDefenseEnemy)
+            {
+                Debug.Log($"【{card.cardName}】不能以敌方单位为目标");
+                return false;
+            }
+
+            return true;
+        }
+
+        Debug.Log($"【{card.cardName}】没有可用的目标类型");
+        return false;
+    }
+
+    /// <summary>
+    /// 射程 / 亲密 / 视线三道校验。只有目标是"别人"时才查
+    /// （攻击卡打敌人、防御卡给敌人挂 debuff）；对自己用的卡（距离 0）直接通过。
+    ///
+    /// 顺序有讲究：亲密必须拦在扣费之前，否则会出现"扣了耐力却打不出去"。
+    /// </summary>
+    protected virtual bool ValidateCardTargeting(CardData card, Unit finalTarget)
+    {
+        if (finalTarget == null || finalTarget == player) return true;
+
+        // 射程
+        if (!IsInRange(card, player.GetCoord(), finalTarget.GetCoord()))
+            return false;
+
+        // "亲密"（攻击目标限制）：名单里的单位不能被选为攻击目标
+        if (player.IsAttackTargetForbidden(finalTarget))
+        {
+            Debug.Log($"【{card.cardName}】无法将 {finalTarget.data.unitName} 选为攻击目标");
+            return false;
+        }
+
+        // 视线：远程技能要求中间没有单位/障碍物，且目标不在烟雾里
+        if (!IsTargetReachable(card, player.GetCoord(), finalTarget.GetCoord()))
+            return false;
+
+        return true;
+    }
+
+    // ============================================================
+    //              免费技能（药水 / 遗物发放，如"快走饮料"）
+    // ============================================================
+
+    /// <summary>
+    /// 发放"免费使用技能"次数（"快走饮料" = 免费使用 1 次"快走"）。
+    ///
+    /// 为什么不做成"立刻自动放出来"：位移类技能要玩家自己挑落点和距离，
+    /// 自动放等于替玩家做决定。所以改成发一张"免费卡"挂在这儿，
+    /// 玩家点一下才用掉一次——出牌时的射程 / 目标 / 视线校验照走，只是不扣资源。
+    /// </summary>
+    /// <param name="card">免费开放的技能</param>
+    /// <param name="uses">免费次数（默认 1 次）</param>
+    /// <param name="source">来源说明，UI 上显示"来自【快走饮料】"，可留空</param>
+    public virtual void GrantFreeCard(CardData card, int uses = 1, string source = null)
+    {
+        if (card == null || uses <= 0) return;
+
+        // 同一张牌已经发过就往上叠次数，避免 UI 上出现两条一模一样的
+        foreach (var charge in freeCards)
+        {
+            if (charge.card != card) continue;
+
+            charge.remainingUses += uses;
+            charge.source = source;   // 后发的来源覆盖旧的，UI 显示最近一次
+            EventManager.Trigger("FreeCardChanged", this);
+            Debug.Log($"免费技能【{card.cardName}】次数 +{uses}，当前共 {charge.remainingUses} 次");
+            return;
+        }
+
+        freeCards.Add(new FreeCardCharge
+        {
+            card = card,
+            remainingUses = uses,
+            source = source
+        });
+
+        EventManager.Trigger("FreeCardChanged", this);
+        Debug.Log($"获得免费技能【{card.cardName}】×{uses}" +
+                  (string.IsNullOrEmpty(source) ? "" : $"（来自【{source}】）"));
+    }
+
+    /// <summary>
+    /// 使用第 index 条免费技能（目标为单位）。
+    ///
+    /// 和 UseSlotCard 的区别只有两点：
+    ///   ① 不消耗思绪和耐力；
+    ///   ② 用完这一次就从 freeCards 里移除。
+    /// 其余（阶段校验、禁止行动、目标类型、射程、亲密、视线、结算）完全一致。
+    /// </summary>
+    /// <param name="index">免费技能在 FreeCards 里的序号（0 开始）</param>
+    /// <param name="target">目标单位；传 null 时按 ResolveTarget 的规则自动选</param>
+    public virtual bool UseFreeCard(int index, Unit target = null)
+    {
+        if (index < 0 || index >= freeCards.Count)
+        {
+            Debug.Log("免费技能序号无效");
+            return false;
+        }
+
+        FreeCardCharge charge = freeCards[index];
+        if (charge.IsEmpty)
+        {
+            Debug.Log("这条免费技能已用完");
+            return false;
+        }
+
+        if (!CanActNow())
+        {
+            Debug.Log("不是玩家行动阶段，不能使用技能");
+            return false;
+        }
+
+        // 被"禁止行动"（眩晕）时同样放不出来
+        if (player.HasEffect(BuffEffectType.禁止行动))
+        {
+            Debug.Log("被禁止行动，无法出牌");
+            return false;
+        }
+
+        CardData card = charge.card;
+        Unit finalTarget = ResolveTarget(card, target);
+
+        if (!ValidateCardTarget(card, finalTarget)) return false;
+        if (!ValidateCardTargeting(card, finalTarget)) return false;
+
+        // 免费：跳过 TrySpendResource，直接结算
+        card.Resolve(player, finalTarget);
+        EventManager.Trigger("CardUsed", card, player, finalTarget);
+        Debug.Log($"免费使用【{card.cardName}】（来自{(string.IsNullOrEmpty(charge.source) ? "道具" : charge.source)}）");
+
+        // 消耗一次免费额度，用完移除整条
+        charge.remainingUses--;
+        if (charge.IsEmpty)
+            freeCards.RemoveAt(index);
+
+        EventManager.Trigger("FreeCardChanged", this);
+        return true;
     }
 
     /// <summary>
@@ -806,4 +1030,7 @@ public class PlayerCardSystem : MonoBehaviour
 
     [ContextMenu("测试：使用槽位 1")]
     protected void DebugUseSlot0() => UseSlotCard(0);
+
+    [ContextMenu("测试：使用第 1 个免费技能")]
+    protected void DebugUseFreeCard0() => UseFreeCard(0);
 }

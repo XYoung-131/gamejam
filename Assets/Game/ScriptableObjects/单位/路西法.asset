@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 00bca2f6a565a374da8b0d1304cc43ea, type: 3}
+  m_Name: "\u8DEF\u897F\u6CD5"
+  m_EditorClassIdentifier: 
+  unitName: "\u8DEF\u897F\u6CD5"
+  maxHealth: 0
+  grade: 2
+  passiveAbility: "\u26A0 \u7B56\u5212\u8868\u5C1A\u672A\u586B\u5199\uFF1A\u8840\u91CF / \u6280\u80FD\u7EC4 / \u7279\u6B8A\u80FD\u529B / \u884C\u4E3A\u903B\u8F91 \u56DB\u5217\u5168\u7A7A\uFF0C\u5148\u5EFA\u5360\u4F4D\u8D44\u4EA7"
+  aiLogic: ""
+  skillGroup1: []
+  skillGroup2: []
+  skillGroup3: []
