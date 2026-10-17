@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 3101703987822499979}
   - component: {fileID: 8941056444661762164}
   - component: {fileID: 290878506825674431}
+  - component: {fileID: 3719415654711483531}
   m_Layer: 0
   m_Name: "Enemy_\u514B\u52D2\u59AE\xB7\u739B\u5854"
   m_TagString: Untagged
@@ -54,7 +55,7 @@ SpriteRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 10754, guid: 0000000000000000f000000000000000, type: 0}
+  - {fileID: 2100000, guid: a97c105638bdf8b4a8650670310a4cd3, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -139,6 +140,27 @@ MonoBehaviour:
   currentCoord:
     q: 0
     r: 0
+  collisionSelfDamage: 2
+  collisionBlockerDamage: 2
+  reflectsDisplacement: 0
   activeBuffs: []
   thinkDelay: 0.8
   stepDelay: 0.3
+  skillsPerTurn: 1
+--- !u!114 &3719415654711483531
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6413276691809622029}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1ed481c9e1cee2e4e8564081628f11f0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  flashInDuration: 0.1
+  flashOutDuration: 0.1
+  flashColor: {r: 1, g: 0, b: 0, a: 1}
+  flashMaterialTemplate: {fileID: 2100000, guid: f3d49289a2bd8ae4d8ff951c100df768, type: 2}
+  target: {fileID: 3101703987822499979}

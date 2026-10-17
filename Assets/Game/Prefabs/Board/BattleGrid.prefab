@@ -47,4 +47,9 @@ MonoBehaviour:
   hexSize: 1
   gridRadius: 4
   cellPrefab: {fileID: 8698439535907632885, guid: 72a09aa9665945b408542462ebd39bfa, type: 3}
+  generateOnStart: 0
+  useCustomShape: 0
+  customCells: []
+  originOffset: {x: 0, y: 0}
+  verticalScale: 1
   orientation: 0

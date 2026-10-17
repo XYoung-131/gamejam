@@ -106,6 +106,9 @@ tbl*.manifest.json
 Thumbs.db
 Desktop.ini
 
+# ---------- Unity 许可模块生成的缓存 ----------
+/SafeNet Sentinel/
+
 # ---------- 说明 ----------
 # 注意：*.meta 文件必须提交！不要忽略 *.meta
 # 以上规则中只有针对特定类型（pdb/mdb/pidb）的 .meta 被忽略

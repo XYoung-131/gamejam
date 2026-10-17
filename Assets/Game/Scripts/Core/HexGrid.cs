@@ -58,6 +58,12 @@ public class HexGrid : MonoBehaviour
     [Tooltip("六边形朝向：Flat-top（平顶）或 Pointy-top（尖顶）")]
     public HexOrientation orientation = HexOrientation.FlatTop;
 
+    /// <summary>
+    /// 地图根物体在世界里的位置。画稿（SpriteRenderer）挂在这个根物体上，
+    /// 所以格子和单位都要以它为基准，这样挪动地图时画稿和格子不会错开。
+    /// </summary>
+    public Vector2 WorldOrigin => new Vector2(transform.position.x, transform.position.y);
+
     // ========== 运行时数据 ==========
 
     private Dictionary<HexCoord, HexCell> cells = new Dictionary<HexCoord, HexCell>();
@@ -76,6 +82,13 @@ public class HexGrid : MonoBehaviour
     /// </summary>
     public void GenerateGrid()
     {
+        // 缩放/旋转会让格子和画稿对不上，给出提示
+        Vector3 scale = transform.lossyScale;
+        if (Mathf.Abs(scale.x - 1f) > 0.001f || Mathf.Abs(scale.y - 1f) > 0.001f)
+            Debug.LogWarning($"[HexGrid] 地图根物体的缩放是 {scale.x}×{scale.y}，格子尺寸会和画稿不一致");
+        if (Mathf.Abs(transform.eulerAngles.z) > 0.001f)
+            Debug.LogWarning($"[HexGrid] 地图根物体旋转了 {transform.eulerAngles.z} 度，格子会和画稿错开");
+
         // 创建格子父物体
         if (cellsParent == null)
         {
@@ -150,18 +163,30 @@ public class HexGrid : MonoBehaviour
     /// </summary>
     public Vector3 HexToWorld(HexCoord hex)
     {
+        Vector2 p = HexToWorld2D(hex);
+        return new Vector3(p.x, p.y, 0f);
+    }
+
+    /// <summary>
+    /// 六边形坐标 → 世界坐标（二维版）。已经算上 originOffset 和地图根物体的位置。
+    /// Flat-top（平顶）：x = size * 3/2 * q，y = size * (√3 r + √3/2 q) * verticalScale
+    /// </summary>
+    public Vector2 HexToWorld2D(HexCoord hex)
+    {
+        float x, y;
         if (orientation == HexOrientation.FlatTop)
         {
-            float x = hexSize * (3f / 2f * hex.q);
-            float y = hexSize * (Mathf.Sqrt(3) * hex.r + Mathf.Sqrt(3) / 2f * hex.q);
-            return new Vector3(x + originOffset.x, y * verticalScale + originOffset.y, 0);
+            x = hexSize * (3f / 2f * hex.q);
+            y = hexSize * (Mathf.Sqrt(3) * hex.r + Mathf.Sqrt(3) / 2f * hex.q) * verticalScale;
         }
         else // Pointy-top（尖顶）
         {
-            float x = hexSize * (Mathf.Sqrt(3) * hex.q + Mathf.Sqrt(3) / 2f * hex.r);
-            float y = hexSize * (3f / 2f * hex.r);
-            return new Vector3(x + originOffset.x, y * verticalScale + originOffset.y, 0);
+            x = hexSize * (Mathf.Sqrt(3) * hex.q + Mathf.Sqrt(3) / 2f * hex.r);
+            y = hexSize * (3f / 2f * hex.r) * verticalScale;
         }
+
+        return new Vector2(x + originOffset.x + WorldOrigin.x,
+                           y + originOffset.y + WorldOrigin.y);
     }
 
     /// <summary>
@@ -170,8 +195,8 @@ public class HexGrid : MonoBehaviour
     /// </summary>
     public HexCoord WorldToHex(Vector3 worldPos)
     {
-        float x = worldPos.x - originOffset.x;
-        float y = (worldPos.y - originOffset.y) / Mathf.Max(verticalScale, 0.0001f);
+        float x = worldPos.x - originOffset.x - WorldOrigin.x;
+        float y = (worldPos.y - originOffset.y - WorldOrigin.y) / Mathf.Max(verticalScale, 0.0001f);
 
         float q, r;
 
@@ -255,6 +280,34 @@ public class HexGrid : MonoBehaviour
     public Dictionary<HexCoord, HexCell>.ValueCollection GetAllCells()
     {
         return cells.Values;
+    }
+
+    /// <summary>
+    /// 整张地图的世界包围盒（用真实格子位置算，因此包含了 originOffset、纵向压缩和自定义形状），
+    /// 格子还没生成时返回 false。
+    /// </summary>
+    public bool TryGetWorldBounds(out Bounds mapBounds, float margin = 0f)
+    {
+        mapBounds = default;
+        if (cells.Count == 0)
+            return false;
+
+        float minX = float.MaxValue, maxX = float.MinValue;
+        float minY = float.MaxValue, maxY = float.MinValue;
+        foreach (HexCell cell in cells.Values)
+        {
+            Vector3 p = cell.transform.position;
+            if (p.x < minX) minX = p.x;
+            if (p.x > maxX) maxX = p.x;
+            if (p.y < minY) minY = p.y;
+            if (p.y > maxY) maxY = p.y;
+        }
+
+        float pad = margin > 0f ? margin : hexSize;
+        mapBounds = new Bounds(
+            new Vector3((minX + maxX) * 0.5f, (minY + maxY) * 0.5f, 0f),
+            new Vector3(maxX - minX + pad * 2f, maxY - minY + pad * 2f, 0f));
+        return true;
     }
 
     /// <summary>
