@@ -466,7 +466,10 @@ defenseValue / defenseTargetTypes / library / rarity / tags / buffs / devNotes`�
 
 - `Scenes/Battle.unity` —— 修复 `ProjectileSpawner` 的 `speed / minDuration / maxDuration` 缩进错误
   （原文件这三个字段比父级多一级，是非法 YAML）；
-- `.gitignore` —— 补上美术表导出的临时文件 `_art.ndjson` / `_art.manifest.json`。
+- `.gitignore` —— 补上美术表导出的临时文件 `_art.ndjson` / `_art.manifest.json`；
+- `ProjectSettings/EditorBuildSettings.asset` —— 场景构建顺序调整为 `Battle.unity` 放在**索引 0** 并参与构建，
+  `SampleScene`（0 个脚本的空场景）保留但设为 `enabled: 0`。打包或直接 Build 现在直接进战斗场景，
+  不再先加载空场景；`BattleDebugDriver` 的「R 重开」走 `LoadScene(active.buildIndex)`，也因此拿到了合法索引。
 
 ### 七、还没接的（下一版）
 
