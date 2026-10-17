@@ -257,47 +257,11 @@
 - `RelicData` 的同名效果「技能耐力消耗倍率」用的是**增量**填法（滑板鞋 -25% 填 `-0.25`），  
   而 `BuffData` 用的是**绝对乘数**填法（虚弱 +25% 填 `1.25`）。同一件事两种填法，容易填错。  
   建议统一为一种（倾向改成"增量"填法，与策划文案"增加 25%"字面一致）。暂未改动。
-
-
-## 合并 PR #3（位移/地形/掉落系统）+ 冲突解决记录
-
-合并
-
-- 合并 origin/main（PR #3 from Zykluna233：位移系统、地形系统、掉落系统、  
-  怪物行动优先级、远程视线判定、攻击范围高亮、UnitGrade.BOSS、回合结束回 15 资源等）。
-- 网络问题：git 直连 GitHub 被重置，已配置仅对 github.com 生效的本地代理  
-  （`git config --global http.https://github.com.proxy http://127.0.0.1:7897`）。
-
-冲突解决（按"shield 取 B 侧、其余取 A 侧"的约定执行）
-
-- `Unit.cs` —— 取队员版（位移系统完整），重新叠加本地修复：  
-  `GetTotalEffectValue` 拆成"不限时机"+"指定时机"两个重载（倍率感知叠加）、  
-  `isDead` 死亡判定（Die 防重复 + TakeDamage/ApplyBuff/MoveTo/CanAttack 拦截）、  
-  `IsAttackTargetForbidden`（亲密禁打）。
-- `BuffData.cs` —— 保留本地重写版（20 buff 完整体系）；  
-  队员版新增的 `清除所有正面` 已包含，其 `BuffCategory`（伤害类/效果类/护盾类）无其他引用，未引入。
-- `CardData.cs` —— 保留本地版（最终数值区 + 判活挂 buff），  
-  叠加队员的 `damageType` 字段、位移配置块、`SkillPriority`、  
-  伤害结算改 `TakeDamage(GetFinalDamage(caster), damageType)`、新增位移步骤（第 1.5 步）。
-- `PlayerCardSystem.cs` —— 保留本地版（最终消耗 + 亲密前置校验），  
-  叠加队员的视线判定 `IsTargetReachable`（两处调用点）、抽卡费 `drawThoughtCost` 1→5、  
-  `HighlightAttackRange` / `ClearHighlights`。
-- `Progression/RelicData.cs` —— 融合：本地 22 遗物效果体系为主，补队员简化路径  
-  （`RelicPool` 枚举 + `pool` 字段 + `permanentBuffs`/`instantEffect`/`instantHeal`/`instantBuffs`
-  - 兼容入口 `Apply(Unit)`，内部走 `ApplyPermanentBuff` 再调 `OnAcquire`）。
-- `Progression/PotionData.cs` —— 保留本地版（已有兼容的 `Resolve(Unit)` 重载，  
-  PlayerUnit.UsePotion 直接可用；未引入无引用的 `PotionQuality`）。
-
-已知遗留
-
-- `DamageType.Buff` 注释称"受减伤/易伤影响"，但 `TakeDamageInternal` 实际跳过 buff 计算——文档与实现不一致，待统一。
-- 队员 `OnTurnStart` 的 `ClearShield()` 与本地 `OnTurnEnd` 的 `ClearShieldOnTurnEnd()` 并存，  
-  净行为 = 回合结束清零（`ClearShield()` 空转），待策划确认护盾规则的唯一权威时机。
-
+  
 
 ## 小羊：复查：三个已知问题的修复状态 + buff 结算需求落地（Unit / PlayerUnit / EnemyUnit / BuffData）
 
-### 一、你提的三个问题：已确认修复（合并后未被冲掉）
+### 一、修复鱼丸提出的三个buff系统相关问题：已确认修复
 
 1. **CardData.Resolve 不读"攻击时"加成** —— 已修。  
    `Resolve` 第 1 步走 `GetFinalDamage(caster)`，查询不限触发时机；打障碍物复用同一公式。  
