@@ -216,12 +216,26 @@ public class CardData : ScriptableObject
     /// 查询不限触发时机 —— 策划把效果填成"立即生效"或"攻击时"都会算进来。
     /// 下限钳到 0：无力叠得比 damage 还高时打不出伤害，但不会反过来变成治疗。
     /// </summary>
-    public int GetFinalDamage(Unit caster)
+    public int GetFinalDamage(Unit caster, Unit target = null)
     {
         if (caster == null) return damage;
 
         int bonus = Mathf.RoundToInt(caster.GetTotalEffectValue(BuffEffectType.攻击伤害加成));
-        return Mathf.Max(0, damage + bonus);
+
+        // 遗物加成：
+        //   ① 常驻属性类（攻击伤害加成 / 技能基础伤害加成），可按标签 / 稀有度 / 相邻过滤；
+        //   ② 运行时成长类（玛塔的板牙：用啃咬累计击杀 → 永久加伤），由 RelicController 记账。
+        int relicBonus = 0;
+        if (caster is PlayerUnit relicOwner)
+        {
+            relicBonus = RelicData.GetAttackDamageBonus(relicOwner.Relics, this, caster, target);
+
+            RelicController relicController = caster.GetComponent<RelicController>();
+            if (relicController != null)
+                relicBonus += relicController.GetSkillDamageBonus(this);
+        }
+
+        return Mathf.Max(0, damage + bonus + relicBonus);
     }
 
     /// <summary>
@@ -322,10 +336,13 @@ public class CardData : ScriptableObject
 
             caster.OnAttack();   // 触发施法者身上"攻击时"的 buff
 
-            // 伤害 = 卡牌配置的 damage + 力量/无力/临时力量等"攻击伤害加成"（按层数叠加），
-            // 并按配置的伤害类型结算（真实伤害无视护盾）
-            int finalDamage = GetFinalDamage(caster);
-            target.TakeDamage(finalDamage, damageType);
+            // 伤害 = 卡牌配置的 damage + 力量/无力/临时力量等"攻击伤害加成"（按层数叠加）+ 遗物加成，
+            // 并按配置的伤害类型结算（真实伤害无视护盾）。
+            // 走 DamageContext 结算：带上"谁打的 / 用什么牌 / 近战还是远程"，
+            // 让按来源判定的遗物（免疫爆炸、远程减伤、近战增伤）能正确生效。
+            int finalDamage = GetFinalDamage(caster, target);
+            DamageContext ctx = DamageContext.FromCard(caster, this, finalDamage, damageType);
+            target.TakeDamage(ctx);
 
             Debug.Log($"{caster.data.unitName} 使用【{cardName}】对 {target.data.unitName} 造成 {finalDamage} 点伤害");
         }
