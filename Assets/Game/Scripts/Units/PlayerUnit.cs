@@ -229,8 +229,8 @@ public class PlayerUnit : Unit
             return false;
         }
 
-        // 移动距离不能超过耐力（简化：1 耐力 = 走 1 格）
-        int moveDistance = path.Count - 1;  // path 包含起点
+        // 移动距离不能超过耐力（按每格 moveCost 累加，沼泽/难走地形更费耐力）
+        int moveDistance = HexPathfinding.GetPathCost(path);  // path 含起点，代价不含起点
 
         // 「沉重」：移动技能的耐力消耗增加 25%（倍率 1.25）。倍率型：没中时返回 1（不变），
         // 消耗向上取整（走 3 格 × 1.25 = 3.75 → 4 点）。「沉重」还写了"不叠加"，做 asset 时取消 canStack。

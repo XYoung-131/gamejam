@@ -17,6 +17,9 @@ public class UnitData : ScriptableObject
     public int maxHealth;
     public UnitGrade grade;
 
+    [Tooltip("基础攻击力：普通攻击 / 没单独填伤害的卡牌用它。\n默认 1 = 和旧版硬编码的 1 完全一致，老资产不填也不会变成 0 伤害")]
+    public int attack = 1;
+
     [Header("能力")]
     [TextArea] public string passiveAbility;
     [TextArea] public string aiLogic;

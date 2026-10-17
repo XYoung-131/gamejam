@@ -91,6 +91,15 @@ ExportedObj/
 # 本地记忆只保留在本机，不上传仓库（技能等其他内容仍可正常提交）
 .workbuddy/memory/
 
+# ---------- 本地变更说明 ----------
+# 补丁说明只留本机，不提交（代码改动本身正常提交）
+补丁/
+
+# ---------- 飞书表临时导出 ----------
+# lark-cli base +record-list 导出到项目根，用完即弃，不提交
+tbl*.ndjson
+tbl*.manifest.json
+
 # ---------- 操作系统 ----------
 .DS_Store
 .DS_Store*

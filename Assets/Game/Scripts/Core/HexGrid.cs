@@ -227,6 +227,21 @@ public class HexGrid : MonoBehaviour
     }
 
     /// <summary>
+    /// 取某个坐标的 6 个相邻格子（越界的跳过）。
+    /// 和 HexCell.GetNeighborCells 等价，这里给"手上只有坐标、还没拿到格子"的调用方用。
+    /// </summary>
+    public List<HexCell> GetNeighborCells(HexCoord coord)
+    {
+        List<HexCell> result = new List<HexCell>(6);
+        for (int i = 0; i < 6; i++)
+        {
+            HexCell cell = GetCell(coord.GetNeighbor(i));
+            if (cell != null) result.Add(cell);
+        }
+        return result;
+    }
+
+    /// <summary>
     /// 检查坐标是否在网格内
     /// </summary>
     public bool IsInGrid(HexCoord coord)
@@ -295,6 +310,9 @@ public class HexGrid : MonoBehaviour
     /// 判断 from 到 to 之间是否被阻挡。
     /// 文档："当目标与自身之间有其他敌人或者障碍物，那么目标相对于自身就是被阻挡的。"
     /// 起点和终点自身不计入阻挡，只检查中间经过的格子。
+    ///
+    /// 障碍物是否挡视线交给 Obstacle.BlocksSight()（只有"高大"标签的挡：
+    /// 柱子挡、地上的炸药桶不挡），不要用 obstacle != null 一刀切。
     /// </summary>
     public bool IsLineBlocked(HexCoord from, HexCoord to)
     {
@@ -304,7 +322,13 @@ public class HexGrid : MonoBehaviour
         for (int i = 1; i < line.Count - 1; i++)   // 跳过起点和终点
         {
             HexCell cell = GetCell(line[i]);
-            if (cell != null && (cell.obstacle != null || cell.occupyUnit != null))
+            if (cell == null) continue;
+
+            if (cell.obstacle != null && cell.obstacle.BlocksSight())
+                return true;
+
+            // 已 Die() 但还没被 Destroy 的单位不挡视线
+            if (cell.occupyUnit != null && !cell.occupyUnit.IsDead)
                 return true;
         }
         return false;
