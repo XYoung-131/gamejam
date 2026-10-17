@@ -449,8 +449,9 @@ public class PlayerUnit : Unit
         int usedCount = usedBefore + 1;
 
         // 次数上限校验：放在"把道具从背包里拿掉"之前，
-        // 否则会被白白吃掉一瓶却不生效
-        if (!potion.CanUseThisBattle(usedBefore))
+        // 否则会被白白吃掉一瓶却不生效。
+        // 约定：maxUsesPerBattle 0 或负数 = 不限次数；正数 N = 每场最多喝 N 瓶
+        if (potion.maxUsesPerBattle > 0 && usedCount > potion.maxUsesPerBattle)
         {
             Debug.Log($"【{potion.potionName}】本场战斗最多喝 {potion.maxUsesPerBattle} 瓶，已经喝过了");
             return false;
