@@ -45,6 +45,12 @@ public class TerrainData : ScriptableObject
 
     [TextArea] public string description;
 
+    [Header("是否负面地形")]
+    [Tooltip("勾上表示这块地板对站在上面的单位是负面效果（灼热 / 剧毒 / 刀刃 / 吸血）。\n" +
+             "供遗物『小皮鞋：免疫地形效果』判定——只有勾了的负面地形会被免疫。\n" +
+             "克勒妮绒毯、烟雾地板不是负面，不要勾。")]
+    public bool isNegative = false;
+
     [Header("克勒妮绒毯")]
     [Tooltip("站在上面能获得力量的单位（神庙鼠 / 克勒妮之子 / 克勒妮之盾）；留空表示所有单位都能获得")]
     public List<UnitData> grantedUnits = new List<UnitData>();

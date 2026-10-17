@@ -562,7 +562,11 @@ public class RelicData : ScriptableObject
     /// </summary>
     protected virtual int GetCurrentFloor()
     {
-        // TODO：接入关卡进度系统后改成读真实章节数
+        // 接入关卡进度系统：优先读 GameManager 的当前楼层
+        //（GameManager.StartLevel 会在每层开始时刷新 floorNumber，由 RelicController 驱动）
+        if (GameManager.Instance != null && GameManager.Instance.floorNumber > 0)
+            return GameManager.Instance.floorNumber;
+
         return 1;
     }
 
@@ -648,5 +652,52 @@ public class RelicData : ScriptableObject
             }
         }
         return false;
+    }
+
+    /// <summary>
+    /// 计算一张卡牌能获得的遗物"攻击伤害加成"总额。
+    /// 相比 GetTotalValue，这里多支持三个过滤（都是 RelicEffect 上的开关）：
+    ///   · filterBySkillTag / skillTag        —— 只对带该标签的技能生效
+    ///   · filterBySkillRarity / skillRarity  —— 只对该稀有度的技能生效（回归本质：普通）
+    ///   · adjacentTargetOnly                 —— 只对相邻目标生效（黄铜指虎：贴身近战 +1）
+    ///
+    /// 属性类加成不按触发时机过滤（和 buff 侧的约定一致），
+    /// 避免策划把它填成"使用技能时"就静默失效。
+    /// 由 CardData.GetFinalDamage 调用，和 buff 加成相加后再结算。
+    /// </summary>
+    public static int GetAttackDamageBonus(IReadOnlyList<RelicData> relics, CardData card,
+                                           Unit caster = null, Unit target = null)
+    {
+        if (relics == null) return 0;
+
+        float total = 0f;
+        foreach (var relic in relics)
+        {
+            if (relic == null) continue;
+
+            foreach (var e in relic.effects)
+            {
+                if (e == null) continue;
+                if (e.effectType != RelicEffectType.攻击伤害加成 &&
+                    e.effectType != RelicEffectType.技能基础伤害加成) continue;
+
+                // 只对指定标签的技能生效
+                if (e.filterBySkillTag && (card == null || !card.tags.Contains(e.skillTag))) continue;
+
+                // 只对指定稀有度的技能生效
+                if (e.filterBySkillRarity && (card == null || card.rarity != e.skillRarity)) continue;
+
+                // 只对相邻目标生效（黄铜指虎：贴身近战才 +1）
+                if (e.adjacentTargetOnly)
+                {
+                    if (caster == null || target == null) continue;
+                    if (caster.GetCoord().Distance(target.GetCoord()) > 1) continue;
+                }
+
+                total += e.value;
+            }
+        }
+
+        return Mathf.RoundToInt(total);
     }
 }

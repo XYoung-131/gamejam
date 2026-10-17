@@ -156,19 +156,61 @@ public abstract class Unit : MonoBehaviour
     /// </summary>
     public virtual void TakeDamage(int amount, DamageType type, Unit source)
     {
-        if (amount <= 0) return;
+        // 旧签名保留：包一层 DamageContext 后交给带上下文的重载统一结算，
+        // 老的调用点（位移碰撞、持续伤害、地形伤害）不需要改。
+        DamageContext ctx = new DamageContext(amount, type);
+        ctx.attacker = source;
+        TakeDamage(ctx);
+    }
+
+    /// <summary>
+    /// 受到伤害（带完整上下文）——所有伤害结算的统一入口。
+    /// 相比旧重载，它额外携带"是不是近战 / 远程 / 爆炸"，让按来源判定的遗物
+    /// （柔顺布料免疫爆炸、防弹背心远程减伤）能正确生效。
+    ///
+    /// 处理顺序（对应文档"伤害类型"）：
+    /// 1. 免疫伤害（buff 层） → 直接不受伤；
+    /// 2. 广播"受到攻击前"，给遗物一次先手拦截机会（反射神经自动闪避）；
+    /// 3. 遗物免疫来源 / 遗物固定减免（只对玩家持有的遗物生效）；
+    /// 4. 固定减免 + 倍率增减（buff 层，易伤 / 减伤），小数向上取整；
+    /// 5. 扣护盾：真实伤害无视护甲(护盾)，物理/Buff 伤害会被护盾格挡；
+    /// 6. 扣血。
+    /// </summary>
+    public virtual void TakeDamage(DamageContext ctx)
+    {
+        if (ctx == null || ctx.amount <= 0) return;
         if (isDead) return;   // 已死亡的单位不再结算任何伤害
 
         // 免疫伤害 → 直接返回（放在这里是为了连"受到伤害时"事件一起不触发）
         if (HasEffect(BuffEffectType.免疫伤害))
             return;
 
+        // 受到攻击前：遗物可以在这里拦截（监听方把 ctx.amount 改成 0 即可取消这次伤害）
+        EventManager.Trigger("UnitAboutToTakeDamage", this, ctx);
+        if (ctx.amount <= 0) return;
+
+        // 遗物减伤 / 遗物免疫来源（只有玩家单位持有遗物）
+        if (this is PlayerUnit relicOwner)
+        {
+            RelicDamageSource source = ResolveRelicDamageSource(ctx);
+
+            // 免疫某类伤害来源（柔顺布料：免疫爆炸）
+            if (RelicData.HasEffect(relicOwner.Relics, RelicEffectType.免疫伤害来源, source))
+                return;
+
+            // 固定减免（强韧布料：受到伤害减 1）
+            float relicReduce = RelicData.GetTotalValue(
+                relicOwner.Relics, RelicEffectType.受到伤害减免, source);
+            ctx.amount = Mathf.Max(0, ctx.amount - Mathf.RoundToInt(relicReduce));
+            if (ctx.amount <= 0) return;
+        }
+
         // 固定减免 + 倍率增减（易伤 / 减伤），统一走共享算法
-        amount = CalcIncomingDamage(amount);
+        int amount = CalcIncomingDamage(ctx.amount);
         if (amount <= 0) return;
 
         // 扣护盾（真实伤害无视护甲）
-        if (type != DamageType.真实 && shield > 0)
+        if (ctx.type != DamageType.真实 && shield > 0)
         {
             int absorbed = Mathf.Min(shield, amount);
             shield -= absorbed;
@@ -186,7 +228,21 @@ public abstract class Unit : MonoBehaviour
             TriggerBuffs(BuffTrigger.受到伤害时);
 
         EventManager.Trigger("UnitDamaged", this);
-        EventManager.Trigger("UnitDamagedBy", this, source);   // 带来源，遗物/反伤监听这个
+        EventManager.Trigger("UnitDamagedBy", this, ctx.attacker);   // 带来源，遗物/反伤监听这个
+    }
+
+    /// <summary>
+    /// 把伤害上下文映射成遗物能识别的"伤害来源"。
+    /// 没带来源信息（旧的 int 重载、环境伤害）统一按"全部"处理，
+    /// 这样只有填"全部"的遗物会生效，不会误判成近战 / 远程。
+    /// </summary>
+    public static RelicDamageSource ResolveRelicDamageSource(DamageContext ctx)
+    {
+        if (ctx == null) return RelicDamageSource.全部;
+        if (ctx.isExplosion) return RelicDamageSource.爆炸;
+        if (ctx.isMelee) return RelicDamageSource.近战;
+        if (ctx.isRanged) return RelicDamageSource.远程;
+        return RelicDamageSource.全部;
     }
 
     /// <summary>

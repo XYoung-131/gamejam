@@ -487,6 +487,8 @@ public class PlayerCardSystem : MonoBehaviour
             return false;
 
         // --- 结算卡牌效果（伤害/buff 都在 CardData.Resolve 里） ---
+        // 结算前广播一次：让遗物（玛塔的板牙：击杀归属统计）知道"现在用的是哪张牌"
+        EventManager.Trigger("PlayerCardAboutToResolve", card, player);
         card.Resolve(player, finalTarget);
         EventManager.Trigger("CardUsed", card, player, finalTarget);
 
@@ -534,6 +536,8 @@ public class PlayerCardSystem : MonoBehaviour
             return false;
 
         // 结算（障碍物专用重载：只吃伤害，不吃负面 buff）
+        // 结算前同样广播一次，保持和"打单位"路径一致
+        EventManager.Trigger("PlayerCardAboutToResolve", card, player);
         card.Resolve(player, obstacle);
         EventManager.Trigger("CardUsedOnObstacle", card, player, obstacle);
 
