@@ -17,3 +17,5 @@ MonoBehaviour:
   tags: 00000000
   specialAbility: ""
   buffs: []
+  icon: {fileID: 21300000, guid: eabfde77266c4d838099e8e2b8b0cad2, type: 3}
+  prefab: {fileID: 7458477937087658686, guid: 04565c42f73141c6882dfe624aa31d58, type: 3}

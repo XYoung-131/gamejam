@@ -13,19 +13,25 @@ MonoBehaviour:
   m_Name: "\u5288\u780D"
   m_EditorClassIdentifier: 
   cardName: "\u5288\u780D"
-  description: "\u9009\u62E91\u4E2A\u76F8\u90BB\u76EE\u6807\uFF0C\u9020\u62102\u70B9\u7269\u7406\u4F24\u5BB3"
+  description: "\u9009\u62E91\u4E2A\u76F8\u90BB\u76EE\u6807\uFF0C\u9020\u62101\u70B9\u7269\u7406\u4F24\u5BB3\uFF0C\u65BD\u52A01\u5C42\u6D41\u8840"
   thoughtCost: 20
   actionCost: 6
-  maxUses: 2
+  maxUses: 3
   minRange: 0
   maxRange: 1
-  damage: 2
+  damage: 1
+  damageType: 0
   targetTypes: 00000000
+  causesDisplacement: 0
+  displacementType: 0
+  displacementDistance: 1
+  displaceSelf: 0
   defenseEffectType: 1
   defenseValue: 0
   defenseTargetTypes: 01000000
   library: 0
   rarity: 0
   tags: 00000000
-  buffs: []
-  devNotes: 
+  buffs:
+  - {fileID: 11400000, guid: 3060afe6ee59a914b879ec8073ce8ba5, type: 2}
+  devNotes: ""

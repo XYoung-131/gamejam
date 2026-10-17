@@ -25,3 +25,5 @@ MonoBehaviour:
   skillGroup3:
   - {fileID: 11400000, guid: 0c3a80713a11948d9880463ad4f49e73, type: 2}
   - {fileID: 11400000, guid: 076a48becdf4886c1dfb0cb8d9294602, type: 2}
+  icon: {fileID: 21300000, guid: 460a242156a749e486c756d0405db0c0, type: 3}
+  prefab: {fileID: 5125114976211495250, guid: db4730597bfe4709bb6c9a6b93f59ea3, type: 3}

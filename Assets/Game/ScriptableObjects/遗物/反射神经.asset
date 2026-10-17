@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   relicName: "反射神经"
   description: "将受到近战攻击时，如果可能自动移动到相邻的安全格，每回合最多触发1次"
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: 168fd599bce346818975dedf43ac8408, type: 3}
   relicType: 2
   pool: 1
   effects:

@@ -264,9 +264,9 @@ MonoBehaviour:
   squareSprite: {fileID: 21300000, guid: 311bc798b5955d0459406dfe124f9b4f, type: 3}
   particleMaterial: {fileID: 2100000, guid: c67d2478dc62bad4abbdec8f881d9c94, type: 2}
   coreMaterial: {fileID: 2100000, guid: ac7a1af0bf602b547828b4b2e4f5bfa5, type: 2}
-    speed: 10
-    minDuration: 0.25
-    maxDuration: 0.6
+  speed: 10
+  minDuration: 0.25
+  maxDuration: 0.6
   apexRatio: 0.25
   playerProjectileColor: {r: 1, g: 1, b: 1, a: 1}
   enemyProjectileColor: {r: 1, g: 0.92, b: 0.85, a: 1}

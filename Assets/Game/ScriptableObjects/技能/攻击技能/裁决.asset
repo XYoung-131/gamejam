@@ -10,9 +10,9 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ed92a0a7f31f8a141bb6e09597cf5c87, type: 3}
-  m_Name: "\u795E\u5723\u6253\u51FB"
+  m_Name: "\u88C1\u51B3"
   m_EditorClassIdentifier: 
-  cardName: "\u795E\u5723\u6253\u51FB"
+  cardName: "\u88C1\u51B3"
   description: "\u9009\u62E91\u4E2A3\u683C\u5185\u76EE\u6807\uFF0C\u9020\u62102\u70B9\u7269\u7406\u4F24\u5BB3\uFF0C\u82E5\u653B\u51FB\u540E\u76EE\u6807\u8840\u91CF\u4E0D\u9AD8\u4E8E3\uFF0C\u76F4\u63A5\u51FB\u6740\u76EE\u6807"
   thoughtCost: 20
   actionCost: 10
@@ -20,7 +20,12 @@ MonoBehaviour:
   minRange: 0
   maxRange: 3
   damage: 2
+  damageType: 0
   targetTypes: 00000000
+  causesDisplacement: 0
+  displacementType: 0
+  displacementDistance: 1
+  displaceSelf: 0
   defenseEffectType: 1
   defenseValue: 0
   defenseTargetTypes: 01000000
@@ -28,4 +33,4 @@ MonoBehaviour:
   rarity: 3
   tags: 01000000
   buffs: []
-  devNotes: 
+  devNotes: "\u653B\u51FB\u540E\u76EE\u6807\u8840\u91CF \u22643 \u76F4\u63A5\u51FB\u6740\u2014\u2014\u65A9\u6740\u5224\u5B9A\u672A\u5B9E\u73B0"

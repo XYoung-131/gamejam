@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   potionName: "提神饮料"
   description: "回复20点思绪"
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: 3c908f365ed145c79f981150400bbd30, type: 3}
   rarity: 0
   maxUsesPerBattle: 0
   effects:

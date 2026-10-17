@@ -18,7 +18,7 @@ MonoBehaviour:
   actionCost: 15
   maxUses: 3
   minRange: 0
-  maxRange: 1
+  maxRange: 3
   damage: 3
   damageType: 0
   targetTypes: 00000000
@@ -33,4 +33,4 @@ MonoBehaviour:
   rarity: 2
   tags: 0000000006000000
   buffs: []
-  devNotes: "\u26A0 \u6247\u5F62\u8303\u56F4\u4E0E\u4F24\u5BB3\u9012\u51CF\u5F85\u8865\uFF08\u8303\u56F4\u56FE\u89C1\u7B56\u5212\u8868\uFF09"
+  devNotes: "\u6247\u5F62\u8303\u56F4\uFF1A\u521D\u59CB 3 \u70B9\uFF0C\u6BCF\u6269\u6563 1 \u683C\u4F24\u5BB3 -1\uFF08\u6247\u5F62\u5BB9\u5668\u672A\u5B9E\u73B0\uFF09"

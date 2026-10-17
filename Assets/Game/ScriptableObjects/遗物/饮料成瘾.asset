@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   relicName: "饮料成瘾"
   description: "劣质混合饮料额外回复2点耐力和2点思绪，并免疫劣质混合饮料的负面效果"
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: 7699537af3c3423e820d1beaf1370ff0, type: 3}
   relicType: 0
   pool: 0
   effects:

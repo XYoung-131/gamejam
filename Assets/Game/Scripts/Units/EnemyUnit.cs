@@ -23,6 +23,10 @@ public class EnemyUnit : Unit
     [Tooltip("每回合预告并释放的技能数量（题目举例的'上回合用了 5 个技能'就把这里设成 5）")]
     public int skillsPerTurn = 1;
 
+    [Header("移动")]
+    [Tooltip("射程够不到玩家时，这一回合最多朝玩家走几格")]
+    public int maxStepsPerTurn = 3;
+
     // 当前使用哪个技能组（1/2/3，对应 UnitData 上配置的三组技能；后续可做阶段切换）
     protected int currentSkillGroup = 1;
     protected bool hasActedThisTurn = false;
@@ -205,6 +209,19 @@ public class EnemyUnit : Unit
             // 走 CardData 的统一判定，位移类技能会自动算上敏捷/残废
             if (target != this)
             {
+                // 够不到就先朝玩家走（最多 maxStepsPerTurn 格），走到能打为止。
+                // 不接这一步的话，只会近战的怪会永远站在原地——第 1 关神庙鼠
+                // 只有射程 1 的"啃咬"，开局距离 2，整局都不会动。
+                if (!card.IsInEffectiveRange(this, GetCoord(), target.GetCoord()))
+                {
+                    yield return ApproachTarget(target, card);
+
+                    // 走路途中可能被反伤/地形打死，或者战斗已经结束
+                    if (GetCurrentHealth() <= 0) yield break;
+                    if (GameManager.Instance != null && !GameManager.Instance.IsInBattle) yield break;
+                }
+
+                // 走完还是够不到（被柱子挡住 / 走满步数还不够）→ 本回合跳过这个技能
                 if (!card.IsInEffectiveRange(this, GetCoord(), target.GetCoord()))
                 {
                     int distance = GetCoord().Distance(target.GetCoord());
@@ -228,6 +245,39 @@ public class EnemyUnit : Unit
 
         // 本回合预告已全部执行完，清空预告队列
         plannedSkills.Clear();
+    }
+
+    // ============================================================
+    //                       移动靠近（行动中）
+    // ============================================================
+
+    /// <summary>
+    /// 朝目标走，直到这个技能的射程够得着为止（最多 maxStepsPerTurn 格）。
+    ///
+    /// 这是"敌人也会走过来打你"的关键：ExecutePlannedSkills 原来只放技能不移动，
+    /// 只会近战的怪在距离 > 1 时整局站着不动。寻路复用 HexPathfinding.FindNextStep
+    /// （它已经把障碍物、不可行走格、占位单位都算进去了），每走一格用 MoveTo，
+    /// 这样格子占用、"移动时" buff、UnitMoved 事件都和正常移动一致。
+    /// </summary>
+    protected virtual IEnumerator ApproachTarget(Unit target, CardData card)
+    {
+        if (target == null || target.IsDead) yield break;
+        if (HexGrid.Instance == null) yield break;
+
+        for (int step = 0; step < maxStepsPerTurn; step++)
+        {
+            // 已经在射程里就不用再走了
+            if (card.IsInEffectiveRange(this, GetCoord(), target.GetCoord())) yield break;
+
+            HexCoord next = HexPathfinding.FindNextStep(GetCoord(), target.GetCoord());
+            if (next == GetCoord()) yield break;   // 没有可走的下一步（被围住 / 已相邻）
+
+            HexCell nextCell = HexGrid.Instance.GetCell(next);
+            if (nextCell == null || !nextCell.CanEnter(this)) yield break;
+
+            MoveTo(next);
+            yield return new WaitForSeconds(stepDelay);
+        }
     }
 
     // ============================================================

@@ -99,6 +99,8 @@ ExportedObj/
 # lark-cli base +record-list 导出到项目根，用完即弃，不提交
 tbl*.ndjson
 tbl*.manifest.json
+_art.ndjson
+_art.manifest.json
 
 # ---------- 操作系统 ----------
 .DS_Store

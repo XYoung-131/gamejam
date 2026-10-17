@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   relicName: "柔顺布料"
   description: "免疫爆炸效果，受到的非物理伤害减1"
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: ab0f8d8821e14d238b729fc5a55d465d, type: 3}
   relicType: 2
   pool: 1
   effects:

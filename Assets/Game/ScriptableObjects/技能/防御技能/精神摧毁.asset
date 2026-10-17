@@ -20,12 +20,21 @@ MonoBehaviour:
   minRange: 0
   maxRange: 999
   damage: 0
+  damageType: 0
   targetTypes: 00000000
+  causesDisplacement: 0
+  displacementType: 0
+  displacementDistance: 1
+  displaceSelf: 0
   defenseEffectType: 1
   defenseValue: 0
-  defenseTargetTypes: 01000000
+  defenseTargetTypes: 00000000
   library: 1
   rarity: 3
   tags: 04000000
-  buffs: []
-  devNotes: 
+  buffs:
+  - {fileID: 11400000, guid: 9734a5bd57087b442ade7d762ed77a45, type: 2}
+  - {fileID: 11400000, guid: 9734a5bd57087b442ade7d762ed77a45, type: 2}
+  - {fileID: 11400000, guid: b95e1d95546388d4c9db0b44aed7479b, type: 2}
+  - {fileID: 11400000, guid: b95e1d95546388d4c9db0b44aed7479b, type: 2}
+  devNotes: "\u5168\u573A\u81F3\u591A 3 \u4E2A\u76EE\u6807\uFF0C\u6301\u7EED 3 \u56DE\u5408\uFF1B\u53EA\u9009 1 \u4E2A\u76EE\u6807\u65F6\u6301\u7EED\u65F6\u95F4\u7FFB\u500D\u2014\u2014\u591A\u76EE\u6807\u4E0E\u52A8\u6001\u6301\u7EED\u65F6\u95F4\u672A\u5B9E\u73B0"

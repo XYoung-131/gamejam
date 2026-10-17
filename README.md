@@ -380,3 +380,96 @@
 > 烟雾地板：（初始状态随机）每隔 1 回合喷出烟雾，位于烟雾中的单位无法被选为远程攻击的目标
 > 吸血地板：回合结束，对上面的所有单位造成 1 点真实伤害
 
+
+---
+
+## 小羊：技能卡按策划表重建 + 美术资源接入 + demo 输入层
+
+### 一、脚本改动（Assets/Game/Scripts/）
+
+| 文件 | 作用 |
+| --- | --- |
+| `Core/HexCell.cs` | 格子通行判定改为 `CanEnter(unit)` / `CanStopOn()` / `IsBlockedByObstacle()` / `GetNeighborCells()`，把障碍物纳入判定，不再只判"有没有单位" |
+| `Core/HexPathfinding.cs` | 整文件重写：A* 的 hCost 改为可采纳（原写法会算出次优路径）、节点变优后重新入队、路径绕开障碍物；新增 `FindPathToRange`（敌人"走到能打到"）、`GetPathCost`、`TryFindPath`；`FindNextStep` 处理终点被占的退化情况；`GetReachableCells` 不再返回 null |
+| `Core/HexGrid.cs` | `IsLineBlocked` 改用 `Obstacle.BlocksSight()`（"高大"标签挡视线）；新增 `GetNeighborCells` |
+| `Units/Unit.cs` | 护盾清空的权威时机统一到"回合开始"（原先回合开始与回合结束各清一次）；`TakeDamage` 增加伤害类型与来源参数并广播 `UnitDamagedBy`；持续伤害改走 `CalcIncomingDamage`，与普通伤害共用同一套减伤/易伤；新增 `GetHealthPercent` / `IsFullHealth` / `HasShield`；buff 层数衰减接上 `BuffStackDecay` |
+| `Units/UnitData.cs` | 新增 `attack` 字段（普通攻击力，原先 `GetAttack` 读的是卡牌伤害） |
+| `Units/PlayerUnit.cs` | 移动耐力消耗改用 `HexPathfinding.GetPathCost(path)`，与实际走的格数一致 |
+| `Units/EnemyUnit.cs` | **新增 `ApproachTarget`**：技能射程不够时先走到能打到的位置（每回合最多 3 步），避免"射程 1 的怪永远站桩" |
+| `Debug/BattleDebugDriver.cs` | **新增**。没有正式 UI 时的操作层（详见第三节）。正式 UI 做好后可直接删除 |
+
+### 二、技能卡资产（Assets/Game/ScriptableObjects/技能/）
+
+按飞书「攻击技能」「防御技能」两张表重建全部 **71 张卡**（42 攻击 + 29 防御），字段与 `CardData.cs` 一一对应
+（`cardName / description / thoughtCost / actionCost / maxUses / minRange / maxRange / damage / damageType /
+targetTypes / causesDisplacement / displacementType / displacementDistance / displaceSelf / defenseEffectType /
+defenseValue / defenseTargetTypes / library / rarity / tags / buffs / devNotes`）。
+
+- **GUID 全部保留**，场景里的牌库引用不会断；
+- 两张卡改名但 GUID 不变：`回旋劈击 → 回旋斩击`、`神圣打击 → 裁决`；
+- 多段效果的层数用"在 `buffs` 里重复引用同一 `BuffData`"表达；
+- 表里 `次数` / `爆炸` 两个词条 `CardTag` 枚举装不下、`临时无力` / `临时残废` 没有对应 BuffData 资产，
+  以及多段/AOE/召唤/换位/斩杀等尚未实现的条件逻辑，全部写进各卡的 `devNotes`，方便后续补。
+
+### 三、demo 输入层（Scripts/Debug/BattleDebugDriver.cs）
+
+`RuntimeInitializeOnLoadMethod(AfterSceneLoad)` 自举，检测到场景里有 `LevelManager` 才创建，**不改 `Battle.unity`**。
+
+| 操作 | 效果 |
+| --- | --- |
+| 左键点格子 | 移动（自动寻路，按路径扣耐力） |
+| Q/W/E/R/T 选槽位 → 左键点敌人/自己/障碍物 | 出牌 |
+| 没选槽位时点敌人 / 按 3 | 普通攻击（按 3 自动打最近的敌人） |
+| 1 / 2 | 抽攻击牌 / 抽防御牌；出现 3 张待选后 1/2/3 灌注、0 放弃 |
+| 空格 | 结束回合（走完整 buff 结算 → 敌方行动） |
+| G / F1 / F2 / R | 补满资源 / 操作说明 / 开关面板 / 战后重开 |
+
+面板用 IMGUI 叠加，不依赖 Canvas 与 TextMeshPro：回合阶段、血/护盾/耐力/思绪、5 个槽位、
+每个敌人的血量与本回合预告、按处境给的操作提示、胜负结算。
+
+### 四、美术资源（Assets/Game/Art/）
+
+按飞书「美术任务」表的「成品」字段下载并归类 **96 张**（表内 100 条记录，7 条成品为空）：
+
+| 目录 | 内容 |
+| --- | --- |
+| `Characters/主角` | 主角立牌 + 缩放版 |
+| `Characters/敌人` | 25 只敌对角色的立牌 |
+| `Characters/立绘` | 主角 / 克勒妮玛塔 / 林德沃姆 立绘（jpg） |
+| `Obstacles` | 柱子、尖刺柱子、炸药桶、大炸药桶、一桶鼠鼠、石堆、折翼 |
+| `Potions` | 11 瓶饮料，与 `PotionData` 资产同名 |
+| `Relics` | 22 件思维碎片，与 `RelicData` 资产同名 |
+| `UI` | 血量/耐力/思绪槽、空技能卡面、技能插槽、抽牌按键、位移/攻击选取格、开始界面元件 |
+| `Backgrounds` | 两张战斗背景 |
+
+导入设置统一为 Sprite / Single，**角色与障碍物 `spritePixelsToUnits = 1400`**（原图 2340px 画布 → 1.67 世界单位，
+恰好填满 1.73 高的格子，且保留美术彼此的比例），其余（UI/药水/遗物/背景）保持 180，`maxTextureSize` 提到 4096。
+
+4 张 RGB 白底图（旱魁、滑板鞋、精力充沛、肌肉强化）做了**边界泛洪挖白**：只清除与图像边缘连通的近白像素，
+角色内部的白色不受影响，否则进游戏会是一块白色矩形。
+
+### 五、美术接线（资产与预制体）
+
+| 对象 | 结果 |
+| --- | --- |
+| `UnitData.icon` | 24 / 28（仲裁人、别西卜、大天使、路西法表内无成品） |
+| `ObstacleData.icon` + `prefab` | 9 / 10（祝福器无成品） |
+| `PotionData.icon` | 11 / 11 |
+| `RelicData.icon` | 22 / 22 |
+| `玩家.asset` | icon + `Player_Template.prefab` 换精灵，用 `主角.png` |
+
+**新增 26 个预制体**（25 个单位 + 2 个障碍物，减掉已有的）：原先只有 7 个怪 + 1 个玩家模板，
+其余单位没有 prefab，`LevelManager` 会直接跳过、图配了也显示不出来。按 `Enemy_神庙鼠.prefab` 克隆，
+只改 `m_Name` / `m_Sprite` / `data` 三行。现在 28 个单位、9 个障碍物都能被关卡摆出来。
+
+### 六、场景与其他
+
+- `Scenes/Battle.unity` —— 修复 `ProjectileSpawner` 的 `speed / minDuration / maxDuration` 缩进错误
+  （原文件这三个字段比父级多一级，是非法 YAML）；
+- `.gitignore` —— 补上美术表导出的临时文件 `_art.ndjson` / `_art.manifest.json`。
+
+### 七、还没接的（下一版）
+
+- `CardData` 没有 `icon` 字段，`BuffData.icon` 也没有图 → 71 张技能卡与 23 个 buff 目前没有图标；
+- 22 件遗物、11 瓶药水只有数据与图，`RelicController` / `LootSystem` 还没挂进场景，运行时拿不到；
+- `Battle.unity` 的牌库还是 37 张旧 GUID 列表，34 张重建后的卡没进池。

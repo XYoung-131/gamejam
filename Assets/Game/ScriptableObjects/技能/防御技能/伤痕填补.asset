@@ -18,10 +18,10 @@ MonoBehaviour:
   actionCost: 12
   maxUses: 2
   minRange: 0
-  maxRange: 1
+  maxRange: 0
   damage: 0
   damageType: 0
-  targetTypes: 
+  targetTypes: 00000000
   causesDisplacement: 0
   displacementType: 0
   displacementDistance: 1
@@ -33,4 +33,4 @@ MonoBehaviour:
   rarity: 2
   tags: 03000000
   buffs: []
-  devNotes: "\u26A0 defenseValue \u662F\u5B9A\u503C\u5B57\u6BB5\uFF0C\u586B\u4E0D\u4E86\u300C\u5DF2\u635F\u5931\u751F\u547D\u503C\u300D\uFF0C\u9700\u8981\u8FD0\u884C\u65F6\u6309\u516C\u5F0F\u7B97"
+  devNotes: "\u62A4\u76FE\u503C = \u5DF2\u635F\u5931\u751F\u547D\u503C\u2014\u2014\u9700\u8981\u5728\u7ED3\u7B97\u65F6\u52A8\u6001\u53D6\u503C\uFF0C\u9759\u6001\u5B57\u6BB5\u586B 0"

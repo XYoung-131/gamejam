@@ -31,7 +31,9 @@ MonoBehaviour:
   defenseTargetTypes: 01000000
   library: 0
   rarity: 3
-  tags: 00000000
+  tags: 0000000008000000
   buffs:
   - {fileID: 11400000, guid: 3060afe6ee59a914b879ec8073ce8ba5, type: 2}
-  devNotes: "\u26A0\u300C\u5543\u54AC\u7C7B\u300D\u8BCD\u6761\u7F3A\uFF1Bbuffs \u53EA\u627F\u8F7D\u5230\u300C\u6302\u54EA\u51E0\u4E2A buff\u300D\uFF0C\u5C42\u6570(3)\u5728\u5361\u724C\u4E0A\u65E0\u5904\u5B58"
+  - {fileID: 11400000, guid: 3060afe6ee59a914b879ec8073ce8ba5, type: 2}
+  - {fileID: 11400000, guid: 3060afe6ee59a914b879ec8073ce8ba5, type: 2}
+  devNotes: "\u51FB\u6740\u540E\u83B7\u5F97 1 \u5C42\u529B\u91CF\uFF08\u6700\u591A 2 \u5C42\uFF09"
