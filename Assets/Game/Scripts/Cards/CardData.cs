@@ -78,6 +78,46 @@ public enum DefenseEffectType
     护盾    // 获得护盾（调用 Unit.AddShield）
 }
 
+public enum DefenseTargetRule
+{
+    自身 = 0,
+    单位 = 1,
+    地块 = 2,
+    多个单位 = 3
+}
+
+/// <summary>防御技能的特殊结算编号；已写入资产后不得重排。</summary>
+public enum DefenseEffectRule
+{
+    普通 = 0,
+    寻觅 = 1,
+    指定治疗 = 2,
+    神圣护盾 = 3,
+    荧光汇聚 = 4,
+    抱抱喷射 = 5,
+    换位 = 6,
+    坚守 = 7,
+    延迟亲密 = 8,
+    失血护盾 = 9,
+    肌肉突变 = 10,
+    自动屏障 = 11,
+    精神摧毁 = 12,
+    步行 = 13,
+    跳跃 = 14,
+    临时残废 = 15,
+    投掷织毯 = 16,
+    群体疗愈 = 17,
+    克勒妮的呼唤 = 18,
+    风飑 = 19,
+    岚匿 = 20,
+    飔垣 = 21,
+    错乱传送 = 22,
+    精神压制 = 23,
+    毒遁 = 24,
+    炎障 = 25,
+    神圣祝福 = 26
+}
+
 /// <summary>
 /// 让 Unity 编辑器的右键菜单出现 "Game/Card Data" 选项，用来新建卡牌资产
 /// </summary>
@@ -129,6 +169,15 @@ public class CardData : ScriptableObject
     public int defenseValue = 0;
     [Tooltip("防御卡可以选择哪些目标类型，可多选")]
     public List<DefenseTargetType> defenseTargetTypes = new List<DefenseTargetType> { DefenseTargetType.自身 };
+    [Tooltip("玩家先点击自己；如需第二步，再按此规则选择目标")]
+    public DefenseTargetRule defenseTargetRule = DefenseTargetRule.自身;
+    public DefenseEffectRule defenseEffectRule = DefenseEffectRule.普通;
+    public int maxDefenseTargets = 1;
+    [Tooltip("开局装入槽位，且不参与普通抽牌")]
+    public bool initialOnly;
+    public UnitData summonUnit;
+    public UnitData alternateSummonUnit;
+    public TerrainData generatedTerrain;
 
     [Header("分类")]
     [Tooltip("属于攻击牌库还是防御牌库（灌注抽卡用）")]
