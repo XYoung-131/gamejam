@@ -22,18 +22,19 @@ using UnityEngine.SceneManagement;
 //    用 [RuntimeInitializeOnLoadMethod] 自举，场景里存在 LevelManager
 //    时才创建这个物体——不改 Battle.unity，不影响队友的编辑器操作。
 //
-//  操作（游戏里按 F1 随时查看）：
+//  操作说明弹窗已移除：状态栏等 UI 由 BattleHUD 承载：
 //    左键点空格子   → 移动（自动寻路，按路径扣耐力）
 //    左键点敌人     → 选中槽位则对该敌人出牌，没选中则普通攻击（需相邻）
 //    左键点自己     → 对自身使用当前槽位的防御/增益牌
 //    左键点障碍物   → 对障碍物使用当前槽位的攻击牌
 //    1 / 2          → 从攻击 / 防御牌库抽卡（出现 3 张待选）
 //    1 / 2 / 3      → 选牌阶段：灌注第 1/2/3 张（0 或退格放弃）
+//                     实际可按键数跟随 PlayerCardSystem.offerCount（默认 6，即 6 选 3）
 //    Q W E R T      → 选中第 1~5 号槽位（再按一次取消）
 //    空格           → 结束回合
 //    3              → 普通攻击最近的敌人
 //    G              → 调试：补满耐力/思绪
-//    F1 / F2        → 开关帮助 / 开关整个面板
+//    F2             → 开关整个调试面板
 //    R              → 战斗结束后重开本场景
 //
 //  挂载位置：不需要手动挂，运行时自动创建（名字 "~BattleDebugDriver"）。
@@ -49,8 +50,6 @@ public class BattleDebugDriver : MonoBehaviour
     [Tooltip("关闭后只剩键鼠操作，不画任何界面（游戏中按 F2 也能切）")]
     public bool showOverlay = true;
 
-    [Tooltip("关闭后不显示左下角的操作说明（游戏中按 F1 也能切）")]
-    public bool showControlHelp = true;
 
     // ============================================================
     //                       运行时引用
@@ -69,16 +68,24 @@ public class BattleDebugDriver : MonoBehaviour
         KeyCode.Q, KeyCode.W, KeyCode.E, KeyCode.R, KeyCode.T
     };
 
+    // 选牌阶段的数字键。PlayerCardSystem.offerCount 默认是 6（规则里的"6 选 3"），
+    // 所以这里必须准备到 6 个，只写 1/2/3 会让后 3 张牌看得到却按不动。
+    private static readonly KeyCode[] ChooseKeys =
+    {
+        KeyCode.Alpha1, KeyCode.Alpha2, KeyCode.Alpha3,
+        KeyCode.Alpha4, KeyCode.Alpha5, KeyCode.Alpha6,
+        KeyCode.Alpha7, KeyCode.Alpha8, KeyCode.Alpha9
+    };
+
     // ============================================================
     //                       交互状态
     // ============================================================
 
     private int selectedSlot = -1;     // 当前选中的槽位，-1 = 没选（此时点敌人走普通攻击）
-    private string tip = "";           // 底部提示文字
-    private float tipUntil;            // 提示显示到什么时候（Time.unscaledTime）
     private float highlightAge;        // 高亮还有多久刷新
     private float refRefreshTimer;     // 引用重查的节流计时
     private bool highlightDirty = true;
+    private bool paintedHighlight = false;   // 自己是否画过射程高亮（没画过就别清别人的）
 
     // 缓存下来的敌人列表，OnGUI 每帧都要用，避免每帧两次 FindObjectsOfType
     private readonly List<EnemyUnit> enemyBuffer = new List<EnemyUnit>();
@@ -116,7 +123,7 @@ public class BattleDebugDriver : MonoBehaviour
     private void Start()
     {
         RefreshRefs();
-        Say("点格子移动 · 点敌人出牌 · 1抽攻击 2抽防御 · QWERT选槽位 · 空格结束回合 · F1帮助");
+        Say("抽卡请点左下角\"技能\"按钮 · QWERT选槽位 · 空格结束回合");
     }
 
     private void OnDisable()
@@ -156,12 +163,11 @@ public class BattleDebugDriver : MonoBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(KeyCode.F1)) showControlHelp = !showControlHelp;
         if (Input.GetKeyDown(KeyCode.F2)) showOverlay = !showOverlay;
 
         if (player == null || cardSystem == null) return;
 
-        // ---------- 正在选牌：只接受 1/2/3 和 0 ----------
+        // ---------- 正在选牌：只接受 1~N 和 0 ----------
         if (cardSystem.IsChoosing)
         {
             HandleChooseKeys();
@@ -170,19 +176,8 @@ public class BattleDebugDriver : MonoBehaviour
         }
 
         // ---------- 常规操作 ----------
-        if (Input.GetKeyDown(KeyCode.Alpha1))
-        {
-            bool ok = cardSystem.BeginDraw(CardPool.攻击);
-            Say(ok ? "抽攻击牌：用 1 / 2 / 3 选一张，0 放弃" : "抽攻击牌失败（阶段不对 / 槽位满 / 思绪不足，详见 Console）");
-            MarkDirty();
-        }
-        else if (Input.GetKeyDown(KeyCode.Alpha2))
-        {
-            bool ok = cardSystem.BeginDraw(CardPool.防御);
-            Say(ok ? "抽防御牌：用 1 / 2 / 3 选一张，0 放弃" : "抽防御牌失败（阶段不对 / 槽位满 / 思绪不足，详见 Console）");
-            MarkDirty();
-        }
-        else if (Input.GetKeyDown(KeyCode.Alpha3))
+        // 抽卡（原 1/2 键）已按需求移除：抽牌统一走 BattleHUD 的"技能"按钮 → 牌堆选择
+        if (Input.GetKeyDown(KeyCode.Alpha3))
         {
             DoBasicAttackNearest();
         }
@@ -208,21 +203,14 @@ public class BattleDebugDriver : MonoBehaviour
         UpdateHighlights();
     }
 
-    /// <summary>选牌阶段的按键：1/2/3 灌注，0 或退格放弃。</summary>
+    /// <summary>选牌阶段的按键：1~N 灌注第 N 张，0 或退格放弃。</summary>
     private void HandleChooseKeys()
     {
         int count = cardSystem.CurrentChoices.Count;
 
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < ChooseKeys.Length && i < count; i++)
         {
-            KeyCode key = i == 0 ? KeyCode.Alpha1 : (i == 1 ? KeyCode.Alpha2 : KeyCode.Alpha3);
-            if (!Input.GetKeyDown(key)) continue;
-
-            if (i >= count)
-            {
-                Say("没有第 " + (i + 1) + " 张待选牌");
-                return;
-            }
+            if (!Input.GetKeyDown(ChooseKeys[i])) continue;
 
             // 先记下卡名：ConfirmInfuse 成功后 currentChoices 会被清空
             CardData picked = cardSystem.CurrentChoices[i];
@@ -242,9 +230,19 @@ public class BattleDebugDriver : MonoBehaviour
         }
     }
 
-    /// <summary>鼠标左键：点格子 → 移动 / 出牌 / 打障碍物。</summary>
+    /// <summary>
+    /// 鼠标左键：点格子 → 出牌 / 打障碍物。
+    /// 需求规则：常态（未选任何技能）禁止点击移动和普通攻击——行动只能通过
+    /// 选中技能后进行（键盘选槽位，或 BattleHUD 的攻击/位移按钮）。
+    /// </summary>
     private void HandleMouse()
     {
+        // HUD 瞄准模式时让位：点击由 HUD 处理，避免双重结算
+        if (BattleHUD.Instance != null && BattleHUD.Instance.IsAiming) return;
+
+        // 常态不响应世界点击（不能再点格子直接走/平A）
+        if (selectedSlot < 0) return;
+
         if (!InPlayerAction) return;
         if (cam == null) cam = Camera.main;
         if (cam == null || HexGrid.Instance == null) return;
@@ -447,10 +445,10 @@ public class BattleDebugDriver : MonoBehaviour
         return card != null ? card.cardName : "空";
     }
 
+    /// <summary>操作反馈：屏幕底部提示条已移除，统一写 Console</summary>
     private void Say(string text)
     {
-        tip = text;
-        tipUntil = Time.unscaledTime + 4f;
+        Debug.Log("[Battle] " + text);
     }
 
     private void MarkDirty() => highlightDirty = true;
@@ -460,7 +458,9 @@ public class BattleDebugDriver : MonoBehaviour
     // ============================================================
 
     /// <summary>
-    /// 选中槽位时高亮该牌的射程（粉红），没选槽位时高亮可移动范围（绿色）。
+    /// 选中槽位时高亮该牌的射程（粉红）；平时不高亮任何格子，也不清除别人的高亮。
+    /// 注意：BattleHUD 的瞄准高亮是常亮的，这里没画过高亮就绝不能调 ClearAllHighlights，
+    /// 否则会把 HUD 的常亮圈每 0.35 秒抹一次（表现为高亮只闪一瞬）。
     /// 每 0.35 秒最多重算一次，避免每帧跑 BFS。
     /// </summary>
     private void UpdateHighlights()
@@ -473,30 +473,32 @@ public class BattleDebugDriver : MonoBehaviour
         highlightDirty = false;
         highlightAge = 0.35f;
 
-        HexGrid.Instance.ClearAllHighlights();
+        bool hasSlot = player != null && !player.IsDead && InPlayerAction
+                       && selectedSlot >= 0 && selectedSlot < cardSystem.Slots.Count
+                       && !cardSystem.Slots[selectedSlot].IsEmpty;
 
-        if (player == null || player.IsDead || !InPlayerAction) return;
-
-        if (selectedSlot >= 0 && selectedSlot < cardSystem.Slots.Count && !cardSystem.Slots[selectedSlot].IsEmpty)
+        if (!hasSlot)
         {
-            CardData card = cardSystem.Slots[selectedSlot].card;
-            int maxRange = Mathf.Clamp(card.GetEffectiveMaxRange(player), 0, 12);
-            HexCoord from = player.GetCoord();
-
-            foreach (HexCell cell in HexGrid.Instance.GetCellsInRange(from, maxRange))
+            // 自己没在画高亮：什么都不动（HUD 的高亮归 HUD 管）
+            if (paintedHighlight)
             {
-                if (cell.coord.Distance(from) < card.minRange) continue;
-                cell.SetAttackRangeHighlight(true);
+                HexGrid.Instance.ClearAllHighlights();
+                paintedHighlight = false;
             }
             return;
         }
 
-        // 没选牌：把能走到的格子涂绿（按当前耐力算，走不动的不涂）
-        foreach (HexCoord coord in HexPathfinding.GetReachableCells(player.GetCoord(), player.CurrentStamina))
+        HexGrid.Instance.ClearAllHighlights();
+        paintedHighlight = true;
+
+        CardData card = cardSystem.Slots[selectedSlot].card;
+        int maxRange = Mathf.Clamp(card.GetEffectiveMaxRange(player), 0, 12);
+        HexCoord from = player.GetCoord();
+
+        foreach (HexCell cell in HexGrid.Instance.GetCellsInRange(from, maxRange))
         {
-            HexCell cell = HexGrid.Instance.GetCell(coord);
-            if (cell != null && cell.CanStopOn(player))
-                cell.SetMoveRangeHighlight(true);
+            if (cell.coord.Distance(from) < card.minRange) continue;
+            cell.SetAttackRangeHighlight(true);
         }
     }
 
@@ -516,51 +518,16 @@ public class BattleDebugDriver : MonoBehaviour
             return;
         }
 
-        DrawPlayerPanel();
         DrawSlotPanel();
         DrawEnemyPanel();
-        DrawTipBar();
+        // 提示条已按需求移除：抽卡等引导提示改由 BattleHUD 的技能按钮流程承载
 
-        if (cardSystem != null && cardSystem.IsChoosing)
+        // BattleHUD 在场时选牌界面由 HUD 负责，调试面板不再重复画一份（否则两套弹窗叠在一起）
+        if (cardSystem != null && cardSystem.IsChoosing && BattleHUD.Instance == null)
             DrawChoosePanel();
-
-        if (showControlHelp)
-            DrawHelpPanel();
 
         if (IsBattleOver)
             DrawResultPanel();
-    }
-
-    private void DrawPlayerPanel()
-    {
-        Rect panel = new Rect(12f, 12f, 350f, 152f);
-        DrawPanel(panel);
-
-        GUI.Label(new Rect(panel.x + 10f, panel.y + 8f, 330f, 22f),
-            "第 " + (game != null ? game.turnCount : 0) + " 回合 · " +
-            (turnManager != null ? turnManager.Phase.ToString() : "无 TurnManager"), titleStyle);
-
-        DrawBar(new Rect(panel.x + 10f, panel.y + 36f, 330f, 18f),
-            player.GetMaxHealth() > 0 ? (float)player.GetCurrentHealth() / player.GetMaxHealth() : 0f,
-            new Color(0.85f, 0.25f, 0.25f, 0.95f),
-            "生命 " + player.GetCurrentHealth() + " / " + player.GetMaxHealth() +
-            (player.GetShield() > 0 ? "  护盾 " + player.GetShield() : ""));
-
-        DrawBar(new Rect(panel.x + 10f, panel.y + 58f, 330f, 16f),
-            player.maxStamina > 0 ? (float)player.CurrentStamina / player.maxStamina : 0f,
-            new Color(0.35f, 0.6f, 0.95f, 0.95f),
-            "耐力 " + player.CurrentStamina + " / " + player.maxStamina);
-
-        DrawBar(new Rect(panel.x + 10f, panel.y + 78f, 330f, 16f),
-            player.maxThought > 0 ? (float)player.CurrentThought / player.maxThought : 0f,
-            new Color(0.6f, 0.45f, 0.95f, 0.95f),
-            "思绪 " + player.CurrentThought + " / " + player.maxThought);
-
-        string pos = "位置 (" + player.GetCoord().q + "," + player.GetCoord().r + ")";
-        if (player.IsDead) pos += "  <color=#ff6666>已阵亡</color>";
-        GUI.Label(new Rect(panel.x + 10f, panel.y + 100f, 330f, 20f), pos, smallStyle);
-        GUI.Label(new Rect(panel.x + 10f, panel.y + 120f, 330f, 20f),
-            "选中的槽位：" + (selectedSlot >= 0 ? (selectedSlot + 1) + " 【" + SlotName(selectedSlot) + "】" : "无"), smallStyle);
     }
 
     private void DrawSlotPanel()
@@ -606,7 +573,9 @@ public class BattleDebugDriver : MonoBehaviour
         CollectEnemies();
 
         float h = 40f + enemyBuffer.Count * 46f;
-        Rect panel = new Rect(Screen.width - 330f - 12f, 12f, 330f, Mathf.Max(h, 60f));
+        float panelH = Mathf.Max(h, 60f);
+        // 右下角"下一回合"按钮（UGUI，底部约 90px 高）的上方
+        Rect panel = new Rect(Screen.width - 330f - 12f, Screen.height - panelH - 100f, 330f, panelH);
         DrawPanel(panel);
 
         GUI.Label(new Rect(panel.x + 10f, panel.y + 6f, 300f, 20f),
@@ -649,64 +618,8 @@ public class BattleDebugDriver : MonoBehaviour
         }
     }
 
-    private void DrawTipBar()
-    {
-        float width = Mathf.Min(Screen.width - 380f, 760f);
-        if (width < 300f) width = Screen.width - 24f;
 
-        Rect panel = new Rect((Screen.width - width) * 0.5f, Screen.height - 60f, width, 46f);
-        DrawPanel(panel);
-
-        // 刚操作过的提示优先；没有新提示时按当前处境给一句"该做什么"
-        string text = Time.unscaledTime < tipUntil && !string.IsNullOrEmpty(tip)
-            ? tip
-            : DefaultHint();
-        GUI.Label(new Rect(panel.x + 10f, panel.y + 6f, panel.width - 20f, 36f), text, centerStyle);
-    }
-
-    /// <summary>
-    /// 没在显示操作反馈时，按当前阶段/资源状态给一句引导。
-    /// 演示时最容易卡住的是"槽位全空不知道要抽牌"，所以这一条优先级最高。
-    /// </summary>
-    private string DefaultHint()
-    {
-        if (cardSystem != null && cardSystem.IsChoosing)
-            return "按 1 / 2 / 3 选一张灌注到空槽位，0 放弃";
-
-        if (turnManager != null)
-        {
-            switch (turnManager.Phase)
-            {
-                case TurnPhase.回合开始:
-                    return "回合开始 · 正在展示敌方预告";
-                case TurnPhase.Buff结算:
-                    return "结算中…";
-                case TurnPhase.敌方行动:
-                    return "敌人行动中…";
-                case TurnPhase.战斗结束:
-                    return "战斗结束 · 按 R 重开";
-            }
-        }
-
-        if (cardSystem != null)
-        {
-            bool hasCard = false;
-            foreach (CardSlot slot in cardSystem.Slots)
-            {
-                if (!slot.IsEmpty) { hasCard = true; break; }
-            }
-
-            if (!hasCard)
-                return "槽位是空的 —— 按 1 抽攻击牌 / 2 抽防御牌（开抽 5 思绪，选牌还要付牌面费用）";
-        }
-
-        if (player.CurrentStamina <= 0 && player.CurrentThought <= 0)
-            return "耐力和思绪都空了 —— 按空格结束回合";
-
-        return "左键点格子移动 / 点敌人出牌 · QWERT 选槽位 · 空格结束回合 · F1 帮助";
-    }
-
-    /// <summary>选牌弹窗：3 张待选牌，按 1/2/3 灌注，0 放弃。</summary>
+    /// <summary>选牌弹窗：列出待选牌（默认 3 张，取自 offerCount），按 1~N 灌注，0 放弃。</summary>
     private void DrawChoosePanel()
     {
         IReadOnlyList<CardData> choices = cardSystem.CurrentChoices;
@@ -738,33 +651,18 @@ public class BattleDebugDriver : MonoBehaviour
         }
 
         GUI.Label(new Rect(panel.x + 14f, panel.y + height - 30f, width - 28f, 22f),
-            "按 1 / 2 / 3 灌注其中一张（还要再付牌面思绪）；0 或退格全部放弃", smallStyle);
+            "按 " + ChooseKeyRange() + " 灌注其中一张（还要再付牌面思绪）；0 或退格全部放弃", smallStyle);
     }
 
-    private void DrawHelpPanel()
+    /// <summary>
+    /// 选牌阶段能按的数字键范围。张数取自 PlayerCardSystem.offerCount（默认 3），
+    /// 不要写死成 "1 / 2 / 3" —— 张数以后再调大时键位要跟得上。
+    /// </summary>
+    private string ChooseKeyRange()
     {
-        float h = 176f;
-        Rect panel = new Rect(12f, Screen.height - 260f - h - 8f, 300f, h);
-        DrawPanel(panel);
-
-        GUI.Label(new Rect(panel.x + 10f, panel.y + 6f, 280f, 20f), "操作（F1 关闭）", titleStyle);
-
-        string[] lines =
-        {
-            "左键点格子：移动（自动寻路）",
-            "左键点敌人：出牌 / 普通攻击",
-            "左键点自己：对自己用防御牌",
-            "1 / 2：抽攻击 / 防御牌",
-            "选牌时 1/2/3 选，0 放弃",
-            "Q W E R T：选中 1~5 号槽位",
-            "3：普通攻击最近的敌人",
-            "空格：结束回合",
-            "G：补满耐力/思绪（调试）",
-            "R：战斗结束后重开",
-        };
-
-        for (int i = 0; i < lines.Length; i++)
-            GUI.Label(new Rect(panel.x + 12f, panel.y + 28f + i * 14.5f, 280f, 16f), lines[i], smallStyle);
+        int n = cardSystem != null && cardSystem.offerCount > 0 ? cardSystem.offerCount : 3;
+        n = Mathf.Min(n, ChooseKeys.Length);
+        return n <= 1 ? "1" : "1 ~ " + n;
     }
 
     private void DrawResultPanel()

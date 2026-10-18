@@ -476,3 +476,29 @@ defenseValue / defenseTargetTypes / library / rarity / tags / buffs / devNotes`�
 - `CardData` 没有 `icon` 字段，`BuffData.icon` 也没有图 → 71 张技能卡与 23 个 buff 目前没有图标；
 - 22 件遗物、11 瓶药水只有数据与图，`RelicController` / `LootSystem` 还没挂进场景，运行时拿不到；
 - `Battle.unity` 的牌库还是 37 张旧 GUID 列表，34 张重建后的卡没进池。
+
+## 小羊：战斗界面改造（背景 / 高亮贴图 / 战斗 HUD）
+
+新增
+
+- `Battle/BattleHUD.cs` —— 战斗界面 UI（挂 `Battle.unity` 的 Managers 上，全部运行时生成，无预制体）。
+  按飞书《游戏系统》例图布局：左上角红圈血量 + 耐力/思绪小字；左下角 攻击/位移/技能/休息 四个按钮；
+  右下角"下一回合"按钮（进入选择状态自动变"取消"）。
+  **攻击 / 位移做成两个常驻可选技能**：点击进入瞄准模式，可交互格显示 `UI/攻击选取格.png`（红圈）/ `UI/位移选取格.png`（绿圈），
+  左键点格子执行（位移走寻路扣耐力、攻击限相邻 1 格），右键/Esc 取消。
+  "技能"按钮 = 抽卡流程 UI：牌堆选择（攻击/防御，5 思绪）→ 3 张待选卡 → 点击灌注，与 `PlayerCardSystem` 的
+  `BeginDraw / ConfirmInfuse / AbandonInfuse` 对接。选择技能或卡牌期间所有小怪图像半透明化（例图要求）。
+
+修改
+
+- `Core/HexCell.cs` —— 战斗高亮从"格子染色"改为"贴图覆盖层"：
+  新增 `moveHighlightSprite` / `attackHighlightSprite` 两个字段（已配在 `ConceptMapCell.prefab` 上），
+  `SetMoveRangeHighlight / SetAttackRangeHighlight / SetTargetHighlight / SetAimHighlight` 改为在格子正上方
+  （排序 5，格子之上、棋子之下）懒创建子物体 `HighlightOverlay` 显示对应选取格图形，自动缩放到与格子贴图同大；
+  有目标格 = 红圈加深、瞄准格 = 红圈染黄。未配置贴图时退回旧染色方案。
+- `Units/PlayerUnit.cs` —— 新增 `GetMoveRangeForUI()`（耐力 + 敏捷/残废修正后的移动距离上限，供 HUD 高亮用）。
+- `Prefabs/Board/ConceptMap.prefab` —— 战斗背景替换：根物体的旧 SpriteRenderer（ConceptArena.png）移除，
+  改为子物体 `Background` 挂 `Backgrounds/蓝黑色战斗背景.png`，旋转 -90° 转横版（17.8×13.3 世界单位），
+  **排序 -100 = 全界面最低**；格子 / 高亮 / 棋子 / 相机全部不受影响。
+- `Prefabs/Board/ConceptMapCell.prefab` —— 格子预制体补上两张选取格贴图引用。
+- `Scenes/Battle.unity` —— Managers 物体追加 `BattleHUD` 组件。

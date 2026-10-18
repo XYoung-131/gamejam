@@ -51,6 +51,15 @@ public class HexCell : MonoBehaviour
     [Tooltip("是否处于烟雾中（烟雾中的单位不能被远程攻击选中）")]
     public bool isSmoky;
 
+    [Header("战斗高亮贴图（例图方案：不用颜色，改用选取格图形）")]
+    [Tooltip("位移选取格（绿圈）——移动可到达格")]
+    public Sprite moveHighlightSprite;
+    [Tooltip("攻击选取格（红圈）——攻击范围格")]
+    public Sprite attackHighlightSprite;
+
+    // 运行时高亮覆盖层（懒创建的子物体，显示在格子之上、棋子之下）
+    private SpriteRenderer highlightOverlay;
+
     /// <summary>
     /// 初始化格子
     /// </summary>
@@ -66,34 +75,100 @@ public class HexCell : MonoBehaviour
     }
 
     /// <summary>
-    /// 设置高亮
+    /// 设置高亮（通用选中提示，用位移选取格图形；未配置贴图时退回旧染色方案）
     /// </summary>
     public void SetHighlight(bool active)
     {
-        if (spriteRenderer != null)
+        if (active && moveHighlightSprite != null)
         {
-            spriteRenderer.color = active ? highlightColor : defaultColor;
+            ShowOverlay(moveHighlightSprite, Color.white);
+            return;
         }
+
+        // 关键：清除时必须同时关掉贴图覆盖层，否则上个技能的圈会留在场景里
+        if (!active)
+            ShowOverlay(null, Color.white);
+
+        if (spriteRenderer != null)
+            spriteRenderer.color = active ? highlightColor : defaultColor;
     }
 
-    /// <summary>直接设置格子颜色（战斗高亮统一入口）</summary>
+    /// <summary>直接设置格子颜色（旧方案保留；战斗高亮已改走贴图覆盖层）</summary>
     public void SetColor(Color color)
     {
         if (spriteRenderer != null)
             spriteRenderer.color = color;
     }
 
-    /// <summary>可移动范围高亮（绿色）</summary>
-    public void SetMoveRangeHighlight(bool active) => SetColor(active ? moveRangeColor : defaultColor);
+    // ============================================================
+    //          战斗高亮（例图方案：选取格贴图，不再用染色）
+    // ============================================================
 
-    /// <summary>攻击范围高亮（粉红色）</summary>
-    public void SetAttackRangeHighlight(bool active) => SetColor(active ? attackRangeColor : defaultColor);
+    /// <summary>可移动范围高亮（位移选取格·绿圈）</summary>
+    public void SetMoveRangeHighlight(bool active) => ShowOverlay(active ? moveHighlightSprite : null, Color.white);
 
-    /// <summary>有目标的高亮（深红色）</summary>
-    public void SetTargetHighlight(bool active) => SetColor(active ? targetColor : defaultColor);
+    /// <summary>攻击范围高亮（攻击选取格·红圈）</summary>
+    public void SetAttackRangeHighlight(bool active) => ShowOverlay(active ? attackHighlightSprite : null, Color.white);
 
-    /// <summary>瞄准高亮（敌方预备技能时变色）</summary>
-    public void SetAimHighlight(bool active) => SetColor(active ? aimColor : defaultColor);
+    /// <summary>攻击范围内有目标的高亮（红圈加深，和普通攻击格区分）</summary>
+    public void SetTargetHighlight(bool active) => ShowOverlay(active ? attackHighlightSprite : null, new Color(0.75f, 0.2f, 0.2f, 1f));
+
+    /// <summary>瞄准高亮（敌方预备技能指向的格子，红圈染黄）</summary>
+    public void SetAimHighlight(bool active) => ShowOverlay(active ? attackHighlightSprite : null, new Color(1f, 0.85f, 0.3f, 1f));
+
+    /// <summary>
+    /// 显示/隐藏高亮覆盖层。sprite 传 null 表示隐藏。
+    /// 覆盖层是懒创建的子物体，自动缩放到和格子贴图一样大。
+    /// </summary>
+    private void ShowOverlay(Sprite sprite, Color tint)
+    {
+        if (sprite == null)
+        {
+            if (highlightOverlay != null)
+                highlightOverlay.enabled = false;
+            return;
+        }
+
+        if (highlightOverlay == null)
+        {
+            Transform child = transform.Find("HighlightOverlay");
+            if (child == null)
+            {
+                GameObject go = new GameObject("HighlightOverlay");
+                go.transform.SetParent(transform, false);
+                go.transform.localPosition = Vector3.zero;
+                highlightOverlay = go.AddComponent<SpriteRenderer>();
+                highlightOverlay.sortingOrder = 5;   // 格子(0)之上、棋子(10)之下
+            }
+            else
+            {
+                highlightOverlay = child.GetComponent<SpriteRenderer>();
+            }
+        }
+
+        highlightOverlay.sprite = sprite;
+        highlightOverlay.color = tint;
+        highlightOverlay.enabled = true;
+
+        // 把覆盖层缩放到和格子贴图一样大（局部空间对比两张 sprite 的 bounds）
+        if (spriteRenderer != null && spriteRenderer.sprite != null)
+        {
+            Vector2 target = spriteRenderer.sprite.bounds.size;
+            Vector2 source = sprite.bounds.size;
+            if (source.x > 0.0001f && source.y > 0.0001f)
+                highlightOverlay.transform.localScale = new Vector3(
+                    target.x / source.x, target.y / source.y, 1f);
+        }
+    }
+
+    /// <summary>
+    /// Unity 碰撞体点击事件（PolygonCollider2D + Camera 射线）。
+    /// 和 BattleHUD 的坐标拾取互为兜底：任一条通道可用，点格子就能生效。
+    /// </summary>
+    private void OnMouseDown()
+    {
+        EventManager.Trigger("CellClicked", this);
+    }
 
     /// <summary>
     /// 获取所有相邻格子

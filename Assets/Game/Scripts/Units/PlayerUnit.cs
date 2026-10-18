@@ -259,6 +259,11 @@ public class PlayerUnit : Unit
     }
 
     /// <summary>
+    /// 当前可移动距离上限（UI 瞄准模式用）：耐力 + 敏捷/残废修正
+    /// </summary>
+    public int GetMoveRangeForUI() => currentStamina + GetMoveBonus();
+
+    /// <summary>
     /// 沿路径移动（简化版：瞬移，以后加协程动画）
     /// </summary>
     protected void MoveAlongPath(List<HexCoord> path)
@@ -340,12 +345,11 @@ public class PlayerUnit : Unit
     // ============================================================
 
     /// <summary>
-    /// 选中这个单位
+    /// 选中这个单位（不再自动高亮移动范围——高亮只在选择技能/攻击/位移时显示）
     /// </summary>
     public void Select()
     {
         isSelected = true;
-        HighlightMoveRange();
         EventManager.Trigger("UnitSelected", this);
     }
 

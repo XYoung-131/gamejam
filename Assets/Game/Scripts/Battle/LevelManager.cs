@@ -83,6 +83,19 @@ public class LevelManager : MonoBehaviour
         foreach (LevelData.Spawn spawn in variant.spawns)
             SpawnOne(spawn);
 
+        // ②.5 铺特殊地形（灼热/剧毒/刀刃/烟雾/吸血/绒毯，由 TerrainSystem 在回合节点结算）
+        foreach (LevelData.TerrainSpawn t in variant.terrains)
+        {
+            if (t == null || t.terrain == null) continue;
+            HexCell cell = HexGrid.Instance.GetCell(t.coord);
+            if (cell == null)
+            {
+                Debug.LogWarning($"[LevelManager] 地形 {t.terrain.name} 的格子 {t.coord} 不在地图上，跳过");
+                continue;
+            }
+            cell.terrain = t.terrain;
+        }
+
         Debug.Log($"[LevelManager] {level.levelName} / {variant.variantName} 布阵完成：" +
                   $"玩家 {Player?.GetCurrentHealth() ?? 0} 血，敌人 {enemies.Count} 个，障碍物 {obstacles.Count} 个");
 
@@ -122,6 +135,10 @@ public class LevelManager : MonoBehaviour
             cards = go.AddComponent<PlayerCardSystem>();
         if (attackPool.Count > 0) cards.attackPool = new List<CardData>(attackPool);
         if (defensePool.Count > 0) cards.defensePool = new List<CardData>(defensePool);
+
+        // 遗物条件触发总调度（RelicData.Trigger 的唯一驱动者，必须和 PlayerUnit 同物体）
+        if (go.GetComponent<RelicController>() == null)
+            go.AddComponent<RelicController>();
 
         EnsureFlipEffect(go);
         EnsureBuffRing(go);

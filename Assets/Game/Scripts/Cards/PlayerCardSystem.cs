@@ -6,7 +6,7 @@ using UnityEngine;
 //
 //  它负责三件事：
 //  ① 灌注（把新技能装进技能槽）：
-//     - 方式 A：花思绪选攻击/防御牌库 → 6 张展示 → 随机抽 3 张 → 选 1 张装入，其余作废
+//     - 方式 A：花思绪选攻击/防御牌库 → 出 3 张卡 → 选 1 张装入，其余作废
 //     - 方式 B：从某个敌人"上回合用过的技能"里选 1 张窃取而装（敌方特有不可偷）
 //  ② 出牌（使用槽位里的技能）：消耗思绪 + 耐力，可无限次重复使用同一技能
 //  ③ 把数据通过 EventManager 广播给 UI（槽位变化、待选卡牌等事件）
@@ -88,10 +88,10 @@ public class PlayerCardSystem : MonoBehaviour
     public List<CardData> initialCards = new List<CardData>();
 
     [Header("抽卡规则")]
-    [Tooltip("每次从牌库展示多少张")]
-    public int offerCount = 6;           // 规则里的"6 张"
-    [Tooltip("从展示的牌中随机抽出多少张供选择")]
-    public int pickCount = 3;            // 规则里的"抽 3 张"
+    [Tooltip("每次从牌库展示多少张（文档：选择牌堆后出现 3 张卡）")]
+    public int offerCount = 3;           // 文档："选择牌堆后，出现3张卡"
+    [Tooltip("从展示的牌中随机抽出多少张供选择（与 offerCount 相同 = 展示几张就选几张，不再二次抽）")]
+    public int pickCount = 3;
     [Tooltip("发起一次抽卡消耗的思绪（文档：抽牌要消耗 5 点思绪。灌注确认时还要再支付卡牌本身的思绪费用）")]
     public int drawThoughtCost = 5;      // 注意：这是"开抽"的费用，选牌时还要再付卡费
 

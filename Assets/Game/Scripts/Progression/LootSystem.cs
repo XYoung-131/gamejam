@@ -170,6 +170,7 @@ public class LootSystem : MonoBehaviour
         if (state == GameState.Victory)
         {
             FlushBattleEndRelics();
+            DropBattleEndPotion();
         }
         else if (state == GameState.Defeat)
         {
@@ -177,6 +178,24 @@ public class LootSystem : MonoBehaviour
                 Debug.Log($"战斗失败，{pendingBattleEndRelics.Count} 件战斗结束奖励作废");
             pendingBattleEndRelics.Clear();
         }
+    }
+
+    /// <summary>
+    /// 战斗胜利后掷一次药水掉落（文档：战后 50% 概率掉 1 瓶，连 2 关没掉第 3 关必掉），
+    /// 掉到就直接塞进玩家背包。RollBattlePotionDrop 内部已广播 PotionDropped。
+    /// </summary>
+    private void DropBattleEndPotion()
+    {
+        PotionData drop = RollBattlePotionDrop();
+        if (drop == null) return;
+
+        PlayerUnit player = FindObjectOfType<PlayerUnit>();
+        if (player == null) return;
+
+        if (player.AddPotion(drop))
+            Debug.Log($"战后掉落：获得饮料【{drop.potionName}】");
+        else
+            Debug.Log($"战后掉落【{drop.potionName}】，但背包已满（上限 3 瓶），作废");
     }
 
     /// <summary>
