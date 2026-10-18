@@ -122,6 +122,7 @@ public class LevelManager : MonoBehaviour
             cards = go.AddComponent<PlayerCardSystem>();
         if (attackPool.Count > 0) cards.attackPool = new List<CardData>(attackPool);
         if (defensePool.Count > 0) cards.defensePool = new List<CardData>(defensePool);
+        cards.initialCards = CardPoolRules.MergeInitialCards(cards.initialCards, cards.defensePool);
 
         EnsureFlipEffect(go);
         EnsureBuffRing(go);

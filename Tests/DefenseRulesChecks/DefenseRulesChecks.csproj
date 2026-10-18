@@ -9,6 +9,7 @@
     <Compile Include="../../Assets/Game/Scripts/Core/HexCoord.cs" Link="HexCoord.cs" />
     <Compile Include="../../Assets/Game/Scripts/Cards/DefenseSkillMath.cs" Link="DefenseSkillMath.cs" />
     <Compile Include="../../Assets/Game/Scripts/Cards/DefenseSkillTargeting.cs" Link="DefenseSkillTargeting.cs" />
+    <Compile Include="../../Assets/Game/Scripts/Cards/CardPoolRules.cs" Link="CardPoolRules.cs" />
     <Compile Include="../AttackAreaGeometryChecks/UnityStubs.cs" Link="UnityStubs.cs" />
   </ItemGroup>
 </Project>
