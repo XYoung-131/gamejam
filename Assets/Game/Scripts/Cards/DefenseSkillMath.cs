@@ -17,4 +17,9 @@ public static class DefenseSkillMath
             if (!unique.Add(cell)) return false;
         return true;
     }
+
+    public static bool IsPathWithinSteps(IReadOnlyList<HexCoord> path, int maxSteps)
+    {
+        return path != null && path.Count > 0 && path.Count - 1 <= maxSteps;
+    }
 }

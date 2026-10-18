@@ -43,6 +43,11 @@ public class LevelManager : MonoBehaviour
     public PlayerUnit Player { get; private set; }
 
     private readonly List<EnemyUnit> enemies = new List<EnemyUnit>();
+
+    public void RegisterSummonedEnemy(EnemyUnit enemy)
+    {
+        if (enemy != null && !enemies.Contains(enemy)) enemies.Add(enemy);
+    }
     private readonly List<Obstacle> obstacles = new List<Obstacle>();
 
     // ============================================================

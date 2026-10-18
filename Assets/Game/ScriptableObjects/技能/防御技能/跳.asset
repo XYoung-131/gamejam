@@ -17,7 +17,7 @@ MonoBehaviour:
   thoughtCost: 0
   actionCost: 5
   maxUses: 0
-  minRange: 0
+  minRange: 1
   maxRange: 1
   damage: 0
   damageType: 0
@@ -28,6 +28,8 @@ MonoBehaviour:
   displaceSelf: 1
   defenseEffectType: 1
   defenseValue: 0
+  defenseTargetRule: 2
+  defenseEffectRule: 14
   defenseTargetTypes: 01000000
   initialOnly: 1
   library: 1
