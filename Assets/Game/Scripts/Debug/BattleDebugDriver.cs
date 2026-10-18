@@ -23,13 +23,14 @@ using UnityEngine.SceneManagement;
 //    时才创建这个物体——不改 Battle.unity，不影响队友的编辑器操作。
 //
 //  操作（游戏里按 F1 随时查看）：
-//    左键点空格子   → 移动（自动寻路，按路径扣耐力）
+//    左键点空格子   → 进入移动选格；再点目标空格子移动，成功后退出
 //    左键点敌人     → 选中槽位则对该敌人出牌，没选中则普通攻击（需相邻）
-//    左键点自己     → 对自身使用当前槽位的防御/增益牌
+//    左键点自己     → 防御牌先确认自己；有目标的再点紫色格子
 //    左键点障碍物   → 对障碍物使用当前槽位的攻击牌
 //    1 / 2          → 从攻击 / 防御牌库抽卡（出现 3 张待选）
 //    1 / 2 / 3      → 选牌阶段：灌注第 1/2/3 张（0 或退格放弃）
 //    Q W E R T      → 选中第 1~5 号槽位（再按一次取消）
+//    F              → 依次选择药水等授予的免费防御技能
 //    空格           → 结束回合
 //    3              → 普通攻击最近的敌人
 //    G              → 调试：补满耐力/思绪
@@ -74,6 +75,13 @@ public class BattleDebugDriver : MonoBehaviour
     // ============================================================
 
     private int selectedSlot = -1;     // 当前选中的槽位，-1 = 没选（此时点敌人走普通攻击）
+    private int selectedFreeDefense = -1;
+    private bool moveSelectionActive;
+    private readonly List<HexCoord> pendingAttackCells = new List<HexCoord>();
+    private readonly List<HexCoord> pendingDefenseCells = new List<HexCoord>();
+    private bool defenseChoosingTargets;
+    private readonly List<AttackAreaCell> recentAttackArea = new List<AttackAreaCell>();
+    private float recentAttackAreaUntil;
     private string tip = "";           // 底部提示文字
     private float tipUntil;            // 提示显示到什么时候（Time.unscaledTime）
     private float highlightAge;        // 高亮还有多久刷新
@@ -116,11 +124,17 @@ public class BattleDebugDriver : MonoBehaviour
     private void Start()
     {
         RefreshRefs();
-        Say("点格子移动 · 点敌人出牌 · 1抽攻击 2抽防御 · QWERT选槽位 · 空格结束回合 · F1帮助");
+        Say("点空地进入移动选格，再点目标移动 · 1抽攻击 2抽防御 · QWERT选槽位 · F1帮助");
+    }
+
+    private void OnEnable()
+    {
+        EventManager.AddListener<CardData, Unit, List<AttackAreaCell>>("CardAreaResolved", OnCardAreaResolved);
     }
 
     private void OnDisable()
     {
+        EventManager.RemoveListener<CardData, Unit, List<AttackAreaCell>>("CardAreaResolved", OnCardAreaResolved);
         // 面板销毁时把格子颜色还原，免得留一地高亮
         if (HexGrid.Instance != null)
             HexGrid.Instance.ClearAllHighlights();
@@ -150,6 +164,7 @@ public class BattleDebugDriver : MonoBehaviour
         // ---------- 战斗结束：只留"重开" ----------
         if (IsBattleOver)
         {
+            ClearMoveSelection();
             if (Input.GetKeyDown(KeyCode.R))
                 RestartBattle();
             UpdateHighlights();
@@ -159,11 +174,16 @@ public class BattleDebugDriver : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.F1)) showControlHelp = !showControlHelp;
         if (Input.GetKeyDown(KeyCode.F2)) showOverlay = !showOverlay;
 
-        if (player == null || cardSystem == null) return;
+        if (player == null || cardSystem == null)
+        {
+            ClearMoveSelection();
+            return;
+        }
 
         // ---------- 正在选牌：只接受 1/2/3 和 0 ----------
         if (cardSystem.IsChoosing)
         {
+            ClearMoveSelection();
             HandleChooseKeys();
             UpdateHighlights();
             return;
@@ -203,9 +223,86 @@ public class BattleDebugDriver : MonoBehaviour
             if (Input.GetKeyDown(SlotKeys[i]))
                 SelectSlot(i);
         }
+        if (Input.GetKeyDown(KeyCode.F)) SelectFreeDefense();
+
+        if (Input.GetKeyDown(KeyCode.Escape) && pendingAttackCells.Count > 0)
+        {
+            pendingAttackCells.Clear();
+            Say("已取消轰击目标选择");
+            MarkDirty();
+        }
+        else if (Input.GetKeyDown(KeyCode.Escape) && defenseChoosingTargets)
+        {
+            defenseChoosingTargets = false;
+            pendingDefenseCells.Clear();
+            Say("已取消防御技能目标选择");
+            MarkDirty();
+        }
+        else if (Input.GetKeyDown(KeyCode.Escape) && moveSelectionActive)
+        {
+            ClearMoveSelection();
+            Say("已取消移动选格");
+        }
+        else if ((Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter)) &&
+                 (selectedSlot >= 0 || GetSelectedFreeDefense() != null))
+        {
+            CardData card = GetSelectedFreeDefense() ?? cardSystem.Slots[selectedSlot].card;
+            if (card != null && !card.IsAttack)
+            {
+                if (!defenseChoosingTargets || pendingDefenseCells.Count == 0) return;
+                bool defenseOk = UseSelectedDefense(pendingDefenseCells);
+                Say(defenseOk ? "【" + card.cardName + "】已释放" : "目标或耐力不符合要求");
+                if (defenseOk) { defenseChoosingTargets = false; pendingDefenseCells.Clear(); }
+                AfterPlay();
+                return;
+            }
+            bool autoArea = card != null && IsClickToCastArea(card.attackTargetRule);
+            if (!autoArea && pendingAttackCells.Count == 0) return;
+            bool ok = cardSystem.UseSlotCardOnCells(selectedSlot, autoArea ? new HexCoord[0] : pendingAttackCells);
+            Say(ok ? "【" + card.cardName + "】已释放" : "释放失败：请检查目标、射程、视线和耐力");
+            if (ok) pendingAttackCells.Clear();
+            AfterPlay();
+        }
 
         HandleMouse();
         UpdateHighlights();
+    }
+
+    private void ClearMoveSelection()
+    {
+        if (moveSelectionActive) MarkDirty();
+        moveSelectionActive = false;
+    }
+
+    private static bool IsClickToCastArea(AttackTargetRule rule) =>
+        rule == AttackTargetRule.自身范围 || rule == AttackTargetRule.全场 ||
+        rule == AttackTargetRule.全场随机 || rule == AttackTargetRule.固定地图图案;
+
+    /// <summary>无需另选中心格的范围技能：这些高亮格都可以点击以释放。</summary>
+    private IEnumerable<HexCoord> GetClickToCastCells(CardData card)
+    {
+        if (card.attackTargetRule == AttackTargetRule.固定地图图案)
+        {
+            // 礼炮轰炸在释放时才随机选四图之一，选牌时显示四图可能覆盖的格子。
+            for (int pattern = 0; pattern < 4; pattern++)
+                foreach (HexCoord coord in AttackAreaGeometry.GetFixedBombardmentPattern(pattern))
+                    if (HexGrid.Instance.GetCell(coord) != null) yield return coord;
+            yield break;
+        }
+
+        if (card.attackTargetRule == AttackTargetRule.全场随机)
+        {
+            foreach (HexCell cell in HexGrid.Instance.GetAllCells())
+                if (cell != null && cell.occupyUnit != null &&
+                    cell.occupyUnit.GetCurrentHealth() > 0 &&
+                    ((cell.occupyUnit is PlayerUnit) != (player is PlayerUnit)))
+                    yield return cell.coord;
+            yield break;
+        }
+
+        foreach (AttackAreaCell entry in card.GetAttackArea(player, player.GetCoord()))
+            if (HexGrid.Instance.GetCell(entry.Coord) != null)
+                yield return entry.Coord;
     }
 
     /// <summary>选牌阶段的按键：1/2/3 灌注，0 或退格放弃。</summary>
@@ -229,7 +326,7 @@ public class BattleDebugDriver : MonoBehaviour
             string pickedName = picked != null ? picked.cardName : "?";
 
             bool ok = cardSystem.ConfirmInfuse(i);
-            Say(ok ? "灌注成功：【" + pickedName + "】" : "灌注失败（思绪不足，换一张便宜的试试）");
+            Say(ok ? "灌注成功：【" + pickedName + "】" : "灌注失败（思绪不足）");
             MarkDirty();
             return;
         }
@@ -254,6 +351,94 @@ public class BattleDebugDriver : MonoBehaviour
         HexCell cell = HexGrid.Instance.GetCell(HexGrid.Instance.WorldToHex(world));
         if (cell == null) return;   // 点到地图外面，忽略
 
+        if (moveSelectionActive)
+        {
+            if (cell.occupyUnit != null || cell.obstacle != null || !cell.CanStopOn(player))
+            {
+                Say("请选择绿色范围内的空地，或按 Esc 取消移动");
+                return;
+            }
+            if (player.TryMoveTo(cell.coord))
+            {
+                ClearMoveSelection();
+                Say("移动到 (" + cell.coord.q + "," + cell.coord.r + ")");
+            }
+            else
+                Say("移动失败：请选绿色范围内的空地，或检查耐力");
+            return;
+        }
+
+        if (selectedSlot >= 0 && selectedSlot < cardSystem.Slots.Count && !cardSystem.Slots[selectedSlot].IsEmpty)
+        {
+            CardData selectedCard = cardSystem.Slots[selectedSlot].card;
+            if (!selectedCard.IsAttack)
+            {
+                HandleDefenseClick(selectedCard, cell);
+                return;
+            }
+            if (selectedCard.IsAttack && IsClickToCastArea(selectedCard.attackTargetRule))
+            {
+                bool highlighted = false;
+                foreach (HexCoord coord in GetClickToCastCells(selectedCard))
+                    if (coord == cell.coord) { highlighted = true; break; }
+                if (!highlighted)
+                {
+                    Say("请选择紫色高亮的地块释放【" + selectedCard.cardName + "】");
+                    return;
+                }
+                bool ok = cardSystem.UseSlotCardOnCells(selectedSlot, new HexCoord[0]);
+                Say(ok ? "【" + selectedCard.cardName + "】已释放" : "释放失败：请检查耐力和行动状态");
+                AfterPlay();
+                return;
+            }
+            if (selectedCard.attackTargetRule == AttackTargetRule.地块 ||
+                selectedCard.attackTargetRule == AttackTargetRule.穿透单位 ||
+                selectedCard.attackTargetRule == AttackTargetRule.连锁单位)
+            {
+                bool ok = cardSystem.UseSlotCardOnCells(selectedSlot, new[] { cell.coord });
+                Say(ok ? "【" + selectedCard.cardName + "】已释放" : "该格不是有效目标，或耐力不足");
+                AfterPlay();
+                return;
+            }
+            if (selectedCard.attackTargetRule == AttackTargetRule.相邻地块定向扇形)
+            {
+                bool ok = cardSystem.UseSlotCardOnCells(selectedSlot, new[] { cell.coord });
+                Say(ok ? "巨尾拍击已释放" : "请选择自己相邻的地块，或检查耐力");
+                AfterPlay();
+                return;
+            }
+            if (selectedCard.attackTargetRule == AttackTargetRule.多个单位)
+            {
+                EnemyUnit chosenEnemy = cell.occupyUnit as EnemyUnit;
+                if (chosenEnemy == null || chosenEnemy.IsDead ||
+                    !selectedCard.CanSelectAttackCell(player, cell.coord))
+                {
+                    Say("请选择紫色高亮的敌方单位");
+                    return;
+                }
+                if (pendingAttackCells.Contains(cell.coord) ||
+                    pendingAttackCells.Count >= Mathf.Max(1, selectedCard.maxSelectedTargets))
+                {
+                    bool ok = cardSystem.UseSlotCardOnCells(selectedSlot, pendingAttackCells);
+                    Say(ok ? "【" + selectedCard.cardName + "】已释放" : "释放失败：请检查射程、视线和耐力");
+                    if (ok) pendingAttackCells.Clear();
+                    AfterPlay();
+                    return;
+                }
+                pendingAttackCells.Add(cell.coord);
+                Say("已选 " + pendingAttackCells.Count + " 个目标；点新目标继续选，再点已选目标释放");
+                MarkDirty();
+                return;
+            }
+        }
+
+        CardData freeDefense = GetSelectedFreeDefense();
+        if (freeDefense != null)
+        {
+            HandleDefenseClick(freeDefense, cell);
+            return;
+        }
+
         // ① 敌人 → 出牌 / 普通攻击
         EnemyUnit enemy = cell.occupyUnit as EnemyUnit;
         if (enemy != null && !enemy.IsDead)
@@ -271,7 +456,7 @@ public class BattleDebugDriver : MonoBehaviour
                 return;
             }
             bool ok = cardSystem.UseSlotCard(selectedSlot, player);
-            Say(ok ? "对自己使用【" + SlotName(selectedSlot) + "】" : "出牌失败（这张牌不能对自己用 / 资源不足）");
+            Say(ok ? "对自己使用【" + SlotName(selectedSlot) + "】" : "出牌失败（目标不符或耐力不足）");
             AfterPlay();
             return;
         }
@@ -290,16 +475,125 @@ public class BattleDebugDriver : MonoBehaviour
             return;
         }
 
-        // ④ 空格子 → 移动
-        if (player.TryMoveTo(cell.coord))
+        if (selectedSlot >= 0)
         {
-            Say("移动到 (" + cell.coord.q + "," + cell.coord.r + ")");
+            Say("已选中技能，请点击有效目标；再次按该槽位键取消后才能移动");
+            return;
+        }
+
+        // ④ 第一次点空地：进入选格状态，第二次点目标空地才移动
+        if (cell.CanStopOn(player) && player.CurrentStamina > 0)
+        {
+            selectedSlot = -1;
+            pendingAttackCells.Clear();
+            moveSelectionActive = true;
+            Say("移动选格：再点绿色范围内的空地，Esc 取消");
             MarkDirty();
         }
         else
+            Say("无法进入移动选格：耐力不足或地块不可进入");
+    }
+
+    private void HandleDefenseClick(CardData card, HexCell cell)
+    {
+        if (!defenseChoosingTargets)
         {
-            Say("走不过去：耐力不足 / 被挡住 / 不在玩家行动阶段（原因见 Console）");
+            if (cell.occupyUnit != player)
+            {
+                Say("先点击紫色高亮的自己");
+                return;
+            }
+            bool needsTarget = card.defenseTargetRule != DefenseTargetRule.自身 ||
+                (card.defenseEffectRule == DefenseEffectRule.神圣祝福 && player.HasNamedBuff("神圣"));
+            if (!needsTarget)
+            {
+                bool ok = UseSelectedDefense(new HexCoord[0]);
+                Say(ok ? "【" + card.cardName + "】已释放" : "释放失败：请检查耐力、行动状态和落点");
+                AfterPlay();
+                return;
+            }
+            bool hasLegalTarget = false;
+            foreach (HexCoord coord in DefenseSkillTargeting.GetSelectableCells(card, player,
+                         pendingDefenseCells))
+                if (card.defenseTargetRule != DefenseTargetRule.地块 ||
+                    DefenseSkillResolver.CanResolve(card, player, new[] { coord }))
+                    { hasLegalTarget = true; break; }
+            if (!hasLegalTarget)
+            {
+                Say("当前没有合法目标或落点");
+                return;
+            }
+            defenseChoosingTargets = true;
+            pendingDefenseCells.Clear();
+            Say("请选择紫色高亮的目标或落点；Esc 取消");
+            MarkDirty();
+            return;
         }
+
+        bool legal = DefenseSkillTargeting.GetSelectableCells(card, player,
+            pendingDefenseCells).Contains(cell.coord);
+        if (!legal || (card.defenseTargetRule == DefenseTargetRule.地块 &&
+                       !DefenseSkillResolver.CanResolve(card, player, new[] { cell.coord })))
+        {
+            Say("该格不是有效目标或落点");
+            return;
+        }
+        if (card.defenseTargetRule == DefenseTargetRule.多个单位)
+        {
+            if (!pendingDefenseCells.Contains(cell.coord) &&
+                pendingDefenseCells.Count < Mathf.Max(1, card.maxDefenseTargets))
+            {
+                pendingDefenseCells.Add(cell.coord);
+                Say("已选 " + pendingDefenseCells.Count + " 个目标；再次点击已选目标或回车释放");
+                MarkDirty();
+                return;
+            }
+            bool multiOk = UseSelectedDefense(pendingDefenseCells);
+            Say(multiOk ? "【" + card.cardName + "】已释放" : "释放失败：目标或耐力不符合要求");
+            if (multiOk) { defenseChoosingTargets = false; pendingDefenseCells.Clear(); }
+            AfterPlay();
+            return;
+        }
+        bool okSingle = UseSelectedDefense(new[] { cell.coord });
+        Say(okSingle ? "【" + card.cardName + "】已释放" : "释放失败：目标或耐力不符合要求");
+        if (okSingle) { defenseChoosingTargets = false; pendingDefenseCells.Clear(); }
+        AfterPlay();
+    }
+
+    private CardData GetSelectedFreeDefense()
+    {
+        if (cardSystem == null || selectedFreeDefense < 0 ||
+            selectedFreeDefense >= cardSystem.FreeCards.Count) return null;
+        FreeCardCharge charge = cardSystem.FreeCards[selectedFreeDefense];
+        return charge != null && !charge.IsEmpty && charge.card != null &&
+            !charge.card.IsAttack ? charge.card : null;
+    }
+
+    private bool UseSelectedDefense(IReadOnlyList<HexCoord> selected)
+    {
+        bool free = GetSelectedFreeDefense() != null;
+        bool ok = free
+            ? cardSystem.UseFreeDefenseCardOnCells(selectedFreeDefense, selected)
+            : cardSystem.TryUseDefenseCardOnCells(selectedSlot, selected);
+        if (ok && free) selectedFreeDefense = -1;
+        return ok;
+    }
+
+    private void SelectFreeDefense()
+    {
+        if (cardSystem == null) return;
+        int next = selectedFreeDefense;
+        do { next++; } while (next < cardSystem.FreeCards.Count &&
+            (cardSystem.FreeCards[next].IsEmpty || cardSystem.FreeCards[next].card.IsAttack));
+        selectedFreeDefense = next < cardSystem.FreeCards.Count ? next : -1;
+        selectedSlot = -1;
+        defenseChoosingTargets = false;
+        pendingDefenseCells.Clear();
+        pendingAttackCells.Clear();
+        ClearMoveSelection();
+        Say(selectedFreeDefense < 0 ? "已取消免费防御技能选择" :
+            "选中免费技能【" + cardSystem.FreeCards[selectedFreeDefense].card.cardName + "】；先点自己");
+        MarkDirty();
     }
 
     /// <summary>点敌人：有选中槽位就出牌，否则普通攻击。</summary>
@@ -310,7 +604,7 @@ public class BattleDebugDriver : MonoBehaviour
             string name = SlotName(selectedSlot);
             bool ok = cardSystem.UseSlotCard(selectedSlot, enemy);
             Say(ok ? "对 " + enemy.data.unitName + " 使用【" + name + "】"
-                   : "出牌失败：射程 / 视线 / 目标类型 / 资源不满足（详见 Console）");
+                   : "出牌失败：射程 / 视线 / 目标类型 / 耐力不足（详见 Console）");
             AfterPlay();
             return;
         }
@@ -361,6 +655,11 @@ public class BattleDebugDriver : MonoBehaviour
         }
 
         selectedSlot = -1;
+        selectedFreeDefense = -1;
+        pendingAttackCells.Clear();
+        defenseChoosingTargets = false;
+        pendingDefenseCells.Clear();
+        ClearMoveSelection();
         turnManager.RequestEndPlayerTurn();
         Say("结束回合，敌人开始行动");
         MarkDirty();
@@ -371,6 +670,12 @@ public class BattleDebugDriver : MonoBehaviour
     {
         if (cardSystem == null || index < 0 || index >= cardSystem.Slots.Count)
             return;
+
+        pendingAttackCells.Clear();
+        selectedFreeDefense = -1;
+        defenseChoosingTargets = false;
+        pendingDefenseCells.Clear();
+        ClearMoveSelection();
 
         if (selectedSlot == index)
         {
@@ -386,9 +691,8 @@ public class BattleDebugDriver : MonoBehaviour
         {
             selectedSlot = index;
             CardData card = cardSystem.Slots[index].card;
-            Say("选中【" + card.cardName + "】 思绪 " + card.thoughtCost +
-                " / 耐力 " + card.GetFinalActionCost(player) +
-                " / 射程 " + card.minRange + "~" + card.GetEffectiveMaxRange(player));
+            Say("选中【" + card.cardName + "】 使用耐力 " + player.DefenseState.GetStaminaCost(card, player) + " / 射程 " +
+                card.minRange + "~" + card.GetEffectiveMaxRange(player));
         }
 
         MarkDirty();
@@ -402,6 +706,10 @@ public class BattleDebugDriver : MonoBehaviour
             if (selectedSlot >= cardSystem.Slots.Count || cardSystem.Slots[selectedSlot].IsEmpty)
                 selectedSlot = -1;
         }
+        if (selectedSlot < 0) pendingAttackCells.Clear();
+        if (GetSelectedFreeDefense() == null) selectedFreeDefense = -1;
+        if (selectedSlot < 0 && selectedFreeDefense < 0)
+        { defenseChoosingTargets = false; pendingDefenseCells.Clear(); }
         MarkDirty();
     }
 
@@ -455,12 +763,38 @@ public class BattleDebugDriver : MonoBehaviour
 
     private void MarkDirty() => highlightDirty = true;
 
+    private void OnCardAreaResolved(CardData card, Unit caster, List<AttackAreaCell> area)
+    {
+        recentAttackArea.Clear();
+        if (area != null) recentAttackArea.AddRange(area);
+        recentAttackAreaUntil = Time.unscaledTime + 1f;
+        MarkDirty();
+    }
+
+    private void HighlightArea(IEnumerable<AttackAreaCell> area)
+    {
+        foreach (AttackAreaCell entry in area)
+        {
+            HexCell cell = HexGrid.Instance.GetCell(entry.Coord);
+            if (cell == null) continue;
+            if (entry.Damage >= 3) cell.SetColor(new Color(1f, 0.35f, 0.3f, 0.8f));
+            else if (entry.Damage == 2) cell.SetColor(new Color(1f, 0.65f, 0.25f, 0.8f));
+            else cell.SetColor(new Color(1f, 0.85f, 0.3f, 0.8f));
+        }
+    }
+
+    private void HighlightRecentArea()
+    {
+        if (Time.unscaledTime < recentAttackAreaUntil)
+            HighlightArea(recentAttackArea);
+    }
+
     // ============================================================
     //                        格子高亮
     // ============================================================
 
     /// <summary>
-    /// 选中槽位时高亮该牌的射程（粉红），没选槽位时高亮可移动范围（绿色）。
+    /// 选中槽位时高亮该牌的射程；第一次点空地后高亮可移动范围。
     /// 每 0.35 秒最多重算一次，避免每帧跑 BFS。
     /// </summary>
     private void UpdateHighlights()
@@ -475,28 +809,100 @@ public class BattleDebugDriver : MonoBehaviour
 
         HexGrid.Instance.ClearAllHighlights();
 
-        if (player == null || player.IsDead || !InPlayerAction) return;
+        if (player == null || player.IsDead || !InPlayerAction)
+        {
+            HighlightRecentArea();
+            return;
+        }
+
+        CardData freeCard = GetSelectedFreeDefense();
+        if (freeCard != null)
+        {
+            HighlightRecentArea();
+            HighlightDefense(freeCard);
+            return;
+        }
 
         if (selectedSlot >= 0 && selectedSlot < cardSystem.Slots.Count && !cardSystem.Slots[selectedSlot].IsEmpty)
         {
             CardData card = cardSystem.Slots[selectedSlot].card;
+            HighlightRecentArea();
+            if (!card.IsAttack)
+            {
+                HighlightDefense(card);
+                return;
+            }
+            if (card.IsAttack && IsClickToCastArea(card.attackTargetRule))
+            {
+                foreach (HexCoord coord in GetClickToCastCells(card))
+                {
+                    HexCell targetCell = HexGrid.Instance.GetCell(coord);
+                    if (targetCell != null) targetCell.SetAttackRangeHighlight(true);
+                }
+                return;
+            }
             int maxRange = Mathf.Clamp(card.GetEffectiveMaxRange(player), 0, 12);
             HexCoord from = player.GetCoord();
 
             foreach (HexCell cell in HexGrid.Instance.GetCellsInRange(from, maxRange))
             {
+                if (card.IsAttack && !card.CanSelectAttackCell(player, cell.coord)) continue;
                 if (cell.coord.Distance(from) < card.minRange) continue;
                 cell.SetAttackRangeHighlight(true);
+            }
+            if (card.attackTargetRule == AttackTargetRule.多个单位)
+                foreach (HexCoord coord in pendingAttackCells)
+                {
+                    HexCell selected = HexGrid.Instance.GetCell(coord);
+                    if (selected != null) selected.SetColor(new Color(0.65f, 0.25f, 0.9f, 0.85f));
+                }
+            else if (card.attackTargetRule == AttackTargetRule.相邻地块定向扇形 && cam != null)
+            {
+                Vector3 world = cam.ScreenToWorldPoint(Input.mousePosition);
+                HexCoord hovered = HexGrid.Instance.WorldToHex(world);
+                HighlightArea(AttackAreaGeometry.GetCone(from, hovered));
+            }
+            else if ((card.attackTargetRule == AttackTargetRule.地块 ||
+                      card.attackTargetRule == AttackTargetRule.穿透单位) && cam != null)
+            {
+                HexCoord hovered = HexGrid.Instance.WorldToHex(cam.ScreenToWorldPoint(Input.mousePosition));
+                if (card.CanSelectAttackCell(player, hovered))
+                    HighlightArea(card.GetAttackArea(player, hovered));
             }
             return;
         }
 
-        // 没选牌：把能走到的格子涂绿（按当前耐力算，走不动的不涂）
-        foreach (HexCoord coord in HexPathfinding.GetReachableCells(player.GetCoord(), player.CurrentStamina))
+        if (moveSelectionActive)
+            foreach (HexCoord coord in HexPathfinding.GetReachableCells(player.GetCoord(), player.CurrentStamina))
+            {
+                HexCell cell = HexGrid.Instance.GetCell(coord);
+                if (cell != null && cell.CanStopOn(player))
+                    cell.SetMoveRangeHighlight(true);
+            }
+        HighlightRecentArea();
+    }
+
+    private void HighlightDefense(CardData card)
+    {
+        if (!defenseChoosingTargets)
         {
-            HexCell cell = HexGrid.Instance.GetCell(coord);
-            if (cell != null && cell.CanStopOn(player))
-                cell.SetMoveRangeHighlight(true);
+            HexCell self = HexGrid.Instance.GetCell(player.GetCoord());
+            if (self != null) self.SetAttackRangeHighlight(true);
+            return;
+        }
+        foreach (HexCoord coord in DefenseSkillTargeting.GetSelectableCells(card, player,
+                     pendingDefenseCells))
+        {
+            HexCell targetCell = HexGrid.Instance.GetCell(coord);
+            if (targetCell != null &&
+                (card.defenseTargetRule != DefenseTargetRule.地块 ||
+                 DefenseSkillResolver.CanResolve(card, player, new[] { coord })))
+                targetCell.SetAttackRangeHighlight(true);
+        }
+        foreach (HexCoord coord in pendingDefenseCells)
+        {
+            HexCell selected = HexGrid.Instance.GetCell(coord);
+            if (selected != null) selected.SetColor(new Color(0.65f, 0.25f, 0.9f, 0.85f));
         }
     }
 
@@ -593,9 +999,7 @@ public class BattleDebugDriver : MonoBehaviour
             {
                 string uses = slot.RemainingForUI < 0 ? "∞" : slot.RemainingForUI.ToString();
                 text = "[" + SlotKeys[i] + "] " + slot.card.cardName +
-                       "   思绪" + slot.card.thoughtCost +
-                       " 耐力" + slot.card.GetFinalActionCost(player) +
-                       "   剩" + uses;
+                       "   耐力" + slot.card.GetPlayActionCost(player) + "   剩" + uses;
             }
             GUI.Label(new Rect(panel.x + 12f, y, panel.width - 24f, 22f), text, smallStyle);
         }
@@ -688,6 +1092,15 @@ public class BattleDebugDriver : MonoBehaviour
             }
         }
 
+        if (moveSelectionActive)
+            return "移动选格：再点绿色范围内的空地移动，Esc 取消";
+
+        if (defenseChoosingTargets)
+            return "防御技能：点击紫色目标或落点；Esc 返回自身高亮";
+
+        if (GetSelectedFreeDefense() != null)
+            return "免费防御技能：先点自己，再按紫色高亮选目标或落点";
+
         if (cardSystem != null)
         {
             bool hasCard = false;
@@ -697,13 +1110,13 @@ public class BattleDebugDriver : MonoBehaviour
             }
 
             if (!hasCard)
-                return "槽位是空的 —— 按 1 抽攻击牌 / 2 抽防御牌（开抽 5 思绪，选牌还要付牌面费用）";
+                return "槽位是空的 —— 按 1/2 抽牌（开抽 5 思绪，灌注再付牌面思绪）";
         }
 
         if (player.CurrentStamina <= 0 && player.CurrentThought <= 0)
-            return "耐力和思绪都空了 —— 按空格结束回合";
+            return "耐力和思绪已空 · 空格结束回合";
 
-        return "左键点格子移动 / 点敌人出牌 · QWERT 选槽位 · 空格结束回合 · F1 帮助";
+        return "点空地进入移动选格，再点目标移动 · QWERT 选槽位 · 空格结束回合";
     }
 
     /// <summary>选牌弹窗：3 张待选牌，按 1/2/3 灌注，0 放弃。</summary>
@@ -732,18 +1145,18 @@ public class BattleDebugDriver : MonoBehaviour
                 : (card.defenseValue > 0 ? card.defenseEffectType + " " + card.defenseValue : "辅助");
 
             GUI.Label(new Rect(panel.x + 18f, y, width - 36f, 22f),
-                "[" + (i + 1) + "] " + card.cardName + "   思绪" + card.thoughtCost +
-                " 耐力" + card.GetFinalActionCost(player) + "   " + attackHint, labelStyle);
+                "[" + (i + 1) + "] " + card.cardName + "   灌注思绪" + card.thoughtCost +
+                " 使用耐力" + card.GetPlayActionCost(player) + "   " + attackHint, labelStyle);
             GUI.Label(new Rect(panel.x + 18f, y + 20f, width - 36f, 22f), card.description, smallStyle);
         }
 
         GUI.Label(new Rect(panel.x + 14f, panel.y + height - 30f, width - 28f, 22f),
-            "按 1 / 2 / 3 灌注其中一张（还要再付牌面思绪）；0 或退格全部放弃", smallStyle);
+            "按 1 / 2 / 3 灌注其中一张（只支付牌面思绪）；0 或退格放弃", smallStyle);
     }
 
     private void DrawHelpPanel()
     {
-        float h = 176f;
+        float h = 192f;
         Rect panel = new Rect(12f, Screen.height - 260f - h - 8f, 300f, h);
         DrawPanel(panel);
 
@@ -751,12 +1164,13 @@ public class BattleDebugDriver : MonoBehaviour
 
         string[] lines =
         {
-            "左键点格子：移动（自动寻路）",
+            "左键点空地：选移动格；再点一次移动",
             "左键点敌人：出牌 / 普通攻击",
-            "左键点自己：对自己用防御牌",
+            "防御牌：先点自己，再点紫色目标或落点",
             "1 / 2：抽攻击 / 防御牌",
             "选牌时 1/2/3 选，0 放弃",
             "Q W E R T：选中 1~5 号槽位",
+            "F：选择免费防御技能（再按切换）",
             "3：普通攻击最近的敌人",
             "空格：结束回合",
             "G：补满耐力/思绪（调试）",

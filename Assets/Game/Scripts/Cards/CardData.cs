@@ -60,6 +60,52 @@ public enum CardTargetType
     障碍物      // 地图上的 Obstacle，如炸药桶、柱子
 }
 
+/// <summary>攻击牌的选格方式。未配置的旧资产保持单个单位目标。</summary>
+public enum AttackTargetRule
+{
+    单位,
+    多个单位,
+    相邻地块定向扇形,
+    固定地图图案,
+    地块,
+    自身范围,
+    全场,
+    全场随机,
+    穿透单位,
+    连锁单位
+}
+
+/// <summary>单张攻击技能在通用伤害以外的结算规则。编号随资产保存，不可重排。</summary>
+public enum AttackEffectRule
+{
+    普通 = 0,
+    三段攻击 = 1,
+    易伤追加一击 = 2,
+    低血量增伤概率保留次数 = 3,
+    连续使用降低耐力 = 4,
+    本关使用次数增加范围段数 = 5,
+    击杀返还使用次数 = 6,
+    噬咬回血 = 7,
+    啃咬下回合力量 = 8,
+    击杀获得力量 = 9,
+    低血量斩杀 = 10,
+    疯狂撕扯 = 11,
+    神圣追加一击 = 12,
+    后蹬腿撤离 = 13,
+    飞身刺击冲刺 = 14,
+    撞击前冲 = 15,
+    笨拙冲撞 = 16,
+    力竭一击自弱 = 17,
+    地块追踪 = 18
+}
+
+public struct AttackOutcome
+{
+    public bool HitTarget;
+    public bool KilledTarget;
+    public bool ChargeHealthLower;
+}
+
 /// <summary>
 /// 防御卡可以选择的目标类型（可多选）
 /// </summary>
@@ -129,10 +175,10 @@ public class CardData : ScriptableObject
     [TextArea] public string description;  // 卡牌描述（UI 上显示的说明文字）
 
     [Header("消耗")]
-    [Tooltip("使用/灌注这张牌需要消耗的思绪")]
-    public int thoughtCost;          // 思绪费用：灌注时付一次，每次出牌再付一次
-    [Tooltip("使用这张牌需要消耗的耐力")]
-    public int actionCost;           // 耐力费用：只在出牌时支付
+    [Tooltip("确认抽到的技能并装入槽位时消耗的思绪")]
+    public int thoughtCost;
+    [Tooltip("每次使用这张技能时消耗的耐力")]
+    public int actionCost;
 
     [Header("使用次数")]
     [Tooltip("这张牌装入槽位后能用的次数。0 或负数 = 不限次数；正数 N = 可用 N 次，用完槽位自动腾空")]
@@ -151,6 +197,34 @@ public class CardData : ScriptableObject
     public DamageType damageType = DamageType.物理;
     [Tooltip("攻击卡可以选择哪些目标类型，可多选（只勾敌方单位就不能打障碍物）")]
     public List<CardTargetType> targetTypes = new List<CardTargetType> { CardTargetType.敌方单位 };
+    [Tooltip("攻击牌选目标方式：单体、多目标、地块、以自身为中心、全场、穿透或连锁")]
+    public AttackTargetRule attackTargetRule = AttackTargetRule.单位;
+    [Tooltip("多个单位模式下一次最多选择的目标数")]
+    public int maxSelectedTargets = 1;
+    [Tooltip("自身范围或地块爆炸的半径；0 表示只命中中心格")]
+    public int attackAreaRadius = 0;
+    [Tooltip("穿透目标身后的格数")]
+    public int pierceDepth = 0;
+    [Tooltip("目标必须与施法者处于六边形六条直线上")]
+    public bool requiresStraightLine = false;
+    [Tooltip("选择目标时忽略中途单位和障碍物的视线阻挡")]
+    public bool ignoresLineBlock = false;
+    [Tooltip("全场随机攻击次数；同一目标可能重复命中")]
+    public int randomHitCount = 0;
+    [Tooltip("全场技能是否同时命中友方单位")]
+    public bool affectsAllies = false;
+    [Tooltip("命中友方时的基础伤害")]
+    public int allyDamage = 0;
+    [Tooltip("全场技能是否同时命中施法者")]
+    public bool affectsCaster = false;
+    [Tooltip("命中施法者时的基础伤害")]
+    public int casterDamage = 0;
+    [Tooltip("这张攻击牌在基础伤害以外的结算规则")]
+    public AttackEffectRule attackEffectRule = AttackEffectRule.普通;
+    [Tooltip("条件效果使用的 Buff：如易伤、力量、眩晕、无力")]
+    public BuffData specialBuff;
+    [Tooltip("穿透技能命中目标身后格子的基础伤害；0 表示与主目标相同")]
+    public int pierceSecondaryDamage = 0;
 
     [Header("位移设置（位移类卡牌填写）")]
     [Tooltip("勾选后这张牌结算时会造成一次位移")]
@@ -288,7 +362,7 @@ public class CardData : ScriptableObject
     }
 
     /// <summary>
-    /// 攻击技能的最终耐力消耗。
+    /// 使用攻击技能时的最终耐力消耗。
     /// 「攻击耐力消耗倍率」会放大耐力消耗（虚弱 = 1.25），向上取整；
     /// 防御技能不受影响（策划写的是"攻击技能的耐力消耗增加25%"）。
     /// 该类型是倍率型：没挂虚弱时查询返回 1（不变），叠层按 1+0.25×层数 合并。
@@ -302,6 +376,16 @@ public class CardData : ScriptableObject
         return Mathf.Max(0, Mathf.CeilToInt(actionCost * rate));
     }
 
+    /// <summary>使用时的实付耐力；《连续拳》按本回合已有使用次数减少后续使用费用。</summary>
+    public int GetPlayActionCost(Unit caster)
+    {
+        int baseCost = GetFinalActionCost(caster);
+        if (attackEffectRule != AttackEffectRule.连续使用降低耐力 || caster == null)
+            return baseCost;
+        return AttackEffectMath.DiscountedStamina(baseCost,
+            caster.GetSkillUsesThisTurn(this), 3);
+    }
+
     /// <summary>
     /// 位移类技能生效后的最大距离。
     /// 「移动距离加成」只作用于位移类（敏捷 +1 / 残废 -1），传送类不受影响。
@@ -309,6 +393,8 @@ public class CardData : ScriptableObject
     /// </summary>
     public int GetEffectiveMaxRange(Unit caster)
     {
+        if (!IsAttack && (defenseEffectRule == DefenseEffectRule.跳跃 ||
+                          defenseEffectRule == DefenseEffectRule.换位)) return maxRange;
         if (caster == null || !IsMovementSkill || IsTeleportSkill) return maxRange;
 
         int result = maxRange + caster.GetMoveBonus();
@@ -324,6 +410,118 @@ public class CardData : ScriptableObject
     {
         int distance = from.Distance(to);
         return distance >= minRange && distance <= GetEffectiveMaxRange(caster);
+    }
+
+    public bool CanSelectAttackCell(Unit caster, HexCoord coord)
+    {
+        if (caster == null || HexGrid.Instance == null) return false;
+        HexCell cell = HexGrid.Instance.GetCell(coord);
+        if (cell == null) return false;
+        HexCoord origin = caster.GetCoord();
+        if (attackTargetRule == AttackTargetRule.自身范围 ||
+            attackTargetRule == AttackTargetRule.全场 ||
+            attackTargetRule == AttackTargetRule.全场随机 ||
+            attackTargetRule == AttackTargetRule.固定地图图案)
+            return false;
+        if (!IsInEffectiveRange(caster, origin, coord)) return false;
+        if (attackTargetRule == AttackTargetRule.相邻地块定向扇形)
+            return origin.Distance(coord) == 1;
+        if (requiresStraightLine && AttackAreaGeometry.StraightDirection(origin, coord) < 0)
+            return false;
+        if (attackEffectRule == AttackEffectRule.飞身刺击冲刺)
+        {
+            int direction = AttackAreaGeometry.StraightDirection(origin, coord);
+            HexCoord step = origin;
+            for (int i = 1; i < origin.Distance(coord); i++)
+            {
+                step = step.GetNeighbor(direction);
+                HexCell landing = HexGrid.Instance.GetCell(step);
+                if (landing == null || !landing.CanEnter(caster)) return false;
+            }
+        }
+        if (attackEffectRule == AttackEffectRule.疯狂撕扯 && origin.Distance(coord) == 2 &&
+            FindApproachCell(caster, coord) == origin)
+            return false;
+        if (attackEffectRule == AttackEffectRule.撞击前冲 && origin.Distance(coord) > 1 &&
+            FindApproachCell(caster, coord) == origin)
+            return false;
+        if (attackTargetRule == AttackTargetRule.地块) return true;
+        Unit target = cell.occupyUnit;
+        if (target != null && target != caster && target.GetCurrentHealth() > 0 &&
+            ((target is PlayerUnit) != (caster is PlayerUnit) || affectsAllies) &&
+            (!(caster is PlayerUnit) || !target.DefenseState.UntargetableThisTurn) &&
+            !caster.IsAttackTargetForbidden(target)) return CanTargetUnit;
+        return CanTargetObstacle && cell.obstacle != null;
+    }
+
+    public IReadOnlyList<AttackAreaCell> GetAttackArea(Unit caster, HexCoord selected, int patternIndex = 0)
+    {
+        var result = new List<AttackAreaCell>();
+        if (caster == null || HexGrid.Instance == null) return result;
+        HexCoord origin = caster.GetCoord();
+        if (attackTargetRule == AttackTargetRule.相邻地块定向扇形)
+            return AttackAreaGeometry.GetCone(origin, selected);
+        if (attackTargetRule == AttackTargetRule.固定地图图案)
+        {
+            foreach (HexCoord coord in AttackAreaGeometry.GetFixedBombardmentPattern(patternIndex))
+                result.Add(new AttackAreaCell(coord, damage));
+            return result;
+        }
+        if (attackTargetRule == AttackTargetRule.全场 || attackTargetRule == AttackTargetRule.全场随机)
+        {
+            foreach (HexCell cell in HexGrid.Instance.GetAllCells())
+                if (cell != null && ((cell.occupyUnit != null &&
+                    (cell.occupyUnit != caster || affectsCaster)) ||
+                    (CanTargetObstacle && cell.obstacle != null)))
+                    result.Add(new AttackAreaCell(cell.coord, damage));
+            return result;
+        }
+        if (attackTargetRule == AttackTargetRule.自身范围 || attackTargetRule == AttackTargetRule.地块)
+        {
+            HexCoord center = attackTargetRule == AttackTargetRule.自身范围 ? origin : selected;
+            foreach (HexCell cell in HexGrid.Instance.GetCellsInRange(center, attackAreaRadius))
+                if (cell != null && (attackTargetRule != AttackTargetRule.自身范围 || cell.coord != origin))
+                    result.Add(new AttackAreaCell(cell.coord, damage));
+            return result;
+        }
+        if (attackTargetRule == AttackTargetRule.穿透单位)
+        {
+            bool isPrimary = true;
+            foreach (HexCoord coord in AttackAreaGeometry.GetPierce(origin, selected, pierceDepth))
+            {
+                result.Add(new AttackAreaCell(coord,
+                    isPrimary || pierceSecondaryDamage <= 0 ? damage : pierceSecondaryDamage));
+                isPrimary = false;
+            }
+            return result;
+        }
+        result.Add(new AttackAreaCell(selected, damage));
+        return result;
+    }
+
+    private static HexCoord FindApproachCell(Unit caster, HexCoord target)
+    {
+        HexCoord origin = caster.GetCoord();
+        int currentDistance = origin.Distance(target);
+        if (HexGrid.Instance == null) return origin;
+        for (int direction = 0; direction < 6; direction++)
+        {
+            HexCoord next = origin.GetNeighbor(direction);
+            HexCell cell = HexGrid.Instance.GetCell(next);
+            if (next.Distance(target) < currentDistance && cell != null && cell.CanEnter(caster))
+                return next;
+        }
+        return origin;
+    }
+
+    private static bool MoveOneToward(Unit caster, Unit target)
+    {
+        if (caster == null || target == null) return false;
+        HexCoord current = caster.GetCoord();
+        HexCoord next = FindApproachCell(caster, target.GetCoord());
+        if (next == current) return false;
+        caster.MoveTo(next);
+        return caster.GetCoord() == next;
     }
 
     /// <summary>
@@ -345,19 +543,20 @@ public class CardData : ScriptableObject
     ///    负面 buff → 只有这张牌允许以敌方为目标时才挂给目标；
     /// 5. 广播 "CardResolved" 事件。
     ///
-    /// 射程校验和耐力消耗不在这里做：
+    /// 射程校验和耐力扣费不在这里做：
     ///   - 射程 → CardData.IsInEffectiveRange（位移类要算敏捷/残废）；
-    ///   - 耐力 → CardData.GetFinalActionCost（虚弱要放大攻击技能消耗），
-    ///           由调用方在扣费时取用。
+    ///   - 耐力 → 使用技能时由 PlayerCardSystem 按 GetPlayActionCost 扣除。
     ///
     /// 位移/传送/召唤/群体治疗等特殊效果以后接入对应系统时在这里扩展。
     /// </summary>
     /// <param name="caster">施法者（打出这张牌的人，可能是玩家也可能是敌人）</param>
     /// <param name="target">目标单位（防御/自身增益卡可为 null 或就是 caster 自己）</param>
-    public void Resolve(Unit caster, Unit target)
+    public void Resolve(Unit caster, Unit target) => ResolveWithOutcome(caster, target);
+
+    public AttackOutcome ResolveWithOutcome(Unit caster, Unit target)
     {
         // 没有施法者就无法结算（防御性判空）
-        if (caster == null) return;
+        if (caster == null) return default;
 
         // 禁止行动（眩晕）：被控住的单位打不出任何牌。
         // 玩家侧 PlayerCardSystem.ValidateSlot 已经拦过一次，这里兜底，
@@ -365,13 +564,14 @@ public class CardData : ScriptableObject
         if (!caster.CanAttack())
         {
             Debug.Log($"{caster.data.unitName} 被禁止行动，【{cardName}】无法释放");
-            return;
+            return default;
         }
 
         // 目标是否为"敌人"（和施法者不是同一个单位）
         bool targetIsEnemy = target != null && target != caster && target.GetCurrentHealth() > 0;
 
         // ---------- 第 1 步：攻击卡造成伤害 ----------
+        AttackOutcome outcome = default;
         if (IsAttack && CanTargetUnit && targetIsEnemy)
         {
             // 亲密：施法者身上挂着"攻击目标限制"时，不能用被列入名单的单位当目标。
@@ -380,30 +580,30 @@ public class CardData : ScriptableObject
             if (caster.IsAttackTargetForbidden(target))
             {
                 Debug.Log($"{caster.data.unitName} 无法将 {target.data.unitName} 选为攻击目标");
-                return;
+                return default;
             }
-
-            caster.OnAttack();   // 触发施法者身上"攻击时"的 buff
-
-            // 伤害 = 卡牌配置的 damage + 力量/无力/临时力量等"攻击伤害加成"（按层数叠加）+ 遗物加成，
-            // 并按配置的伤害类型结算（真实伤害无视护盾）。
-            // 走 DamageContext 结算：带上"谁打的 / 用什么牌 / 近战还是远程"，
-            // 让按来源判定的遗物（免疫爆炸、远程减伤、近战增伤）能正确生效。
-            int finalDamage = GetFinalDamage(caster, target);
-            DamageContext ctx = DamageContext.FromCard(caster, this, finalDamage, damageType);
-            target.TakeDamage(ctx);
-
-            Debug.Log($"{caster.data.unitName} 使用【{cardName}】对 {target.data.unitName} 造成 {finalDamage} 点伤害");
+            outcome = ResolveUnitAttack(caster, target);
+            if (!outcome.HitTarget) targetIsEnemy = false;
         }
 
         // ---------- 第 1.5 步：位移效果 ----------
         // 位移类卡牌（如"推"/"撞击"）：默认推被打中的目标，也可配置成推自己（如"远跳"）。
         // 传送需要指定落点，走 Unit.TeleportTo，不在这里处理。
-        if (causesDisplacement && displacementType != DisplacementType.传送)
+        if (causesDisplacement && (!IsAttack || outcome.HitTarget) &&
+            displacementType != DisplacementType.传送 &&
+            attackEffectRule != AttackEffectRule.飞身刺击冲刺)
         {
+            HexCoord pushOrigin = target != null ? target.GetCoord() : default;
             Unit subject = displaceSelf ? caster : target;
+            bool attemptedPush = subject == target && target != null && target.GetCurrentHealth() > 0;
             if (subject != null && subject.GetCurrentHealth() > 0)
-                subject.ApplyDisplacement(displacementType, displacementDistance, caster);
+                subject.ApplyDisplacement(displacementType, displacementDistance,
+                    displaceSelf ? target : caster);
+            if (attackEffectRule == AttackEffectRule.笨拙冲撞 && target != null &&
+                (outcome.ChargeHealthLower ||
+                 (attemptedPush && target.GetCoord() == pushOrigin)) &&
+                specialBuff != null && caster.GetCurrentHealth() > 0)
+                caster.ApplyBuff(specialBuff);
         }
 
         // ---------- 第 2 步：防御卡对自身生效（治疗或护盾） ----------
@@ -455,7 +655,116 @@ public class CardData : ScriptableObject
         }
 
         // ---------- 第 4 步：广播事件 ----------
+        if (IsAttack) caster.RecordSkillUse(this);
         EventManager.Trigger("CardResolved", this, caster, target);
+        return outcome;
+    }
+
+    private AttackOutcome ResolveUnitAttack(Unit caster, Unit target)
+    {
+        AttackOutcome result = default;
+        int initialDistance = caster.GetCoord().Distance(target.GetCoord());
+        if (attackEffectRule == AttackEffectRule.笨拙冲撞)
+            result.ChargeHealthLower = caster.GetCurrentHealth() < target.GetCurrentHealth();
+
+        if (attackEffectRule == AttackEffectRule.飞身刺击冲刺)
+        {
+            while (caster.GetCoord().Distance(target.GetCoord()) > 1)
+                if (!MoveOneToward(caster, target)) return result;
+        }
+        else if (attackEffectRule == AttackEffectRule.疯狂撕扯 && initialDistance == 2)
+        {
+            if (!MoveOneToward(caster, target)) return result;
+        }
+        else if (attackEffectRule == AttackEffectRule.撞击前冲 && initialDistance > 1)
+        {
+            if (!MoveOneToward(caster, target)) return result;
+        }
+        else if (attackEffectRule == AttackEffectRule.笨拙冲撞)
+        {
+            while (caster.GetCoord().Distance(target.GetCoord()) > 1)
+                if (!MoveOneToward(caster, target))
+                {
+                    if (specialBuff != null) caster.ApplyBuff(specialBuff);
+                    return result;
+                }
+        }
+
+        int hitCount = 1;
+        switch (attackEffectRule)
+        {
+            case AttackEffectRule.三段攻击: hitCount = 3; break;
+            case AttackEffectRule.易伤追加一击:
+                hitCount = 2 + (specialBuff != null && target.HasBuff(specialBuff) ? 1 : 0);
+                break;
+            case AttackEffectRule.疯狂撕扯:
+                hitCount = AttackEffectMath.HitCount(initialDistance == 1 ? 4 : 2, 1,
+                    caster.GetMaxHealth(), caster.GetCurrentHealth());
+                break;
+            case AttackEffectRule.神圣追加一击:
+                hitCount = caster.HasEffect(BuffEffectType.神圣状态) ? 2 : 1;
+                break;
+        }
+
+        for (int i = 0; i < hitCount && caster.GetCurrentHealth() > 0 &&
+             target.GetCurrentHealth() > 0; i++)
+        {
+            caster.OnAttack();
+            int finalDamage = GetFinalDamage(caster, target);
+            if (attackEffectRule == AttackEffectRule.低血量增伤概率保留次数 &&
+                caster.GetCurrentHealth() * 2 < caster.GetMaxHealth()) finalDamage += 2;
+            if (finalDamage > 0)
+                target.TakeDamage(DamageContext.FromCard(caster, this, finalDamage, damageType));
+            result.HitTarget = true;
+            if (attackEffectRule == AttackEffectRule.神圣追加一击 && i > 0 &&
+                target.GetCurrentHealth() > 0 && buffs != null)
+                foreach (BuffData buff in buffs)
+                    if (buff != null && buff.polarity == BuffPolarity.负面)
+                        target.ApplyBuff(buff);
+        }
+
+        if (attackEffectRule == AttackEffectRule.低血量斩杀 &&
+            target.GetCurrentHealth() > 0 && target.GetCurrentHealth() <= 3)
+            target.TakeDamage(DamageContext.FromCard(caster, this,
+                target.GetCurrentHealth(), DamageType.真实));
+
+        result.KilledTarget = result.HitTarget && target.GetCurrentHealth() <= 0;
+        if (caster.GetCurrentHealth() <= 0) return result;
+
+        if (attackEffectRule == AttackEffectRule.噬咬回血)
+        {
+            if (!(caster is PlayerUnit) && result.HitTarget) caster.Heal(1);
+            else if (result.KilledTarget && caster.GetSkillHealThisLevel(this) < 2)
+            {
+                int before = caster.GetCurrentHealth();
+                caster.Heal(1);
+                caster.RecordSkillHeal(this, caster.GetCurrentHealth() - before);
+            }
+        }
+        if (attackEffectRule == AttackEffectRule.啃咬下回合力量 && specialBuff != null &&
+            (result.KilledTarget || (!(caster is PlayerUnit) && result.HitTarget)))
+            caster.QueueSkillBuffNextTurn(specialBuff);
+        if (attackEffectRule == AttackEffectRule.击杀获得力量 && result.KilledTarget &&
+            specialBuff != null && caster.GetBuffStacks(specialBuff) < 2)
+            caster.ApplyBuff(specialBuff);
+        if (attackEffectRule == AttackEffectRule.力竭一击自弱 && result.HitTarget &&
+            specialBuff != null)
+            caster.ApplyBuff(specialBuff);
+
+        return result;
+    }
+
+    /// <summary>光辉打击追踪目标移动时补上的一次伤害，不再扣费或累计出牌次数。</summary>
+    public void ResolveLockedFollowup(Unit caster, Unit target)
+    {
+        if (attackEffectRule != AttackEffectRule.地块追踪 || caster == null || target == null ||
+            caster.GetCurrentHealth() <= 0 || target.GetCurrentHealth() <= 0 ||
+            caster.IsAttackTargetForbidden(target)) return;
+        caster.OnAttack();
+        int finalDamage = GetFinalDamage(caster, target);
+        if (finalDamage > 0)
+            target.TakeDamage(DamageContext.FromCard(caster, this, finalDamage, damageType));
+        EventManager.Trigger("CardFollowupResolved", this, caster, target);
     }
 
     /// <summary>
@@ -499,5 +808,130 @@ public class CardData : ScriptableObject
         }
 
         EventManager.Trigger("CardResolvedOnObstacle", this, caster, obstacle);
+    }
+
+    /// <summary>
+    /// 对一组已选定的格子结算范围伤害和 Buff。空格不会受伤，地图外格子会被忽略。
+    /// 普通范围每格结算一次；随机全场与连锁允许重复命中。
+    /// </summary>
+    public void ResolveArea(Unit caster, IReadOnlyList<AttackAreaCell> area)
+    {
+        if (caster == null || !caster.CanAttack() || HexGrid.Instance == null || area == null)
+            return;
+        if (causesDisplacement)
+            Debug.LogWarning($"【{cardName}】的范围位移尚未配置逐目标规则");
+        var hits = new List<AttackAreaCell>(area);
+        if (attackTargetRule == AttackTargetRule.全场随机)
+        {
+            hits.Clear();
+            for (int i = 0; i < randomHitCount; i++)
+                hits.Add(new AttackAreaCell(caster.GetCoord(), damage));
+        }
+        if (affectsCaster)
+        {
+            HexCoord self = caster.GetCoord();
+            hits.RemoveAll(entry => entry.Coord == self);
+            hits.Add(new AttackAreaCell(self, casterDamage));
+        }
+        if (attackEffectRule == AttackEffectRule.本关使用次数增加范围段数)
+        {
+            int repeatCount = AttackEffectMath.RepeatsForPriorUses(
+                caster.GetSkillUsesThisLevel(this), 2, 1);
+            var onePass = new List<AttackAreaCell>(hits);
+            for (int repeat = 1; repeat < repeatCount; repeat++) hits.AddRange(onePass);
+        }
+        var visited = new HashSet<HexCoord>();
+        bool attacked = false;
+        var actualHits = new List<AttackAreaCell>();
+        bool isChain = attackTargetRule == AttackTargetRule.连锁单位;
+        HexCoord previousChainCoord = default;
+        int scheduledCount = isChain && hits.Count > 0 ? 3 : hits.Count;
+        for (int hitIndex = 0; hitIndex < scheduledCount; hitIndex++)
+        {
+            if (caster.GetCurrentHealth() <= 0) break;
+            AttackAreaCell entry = hits[Mathf.Min(hitIndex, hits.Count - 1)];
+            if (isChain && hitIndex > 0)
+            {
+                var units = new List<HexCoord>();
+                var obstacles = new List<HexCoord>();
+                foreach (HexCell nearby in HexGrid.Instance.GetCellsInRange(previousChainCoord, 2))
+                {
+                    if (nearby == null || nearby.coord == previousChainCoord) continue;
+                    if (nearby.occupyUnit != null && nearby.occupyUnit != caster &&
+                        nearby.occupyUnit.GetCurrentHealth() > 0 &&
+                        ((nearby.occupyUnit is PlayerUnit) != (caster is PlayerUnit)))
+                        units.Add(nearby.coord);
+                    else if (CanTargetObstacle && nearby.obstacle != null) obstacles.Add(nearby.coord);
+                }
+                var choices = units.Count > 0 ? units : obstacles;
+                if (choices.Count == 0) break;
+                entry = new AttackAreaCell(choices[Random.Range(0, choices.Count)], damage);
+            }
+            if (isChain) previousChainCoord = entry.Coord;
+            if (attackTargetRule == AttackTargetRule.全场随机)
+            {
+                var livingEnemies = new List<AttackAreaCell>();
+                foreach (AttackAreaCell candidate in area)
+                {
+                    HexCell possible = HexGrid.Instance.GetCell(candidate.Coord);
+                    if (possible != null && possible.occupyUnit != null &&
+                        possible.occupyUnit.GetCurrentHealth() > 0 &&
+                        ((possible.occupyUnit is PlayerUnit) != (caster is PlayerUnit)))
+                        livingEnemies.Add(candidate);
+                }
+                if (livingEnemies.Count == 0) break;
+                entry = livingEnemies[Random.Range(0, livingEnemies.Count)];
+            }
+            if (attackTargetRule != AttackTargetRule.全场随机 &&
+                attackTargetRule != AttackTargetRule.连锁单位 &&
+                attackEffectRule != AttackEffectRule.本关使用次数增加范围段数 &&
+                !visited.Add(entry.Coord)) continue;
+            HexCell cell = HexGrid.Instance.GetCell(entry.Coord);
+            if (cell == null) continue;
+            actualHits.Add(entry);
+
+            Unit target = cell.occupyUnit;
+            if (CanTargetObstacle && cell.obstacle != null && entry.Damage > 0)
+            {
+                if (!attacked)
+                {
+                    caster.OnAttack();
+                    attacked = true;
+                }
+                cell.obstacle.TakeDamage(Mathf.Max(0, GetFinalDamage(caster) + entry.Damage - damage));
+            }
+            if (target == null || caster.GetCurrentHealth() <= 0) continue;
+            if (target.GetCurrentHealth() <= 0) continue;
+            if (target == caster && !affectsCaster) continue;
+            bool ally = target != caster && ((target is PlayerUnit) == (caster is PlayerUnit));
+            if (ally && !affectsAllies) continue;
+            if (caster.IsAttackTargetForbidden(target)) continue;
+            if (!attacked)
+            {
+                caster.OnAttack();
+                attacked = true;
+            }
+
+            int finalDamage = target == caster ? casterDamage :
+                ally ? allyDamage : damage == 0 && entry.Damage == 0 ? 0 :
+                Mathf.Max(0, GetFinalDamage(caster, target) + entry.Damage - damage);
+            if (finalDamage > 0)
+                target.TakeDamage(DamageContext.FromCard(caster, this, finalDamage,
+                    target == caster && affectsCaster ? DamageType.真实 : damageType));
+            if (target != caster && !ally && target.GetCurrentHealth() > 0 && buffs != null)
+                foreach (BuffData buff in buffs)
+                    if (buff != null && buff.polarity == BuffPolarity.负面)
+                        target.ApplyBuff(buff);
+            if (attackEffectRule == AttackEffectRule.地块追踪 && target != caster &&
+                target.GetCurrentHealth() > 0)
+                AttackTargetLock.Register(caster, target, this, 2);
+        }
+
+        if (buffs != null && caster.GetCurrentHealth() > 0)
+            foreach (BuffData buff in buffs)
+                if (buff != null && buff.polarity != BuffPolarity.负面)
+                    caster.ApplyBuff(buff);
+        caster.RecordSkillUse(this);
+        EventManager.Trigger("CardAreaResolved", this, caster, actualHits);
     }
 }
