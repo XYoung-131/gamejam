@@ -8,7 +8,7 @@ using UnityEngine;
 //  ① 灌注（把新技能装进技能槽）：
 //     - 方式 A：花思绪选攻击/防御牌库 → 6 张展示 → 随机抽 3 张 → 选 1 张装入，其余作废
 //     - 方式 B：从某个敌人"上回合用过的技能"里选 1 张窃取而装（敌方特有不可偷）
-//  ② 出牌（使用槽位里的技能）：消耗思绪 + 耐力，可无限次重复使用同一技能
+//  ② 出牌（使用槽位里的技能）：只扣耐力和技能使用次数，不扣思绪
 //  ③ 把数据通过 EventManager 广播给 UI（槽位变化、待选卡牌等事件）
 //
 //  挂载位置：和 PlayerUnit 挂在同一个 GameObject 上
@@ -46,8 +46,8 @@ public class CardSlot
 ///
 /// 和 CardSlot 的区别：
 /// - 不占技能槽位（不需要空的槽位，也不会把槽位挤掉）；
-/// - 不用灌注、不用付思绪；
-/// - 用的时候不扣思绪和耐力；
+/// - 不用抽牌和灌注，因此不付获取技能的思绪；
+/// - 使用时也不扣耐力；
 /// - 用完 remainingUses 次就整条消失。
 /// </summary>
 [System.Serializable]
@@ -92,8 +92,8 @@ public class PlayerCardSystem : MonoBehaviour
     public int offerCount = 6;           // 规则里的"6 张"
     [Tooltip("从展示的牌中随机抽出多少张供选择")]
     public int pickCount = 3;            // 规则里的"抽 3 张"
-    [Tooltip("发起一次抽卡消耗的思绪（文档：抽牌要消耗 5 点思绪。灌注确认时还要再支付卡牌本身的思绪费用）")]
-    public int drawThoughtCost = 5;      // 注意：这是"开抽"的费用，选牌时还要再付卡费
+    [Tooltip("发起一次抽卡消耗的思绪；确认选牌时再支付技能牌面的思绪")]
+    public int drawThoughtCost = 5;
 
     [Header("牌库（在 Inspector 中配置）")]
     [Tooltip("攻击牌库包含的所有技能")]
@@ -103,7 +103,7 @@ public class PlayerCardSystem : MonoBehaviour
 
     // -------------------- 运行时数据 --------------------
 
-    protected PlayerUnit player;   // 同一物体上的玩家单位引用，用来扣思绪/耐力
+    protected PlayerUnit player;   // 同一物体上的玩家单位引用，用来支付抽牌、灌注和出牌费用
 
     // 技能槽位列表，长度 = slotCount。用 List 而不是数组是为了增删方便
     protected readonly List<CardSlot> slots = new List<CardSlot>();
@@ -226,19 +226,26 @@ public class PlayerCardSystem : MonoBehaviour
     private void OnEnable()
     {
         // "快走饮料"等免费技能：PotionData 基类广播 FreeSkillGranted(喝的人, 技能)，
-        // 这里翻译成"免费卡"额度——不占槽位、不耗资源、用完即走。
+        // 这里翻译成"免费卡"额度——不占槽位、不付抽牌、灌注和使用费用、用完即走。
         EventManager.AddListener<Unit, CardData>("FreeSkillGranted", HandleFreeSkillGranted);
+        EventManager.AddListener<int>("LevelStarted", HandleSkillLevelStarted);
     }
 
     private void OnDisable()
     {
         EventManager.RemoveListener<Unit, CardData>("FreeSkillGranted", HandleFreeSkillGranted);
+        EventManager.RemoveListener<int>("LevelStarted", HandleSkillLevelStarted);
+    }
+
+    private void HandleSkillLevelStarted(int level)
+    {
+        if (player != null) player.ResetSkillLevelState();
     }
 
     /// <summary>
     /// 收到"免费使用技能"事件 → 发一条免费额度。
     /// 次数固定 1 次（策划原文"免费使用1次快走"）；
-    /// 出牌时的射程 / 目标 / 视线校验照走，只是不扣思绪和耐力。
+    /// 出牌时的射程 / 目标 / 视线校验照走。
     /// </summary>
     private void HandleFreeSkillGranted(Unit user, CardData skill)
     {
@@ -293,13 +300,19 @@ public class PlayerCardSystem : MonoBehaviour
             return false;
         }
 
+        // --- 核心抽卡流程 ---
+        // 1. 先过滤旧场景或手工配置中混入的敌方专属牌、错误牌库卡牌。
+        //    无可用牌时不能先扣开抽费用。
+        List<CardData> offered = BuildOffer(sourcePool, pool);
+        if (offered.Count == 0)
+        {
+            Debug.LogWarning($"{pool}牌库没有玩家可抽取的技能");
+            return false;
+        }
+
         // --- 支付"开抽"费用（思绪不够直接失败，后面的都不执行） ---
         if (!player.TrySpendThought(drawThoughtCost))
             return false;
-
-        // --- 核心抽卡流程 ---
-        // 1. 从牌库生成 6 张展示牌（内部已洗牌）
-        List<CardData> offered = BuildOffer(sourcePool);
 
         // 2. 再洗一次，从 6 张里取前 3 张作为待选
         Shuffle(offered);
@@ -386,7 +399,7 @@ public class PlayerCardSystem : MonoBehaviour
 
     /// <summary>
     /// 玩家在待选列表里点了一张牌，确认灌注。
-    /// 支付这张牌的思绪费用，装进第一个空槽位，其余牌全部作废。
+    /// 只支付这张牌的思绪费用，装进第一个空槽位，其余牌全部作废。
     /// </summary>
     /// <param name="choiceIndex">玩家选中的牌在 currentChoices 里的序号（0 开始）</param>
     public virtual bool ConfirmInfuse(int choiceIndex)
@@ -413,9 +426,7 @@ public class PlayerCardSystem : MonoBehaviour
 
         CardData card = currentChoices[choiceIndex];
 
-        // 支付这张牌本身的思绪费用。
-        // 注意：如果思绪不足，这里直接 return false，但 currentChoices 不清空——
-        // 玩家可以改选另一张更便宜的牌。
+        // 灌注只扣思绪；不足时保留待选牌，玩家可以改选。
         if (!player.TrySpendThought(card.thoughtCost))
             return false;
 
@@ -460,7 +471,7 @@ public class PlayerCardSystem : MonoBehaviour
 
     /// <summary>
     /// 使用某个槽位里的技能（目标为单位）。
-    /// 技能不限次数——只要通过所有校验并支付得起费用，就能一直用。
+    /// 装入槽位后使用时只支付耐力；仍需符合目标、行动状态与使用次数限制。
     /// </summary>
     /// <param name="slotIndex">槽位序号（0 开始）</param>
     /// <param name="target">
@@ -473,6 +484,19 @@ public class PlayerCardSystem : MonoBehaviour
         if (!ValidateSlot(slotIndex, out CardData card))
             return false;
 
+        if (!card.IsAttack)
+        {
+            IReadOnlyList<HexCoord> choice = target != null && target != player
+                ? new[] { target.GetCoord() } : new HexCoord[0];
+            return TryUseDefenseCardOnCells(slotIndex, choice);
+        }
+
+        if (card.IsAttack && card.attackTargetRule != AttackTargetRule.单位)
+        {
+            Debug.Log($"【{card.cardName}】需要按范围选格使用");
+            return false;
+        }
+
         // 确定最终目标（攻击卡/对敌防御卡→敌人；自身防御卡→自己）
         Unit finalTarget = ResolveTarget(card, target);
 
@@ -480,20 +504,23 @@ public class PlayerCardSystem : MonoBehaviour
         if (!ValidateCardTarget(card, finalTarget)) return false;
         if (!ValidateCardTargeting(card, finalTarget)) return false;
 
-        // --- 扣资源（思绪 + 耐力一起判断，任一不足则两种都不扣） ---
-        // 耐力消耗取"最终值"：虚弱（攻击耐力消耗倍率 1.25）会放大攻击技能的消耗
-        int finalActionCost = card.GetFinalActionCost(player);
-        if (!player.TrySpendResource(card.thoughtCost, finalActionCost))
-            return false;
+        int staminaCost = card.GetPlayActionCost(player);
+        if (!player.TrySpendStamina(staminaCost)) return false;
 
         // --- 结算卡牌效果（伤害/buff 都在 CardData.Resolve 里） ---
         // 结算前广播一次：让遗物（玛塔的板牙：击杀归属统计）知道"现在用的是哪张牌"
         EventManager.Trigger("PlayerCardAboutToResolve", card, player);
-        card.Resolve(player, finalTarget);
+        AttackOutcome outcome = card.ResolveWithOutcome(player, finalTarget);
+        if (card.attackEffectRule == AttackEffectRule.飞身刺击冲刺 && outcome.KilledTarget)
+            player.RestoreStamina(AttackEffectMath.HalfRefund(staminaCost));
         EventManager.Trigger("CardUsed", card, player, finalTarget);
 
         // 出牌成功后扣减使用次数（maxUses<=0 的无限卡不扣）
-        DecrementSlotUse(slotIndex);
+        bool keepUse = (card.attackEffectRule == AttackEffectRule.击杀返还使用次数 &&
+                        outcome.KilledTarget) ||
+                       (card.attackEffectRule == AttackEffectRule.低血量增伤概率保留次数 &&
+                        AttackEffectMath.RollSucceeds(Random.value, 0.25f));
+        if (!keepUse) DecrementSlotUse(slotIndex);
         return true;
     }
 
@@ -507,6 +534,9 @@ public class PlayerCardSystem : MonoBehaviour
     {
         // --- 公共前置校验 ---
         if (!ValidateSlot(slotIndex, out CardData card))
+            return false;
+
+        if (card.attackTargetRule != AttackTargetRule.单位)
             return false;
 
         if (obstacle == null)
@@ -530,10 +560,7 @@ public class PlayerCardSystem : MonoBehaviour
         if (!IsTargetReachable(card, player.GetCoord(), obstacle.GetCoord()))
             return false;
 
-        // 扣资源（耐力同样走"最终值"，虚弱会放大攻击技能的消耗）
-        int finalActionCost = card.GetFinalActionCost(player);
-        if (!player.TrySpendResource(card.thoughtCost, finalActionCost))
-            return false;
+        if (!player.TrySpendStamina(card.GetPlayActionCost(player))) return false;
 
         // 结算（障碍物专用重载：只吃伤害，不吃负面 buff）
         // 结算前同样广播一次，保持和"打单位"路径一致
@@ -542,6 +569,97 @@ public class PlayerCardSystem : MonoBehaviour
         EventManager.Trigger("CardUsedOnObstacle", card, player, obstacle);
 
         // 出牌成功后扣减使用次数
+        DecrementSlotUse(slotIndex);
+        return true;
+    }
+
+    /// <summary>
+    /// 使用按格子确定范围的攻击牌。多目标传多个坐标；地块/穿透/连锁传一个坐标；
+    /// 自身范围和全场技能传空列表。一次释放只扣一次耐力和技能使用次数。
+    /// </summary>
+    public virtual bool UseSlotCardOnCells(int slotIndex, IReadOnlyList<HexCoord> selectedCells)
+    {
+        if (!ValidateSlot(slotIndex, out CardData card) || HexGrid.Instance == null || selectedCells == null)
+            return false;
+        if (card.attackTargetRule == AttackTargetRule.单位)
+            return false;
+        if (!card.IsAttack || !card.CanTargetUnit) return false;
+
+        var area = new List<AttackAreaCell>();
+        Unit firstTarget = null;
+        if (card.attackTargetRule == AttackTargetRule.多个单位)
+        {
+            int maxTargets = Mathf.Max(1, card.maxSelectedTargets);
+            if (selectedCells.Count < 1 || selectedCells.Count > maxTargets) return false;
+            var unique = new HashSet<HexCoord>();
+            foreach (HexCoord coord in selectedCells)
+            {
+                if (!unique.Add(coord)) return false;
+                if (!card.CanSelectAttackCell(player, coord)) return false;
+                HexCell cell = HexGrid.Instance.GetCell(coord);
+                Unit target = cell.occupyUnit;
+                if (!ValidateCardTargeting(card, target)) return false;
+                if (firstTarget == null) firstTarget = target;
+                area.Add(new AttackAreaCell(coord, card.damage));
+            }
+        }
+        else if (card.attackTargetRule == AttackTargetRule.相邻地块定向扇形)
+        {
+            if (selectedCells.Count != 1) return false;
+            HexCoord chosen = selectedCells[0];
+            if (HexGrid.Instance.GetCell(chosen) == null || player.GetCoord().Distance(chosen) != 1)
+                return false;
+            area.AddRange(card.GetAttackArea(player, chosen));
+        }
+        else if (card.attackTargetRule == AttackTargetRule.地块 ||
+                 card.attackTargetRule == AttackTargetRule.穿透单位 ||
+                 card.attackTargetRule == AttackTargetRule.连锁单位)
+        {
+            if (selectedCells.Count != 1 || !card.CanSelectAttackCell(player, selectedCells[0])) return false;
+            HexCoord chosen = selectedCells[0];
+            if (card.tags.Contains(CardTag.远程) && !card.ignoresLineBlock &&
+                (HexGrid.Instance.IsLineBlocked(player.GetCoord(), chosen) || HexGrid.Instance.IsCellSmoky(chosen))) return false;
+            HexCell cell = HexGrid.Instance.GetCell(chosen);
+            firstTarget = cell != null ? cell.occupyUnit : null;
+            area.AddRange(card.GetAttackArea(player, chosen));
+        }
+        else if (card.attackTargetRule == AttackTargetRule.自身范围 ||
+                 card.attackTargetRule == AttackTargetRule.全场 ||
+                 card.attackTargetRule == AttackTargetRule.全场随机 ||
+                 card.attackTargetRule == AttackTargetRule.固定地图图案)
+        {
+            if (selectedCells.Count != 0) return false;
+            area.AddRange(card.GetAttackArea(player, player.GetCoord(), Random.Range(0, 4)));
+        }
+        else
+        {
+            return false;
+        }
+
+        if (!player.TrySpendStamina(card.GetPlayActionCost(player))) return false;
+
+        EventManager.Trigger("PlayerCardAboutToResolve", card, player);
+        card.ResolveArea(player, area);
+        EventManager.Trigger("CardUsed", card, player, firstTarget);
+        DecrementSlotUse(slotIndex);
+        return true;
+    }
+
+    public virtual bool TryUseDefenseCardOnCells(int slotIndex, IReadOnlyList<HexCoord> selected)
+    {
+        if (!ValidateSlot(slotIndex, out CardData card) || card.IsAttack ||
+            !DefenseSkillResolver.CanResolve(card, player, selected)) return false;
+        int staminaCost = player.DefenseState.GetStaminaCost(card, player);
+        if (!player.TrySpendStamina(staminaCost)) return false;
+        EventManager.Trigger("PlayerCardAboutToResolve", card, player);
+        if (!DefenseSkillResolver.Resolve(card, player, selected))
+        {
+            player.RestoreStamina(staminaCost);
+            return false;
+        }
+        Unit target = selected.Count > 0 && HexGrid.Instance != null
+            ? HexGrid.Instance.GetCell(selected[0])?.occupyUnit : player;
+        EventManager.Trigger("CardUsed", card, player, target);
         DecrementSlotUse(slotIndex);
         return true;
     }
@@ -640,6 +758,11 @@ public class PlayerCardSystem : MonoBehaviour
         // 射程
         if (!IsInRange(card, player.GetCoord(), finalTarget.GetCoord()))
             return false;
+        if (card.IsAttack && !card.CanSelectAttackCell(player, finalTarget.GetCoord()))
+            return false;
+        if (card.IsAttack && card.requiresStraightLine &&
+            AttackAreaGeometry.StraightDirection(player.GetCoord(), finalTarget.GetCoord()) < 0)
+            return false;
 
         // "亲密"（攻击目标限制）：名单里的单位不能被选为攻击目标
         if (player.IsAttackTargetForbidden(finalTarget))
@@ -664,7 +787,7 @@ public class PlayerCardSystem : MonoBehaviour
     ///
     /// 为什么不做成"立刻自动放出来"：位移类技能要玩家自己挑落点和距离，
     /// 自动放等于替玩家做决定。所以改成发一张"免费卡"挂在这儿，
-    /// 玩家点一下才用掉一次——出牌时的射程 / 目标 / 视线校验照走，只是不扣资源。
+    /// 玩家点一下才用掉一次——出牌时的射程 / 目标 / 视线校验照走。
     /// </summary>
     /// <param name="card">免费开放的技能</param>
     /// <param name="uses">免费次数（默认 1 次）</param>
@@ -700,9 +823,7 @@ public class PlayerCardSystem : MonoBehaviour
     /// <summary>
     /// 使用第 index 条免费技能（目标为单位）。
     ///
-    /// 和 UseSlotCard 的区别只有两点：
-    ///   ① 不消耗思绪和耐力；
-    ///   ② 用完这一次就从 freeCards 里移除。
+    /// 和 UseSlotCard 的区别：不用抽牌或灌注，不占槽位；用完额度后从 freeCards 移除。
     /// 其余（阶段校验、禁止行动、目标类型、射程、亲密、视线、结算）完全一致。
     /// </summary>
     /// <param name="index">免费技能在 FreeCards 里的序号（0 开始）</param>
@@ -736,12 +857,18 @@ public class PlayerCardSystem : MonoBehaviour
         }
 
         CardData card = charge.card;
+        if (!card.IsAttack)
+        {
+            IReadOnlyList<HexCoord> choice = target != null && target != player
+                ? new[] { target.GetCoord() } : new HexCoord[0];
+            return UseFreeDefenseCardOnCells(index, choice);
+        }
         Unit finalTarget = ResolveTarget(card, target);
 
         if (!ValidateCardTarget(card, finalTarget)) return false;
         if (!ValidateCardTargeting(card, finalTarget)) return false;
 
-        // 免费：跳过 TrySpendResource，直接结算
+        // 免费技能由药水或遗物授予，使用时不扣耐力。
         card.Resolve(player, finalTarget);
         EventManager.Trigger("CardUsed", card, player, finalTarget);
         Debug.Log($"免费使用【{card.cardName}】（来自{(string.IsNullOrEmpty(charge.source) ? "道具" : charge.source)}）");
@@ -751,6 +878,22 @@ public class PlayerCardSystem : MonoBehaviour
         if (charge.IsEmpty)
             freeCards.RemoveAt(index);
 
+        EventManager.Trigger("FreeCardChanged", this);
+        return true;
+    }
+
+    public virtual bool UseFreeDefenseCardOnCells(int index, IReadOnlyList<HexCoord> selected)
+    {
+        if (index < 0 || index >= freeCards.Count || freeCards[index].IsEmpty ||
+            !CanActNow() || player.HasEffect(BuffEffectType.禁止行动)) return false;
+        FreeCardCharge charge = freeCards[index];
+        if (charge.card == null || charge.card.IsAttack ||
+            !DefenseSkillResolver.Resolve(charge.card, player, selected)) return false;
+        Unit target = selected.Count > 0 && HexGrid.Instance != null
+            ? HexGrid.Instance.GetCell(selected[0])?.occupyUnit : player;
+        EventManager.Trigger("CardUsed", charge.card, player, target);
+        charge.remainingUses--;
+        if (charge.IsEmpty) freeCards.RemoveAt(index);
         EventManager.Trigger("FreeCardChanged", this);
         return true;
     }
@@ -827,7 +970,7 @@ public class PlayerCardSystem : MonoBehaviour
     /// </summary>
     protected virtual bool IsTargetReachable(CardData card, HexCoord from, HexCoord to)
     {
-        if (!card.tags.Contains(CardTag.远程)) return true;   // 只有远程技能检查视线
+        if (!card.tags.Contains(CardTag.远程) || card.ignoresLineBlock) return true;
         if (HexGrid.Instance == null) return true;
 
         if (HexGrid.Instance.IsLineBlocked(from, to))
@@ -978,14 +1121,17 @@ public class PlayerCardSystem : MonoBehaviour
     /// <summary>
     /// 从牌库生成 6 张"展示牌"。
     /// 规则：牌库数量够 6 张时尽量不重复；牌库不足 6 张时允许重复抽到同一张。
-    /// （题目要求"可以抽到槽位中已有的技能"，所以这里只过滤空引用，不去重已有槽位）
+    /// 过滤空引用、敌方特有和不属于本牌库的卡，但不排除槽位中已有的技能。
     /// </summary>
-    protected virtual List<CardData> BuildOffer(List<CardData> pool)
+    protected virtual List<CardData> BuildOffer(List<CardData> pool, CardPool requestedPool)
     {
         // 先把牌库复制一份并洗牌，避免改动原始列表顺序
         List<CardData> bag = new List<CardData>();
         foreach (var card in pool)
-            if (card != null) bag.Add(card);
+            if (CardPoolRules.IsOfferEligible(card, requestedPool))
+                bag.Add(card);
+        if (bag.Count == 0)
+            return new List<CardData>();
         Shuffle(bag);
 
         List<CardData> offered = new List<CardData>();

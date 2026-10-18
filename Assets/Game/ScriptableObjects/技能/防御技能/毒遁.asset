@@ -17,7 +17,7 @@ MonoBehaviour:
   thoughtCost: 20
   actionCost: 10
   maxUses: 2
-  minRange: 0
+  minRange: 2
   maxRange: 2
   damage: 0
   damageType: 0
@@ -28,7 +28,10 @@ MonoBehaviour:
   displaceSelf: 1
   defenseEffectType: 1
   defenseValue: 0
+  defenseTargetRule: 2
+  defenseEffectRule: 24
   defenseTargetTypes: 01000000
+  specialBuff: {fileID: 11400000, guid: 38dea84538eb44148b4c535b8f5163f7, type: 2}
   library: 1
   rarity: 2
   tags: 0500000004000000

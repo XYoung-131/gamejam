@@ -43,6 +43,11 @@ public class LevelManager : MonoBehaviour
     public PlayerUnit Player { get; private set; }
 
     private readonly List<EnemyUnit> enemies = new List<EnemyUnit>();
+
+    public void RegisterSummonedEnemy(EnemyUnit enemy)
+    {
+        if (enemy != null && !enemies.Contains(enemy)) enemies.Add(enemy);
+    }
     private readonly List<Obstacle> obstacles = new List<Obstacle>();
 
     // ============================================================
@@ -122,6 +127,7 @@ public class LevelManager : MonoBehaviour
             cards = go.AddComponent<PlayerCardSystem>();
         if (attackPool.Count > 0) cards.attackPool = new List<CardData>(attackPool);
         if (defensePool.Count > 0) cards.defensePool = new List<CardData>(defensePool);
+        cards.initialCards = CardPoolRules.MergeInitialCards(cards.initialCards, cards.defensePool);
 
         EnsureFlipEffect(go);
         EnsureBuffRing(go);
