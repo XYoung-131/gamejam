@@ -29,6 +29,9 @@ MonoBehaviour:
   defenseEffectType: 1
   defenseValue: 0
   defenseTargetTypes: 01000000
+  defenseTargetRule: 0
+  defenseEffectRule: 10
+  specialBuff: {fileID: 11400000, guid: 6036645b86313be489798beaa6edba9b, type: 2}
   library: 1
   rarity: 4
   tags: 04000000

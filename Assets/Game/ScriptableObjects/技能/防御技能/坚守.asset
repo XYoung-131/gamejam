@@ -28,6 +28,8 @@ MonoBehaviour:
   displaceSelf: 0
   defenseEffectType: 1
   defenseValue: 8
+  defenseTargetRule: 0
+  defenseEffectRule: 7
   defenseTargetTypes: 01000000
   library: 1
   rarity: 2
