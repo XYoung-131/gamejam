@@ -10,7 +10,7 @@ public class PlayerUnit : Unit
     [Header("玩家特有")]
     [Tooltip("思绪上限（文档：耐力和思绪上限都是 40）")]
     public int maxThought = 40;
-    [Tooltip("耐力上限（耐力 = 行动资源，移动和出牌共用）")]
+    [Tooltip("耐力上限（用于移动、普通攻击和使用技能）")]
     public int maxStamina = 40;
     [Tooltip("战斗开始时的思绪（文档：战斗开始时有 20 点）")]
     public int startThought = 20;
@@ -134,7 +134,7 @@ public class PlayerUnit : Unit
     }
 
     /// <summary>
-    /// 同时消耗思绪 + 耐力（出牌用），任一不足则都不扣
+    /// 同时消耗思绪 + 耐力，任一不足则都不扣（保留供组合费用使用）
     /// </summary>
     public bool TrySpendResource(int thoughtAmount, int staminaAmount)
     {
@@ -301,6 +301,7 @@ public class PlayerUnit : Unit
     {
         if (IsDead || target == null) return false;   // 已死亡：不能攻击
         if (target.IsDead) return false;              // 目标已死：不再打尸体
+        if (target.DefenseState.UntargetableThisTurn) return false;
 
         if (GameManager.Instance != null && !GameManager.Instance.isPlayerTurn)
             return false;
@@ -332,7 +333,7 @@ public class PlayerUnit : Unit
         // 造成伤害
         int damage = GetAttack();
         OnAttack();
-        target.TakeDamage(damage);
+        target.TakeDamage(damage, DamageType.物理, this);
 
         hasActedThisTurn = true;
         EventManager.Trigger("PlayerAttacked", this, target);

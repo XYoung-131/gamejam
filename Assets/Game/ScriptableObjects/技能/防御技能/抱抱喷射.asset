@@ -29,6 +29,9 @@ MonoBehaviour:
   defenseEffectType: 1
   defenseValue: 0
   defenseTargetTypes: 01000000
+  defenseTargetRule: 0
+  defenseEffectRule: 5
+  summonUnit: {fileID: 11400000, guid: 25bc9e03166119ebd1e6d3dff96040af, type: 2}
   library: 1
   rarity: 4
   tags: 04000000

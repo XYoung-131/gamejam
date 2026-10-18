@@ -29,6 +29,9 @@ MonoBehaviour:
   defenseEffectType: 1
   defenseValue: 0
   defenseTargetTypes: 01000000
+  defenseTargetRule: 2
+  defenseEffectRule: 16
+  generatedTerrain: {fileID: 11400000, guid: 4b3bd7e55218a74485d8a6e2cbd1b72f, type: 2}
   library: 1
   rarity: 4
   tags: 04000000
