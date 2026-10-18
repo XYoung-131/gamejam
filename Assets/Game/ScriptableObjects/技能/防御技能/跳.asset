@@ -29,6 +29,7 @@ MonoBehaviour:
   defenseEffectType: 1
   defenseValue: 0
   defenseTargetTypes: 01000000
+  initialOnly: 1
   library: 1
   rarity: 1
   tags: 02000000

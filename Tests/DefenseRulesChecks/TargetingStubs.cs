@@ -2,6 +2,8 @@ using System.Collections.Generic;
 
 public enum DefenseTargetRule { 自身, 单位, 地块, 多个单位 }
 public enum DefenseEffectRule { 普通, 换位, 神圣祝福, 投掷织毯 }
+public enum CardPool { 攻击, 防御 }
+public enum Rarity { 普通, 固有, 稀有, 传奇, 敌方特有 }
 
 public class CardData
 {
@@ -10,6 +12,9 @@ public class CardData
     public int minRange;
     public int maxRange;
     public int maxDefenseTargets = 1;
+    public CardPool library;
+    public Rarity rarity;
+    public bool initialOnly;
     public int GetEffectiveMaxRange(Unit caster) => maxRange;
 }
 
