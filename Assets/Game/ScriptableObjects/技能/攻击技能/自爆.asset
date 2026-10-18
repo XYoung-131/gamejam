@@ -22,6 +22,15 @@ MonoBehaviour:
   damage: 3
   damageType: 0
   targetTypes: 00000000
+  attackTargetRule: 5
+  attackAreaRadius: 1
+  pierceDepth: 0
+  requiresStraightLine: 0
+  ignoresLineBlock: 0
+  randomHitCount: 0
+  attackEffectRule: 0
+  specialBuff: {fileID: 0}
+  pierceSecondaryDamage: 0
   causesDisplacement: 0
   displacementType: 0
   displacementDistance: 1

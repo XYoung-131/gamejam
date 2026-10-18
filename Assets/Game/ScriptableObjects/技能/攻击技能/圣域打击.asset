@@ -17,11 +17,20 @@ MonoBehaviour:
   thoughtCost: 25
   actionCost: 20
   maxUses: 2
-  minRange: 0
+  minRange: 1
   maxRange: 1
   damage: 5
   damageType: 0
   targetTypes: 00000000
+  attackTargetRule: 8
+  attackAreaRadius: 0
+  pierceDepth: 2
+  requiresStraightLine: 0
+  ignoresLineBlock: 0
+  randomHitCount: 0
+  attackEffectRule: 0
+  specialBuff: {fileID: 0}
+  pierceSecondaryDamage: 2
   causesDisplacement: 0
   displacementType: 0
   displacementDistance: 1
