@@ -502,3 +502,35 @@ defenseValue / defenseTargetTypes / library / rarity / tags / buffs / devNotes`�
   **排序 -100 = 全界面最低**；格子 / 高亮 / 棋子 / 相机全部不受影响。
 - `Prefabs/Board/ConceptMapCell.prefab` —— 格子预制体补上两张选取格贴图引用。
 - `Scenes/Battle.unity` —— Managers 物体追加 `BattleHUD` 组件。
+
+## 小羊：战斗界面第二轮（技能插槽 / 抽牌流程 / 推跳 / 敌方技能栏 / 悬停信息）
+
+新增
+
+- `Battle/BattleHUD.cs`（大幅扩充）—— 按例图重排战斗界面，全部运行时生成：
+  - **底部三张技能插槽**：低一层铺 `UI/空技能卡面.png`（空白区填技能名黑字 + 剩余次数），
+    上面叠 `UI/技能插槽.png` 横条；整张卡面可点 → 释放该槽技能，点击进入瞄准后点格子结算。
+  - **抽牌按钮**（`UI/抽牌按键.png`，在"下一回合"正下方）：点击先弹攻击 / 防御两个大型牌堆按钮（中轴对称），
+    再全屏遮罩上出三张居中卡牌，选中即可灌注。
+  - **左侧敌方技能栏**：竖排三张空技能卡面，显示"上回合怪物准备释放并已执行的技能"；
+    上下各一个 `UI/淡蓝色箭头_1.png` 翻页箭头（下箭头旋转 180°，悬停换 `淡蓝色箭头_2.png`），
+    怪物多于 3 个时可翻页；点卡面弹"是否花费思绪灌注"确认框（槽满提示 / 取消无事）；第 1 回合为"空"。
+  - **悬停敌人信息**：鼠标停在怪物立绘上时，脚下显示红色血条（含"当前/上限"数字），
+    头顶显示本回合准备释放的技能；瞄准 / 抽牌 / 敌方回合 / 弹窗期间自动隐藏。浮层整体比其他 UI 大 1.2 倍便于阅读。
+  - **右下角按钮组**：下一回合按钮换 `UI/淡蓝色按键_1.png`，悬停 / 按下换 `淡蓝色按键_2.png`
+    （SpriteSwap 过渡）；按钮右缘距屏幕右边界 10px，插槽组右缘再往左 20px，全部锚定右下角。
+
+修改
+
+- `Cards/PlayerCardSystem.cs` —— 新增 `InfuseResult` 枚举与 `TryInfuseCardDirectly`（左侧敌方技能一键灌注）、
+  `UseBasicAttack` / `UseBasicDefense`（推 / 跳不占槽直接结算，照常扣耐力，共用原有六道校验）。
+- `Core/CameraController.cs` —— 新增 `startZoom`（默认 1.2）：开局按倍数拉近视野，
+  背景 / 格子 / 棋子 / 障碍等比放大，格线与画稿的对齐不会错位；滚轮缩放仍可用。
+- `Battle/LevelManager.cs` —— 编辑器下牌库为空时按目录自动装载 `ScriptableObjects/技能/{攻击技能,防御技能}`，
+  避免 Battle.unity 没配牌库导致抽卡链路失效。
+- `Debug/BattleDebugDriver.cs` —— 删除屏幕左侧 QWERT 技能弹窗、右下角敌人信息面板与技能槽位弹窗（已由 HUD 接管）。
+- `ScriptableObjects/技能/攻击技能/推.asset` —— `targetTypes` 补 `伤害/击退`（原来是空的，选不中目标）；
+  `ScriptableObjects/技能/防御技能/跳.asset` —— `defenseTargetTypes` 补 `传送`。
+- `Art/UI/*.png` —— `技能插槽 / 抽牌按键 / 空技能卡面 / 淡蓝色箭头_1,2 / 淡蓝色按键_1,2` 按按钮实际可点击区域裁剪，
+  去掉四周大片透明边（guid 不变，引用无需重配）。
+- `Scenes/Battle.unity` —— BattleHUD 补齐上述素材引用，相机 `startZoom` 序列化为 1.2。

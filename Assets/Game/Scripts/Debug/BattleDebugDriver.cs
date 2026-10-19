@@ -11,8 +11,9 @@ using UnityEngine.SceneManagement;
 //  所以开战后会永久停在"玩家行动"阶段。
 //
 //  这个脚本补的就是这一层：把键盘和鼠标翻译成已有的公开方法，
-//  再叠一层 IMGUI 状态面板（血量/耐力/思绪/槽位/敌方预告/胜负），
-//  让人能真的把第 1 关打完。
+//  再叠一层 IMGUI 面板（选牌 / 胜负），
+//  让人能真的把第 1 关打完。玩家状态栏与技能槽位由 BattleHUD 绘制；
+//  敌人信息（脚下血条 + 头顶本回合技能预告）改为在 BattleHUD 里"鼠标悬停"时显示。
 //
 //  为什么用 IMGUI 而不是 Canvas：
 //    项目里没有 Canvas / EventSystem / TextMeshPro 场景对象，
@@ -27,9 +28,8 @@ using UnityEngine.SceneManagement;
 //    左键点敌人     → 选中槽位则对该敌人出牌，没选中则普通攻击（需相邻）
 //    左键点自己     → 防御牌先确认自己；有目标的再点紫色格子
 //    左键点障碍物   → 对障碍物使用当前槽位的攻击牌
-//    1 / 2          → 从攻击 / 防御牌库抽卡（出现 3 张待选）
+//    （槽位选择 / 技能释放已迁到 BattleHUD 的底部技能插槽，本调试面板不再提供）
 //    1 / 2 / 3      → 选牌阶段：灌注第 1/2/3 张（0 或退格放弃）
-//    Q W E R T      → 选中第 1~5 号槽位（再按一次取消）
 //    F              → 依次选择药水等授予的免费防御技能
 //    空格           → 结束回合
 //    3              → 普通攻击最近的敌人
@@ -61,17 +61,13 @@ public class BattleDebugDriver : MonoBehaviour
     private GameManager game;
     private Camera cam;
 
-    private const int MaxSlots = 5;
-    private static readonly KeyCode[] SlotKeys =
-    {
-        KeyCode.Q, KeyCode.W, KeyCode.E, KeyCode.R, KeyCode.T
-    };
-
     // ============================================================
     //                       交互状态
     // ============================================================
 
-    private int selectedSlot = -1;     // 当前选中的槽位，-1 = 没选（此时点敌人走普通攻击）
+    // 槽位选择已移到正式 UI（BattleHUD 的技能插槽），这里只保留字段供遗留的出牌分支使用，
+    // 不再由键盘赋值——所以 HUD 在场时鼠标逻辑会直接让位给 HUD。
+    private int selectedSlot = -1;
     private int selectedFreeDefense = -1;
     private bool moveSelectionActive;
     private readonly List<HexCoord> pendingAttackCells = new List<HexCoord>();
@@ -85,7 +81,6 @@ public class BattleDebugDriver : MonoBehaviour
     private bool highlightDirty = true;
 
     // 缓存下来的敌人列表，OnGUI 每帧都要用，避免每帧两次 FindObjectsOfType
-    private readonly List<EnemyUnit> enemyBuffer = new List<EnemyUnit>();
 
     // IMGUI 样式（第一次 OnGUI 时建）
     private Font uiFont;
@@ -120,7 +115,7 @@ public class BattleDebugDriver : MonoBehaviour
     private void Start()
     {
         RefreshRefs();
-        Say("抽卡请点左下角\"技能\"按钮 · QWERT选槽位 · 空格结束回合");
+        Say("抽卡请点右下角插卡按钮 · 技能请点底部技能插槽 · 空格结束回合");
     }
 
     private void OnEnable()
@@ -200,12 +195,7 @@ public class BattleDebugDriver : MonoBehaviour
             DoEndTurn();
         }
 
-        // 槽位选择：Q W E R T
-        for (int i = 0; i < SlotKeys.Length && i < MaxSlots; i++)
-        {
-            if (Input.GetKeyDown(SlotKeys[i]))
-                SelectSlot(i);
-        }
+        // 技能释放（选中槽位 + 选格）已由 BattleHUD 的技能插槽接管，这里不再处理
         if (Input.GetKeyDown(KeyCode.F)) SelectFreeDefense();
 
         if (Input.GetKeyDown(KeyCode.Escape) && pendingAttackCells.Count > 0)
@@ -441,7 +431,7 @@ public class BattleDebugDriver : MonoBehaviour
         {
             if (selectedSlot < 0)
             {
-                Say("先按 Q/W/E/R/T 选一个槽位，再点自己使用防御牌");
+                Say("先点底部技能插槽选中技能，再点自己使用防御牌");
                 return;
             }
             bool ok = cardSystem.UseSlotCard(selectedSlot, player);
@@ -455,7 +445,7 @@ public class BattleDebugDriver : MonoBehaviour
         {
             if (selectedSlot < 0)
             {
-                Say("先按 Q/W/E/R/T 选一个槽位，再点障碍物");
+                Say("先点底部技能插槽选中技能，再点障碍物");
                 return;
             }
             bool ok = cardSystem.UseSlotCardOnObstacle(selectedSlot, cell.obstacle);
@@ -600,7 +590,7 @@ public class BattleDebugDriver : MonoBehaviour
 
         bool hit = player.TryAttack(enemy);
         Say(hit ? "普通攻击 " + enemy.data.unitName
-                : "普通攻击失败：只能打相邻格，或耐力不足（也可以先按 QWERT 选一张牌）");
+                : "普通攻击失败：只能打相邻格，或耐力不足");
         MarkDirty();
     }
 
@@ -651,39 +641,6 @@ public class BattleDebugDriver : MonoBehaviour
         ClearMoveSelection();
         turnManager.RequestEndPlayerTurn();
         Say("结束回合，敌人开始行动");
-        MarkDirty();
-    }
-
-    /// <summary>选中/取消选中一个槽位。</summary>
-    private void SelectSlot(int index)
-    {
-        if (cardSystem == null || index < 0 || index >= cardSystem.Slots.Count)
-            return;
-
-        pendingAttackCells.Clear();
-        selectedFreeDefense = -1;
-        defenseChoosingTargets = false;
-        pendingDefenseCells.Clear();
-        ClearMoveSelection();
-
-        if (selectedSlot == index)
-        {
-            selectedSlot = -1;
-            Say("取消选中槽位");
-        }
-        else if (cardSystem.Slots[index].IsEmpty)
-        {
-            selectedSlot = -1;
-            Say("槽位 " + (index + 1) + " 是空的（按 1 或 2 抽卡灌注）");
-        }
-        else
-        {
-            selectedSlot = index;
-            CardData card = cardSystem.Slots[index].card;
-            Say("选中【" + card.cardName + "】 使用耐力 " + player.DefenseState.GetStaminaCost(card, player) + " / 射程 " +
-                card.minRange + "~" + card.GetEffectiveMaxRange(player));
-        }
-
         MarkDirty();
     }
 
@@ -923,8 +880,7 @@ public class BattleDebugDriver : MonoBehaviour
             return;
         }
 
-        DrawSlotPanel();
-        DrawEnemyPanel();
+        // 敌人信息改为"鼠标悬停时显示在棋子身上"（BattleHUD 负责），此处不再画面板
 
         // 选牌界面由 BattleHUD 承载；只有 HUD 不在场（纯调试场景）时才画 IMGUI 版
         if (cardSystem != null && cardSystem.IsChoosing && BattleHUD.Instance == null)
@@ -932,92 +888,6 @@ public class BattleDebugDriver : MonoBehaviour
 
         if (IsBattleOver)
             DrawResultPanel();
-    }
-
-    private void DrawSlotPanel()
-    {
-        Rect panel = new Rect(12f, Screen.height - 260f, 300f, 190f);
-        DrawPanel(panel);
-
-        GUI.Label(new Rect(panel.x + 10f, panel.y + 6f, 280f, 20f),
-            "技能槽位（Q W E R T 选中）", titleStyle);
-
-        for (int i = 0; i < MaxSlots; i++)
-        {
-            float y = panel.y + 30f + i * 30f;
-            bool valid = cardSystem != null && i < cardSystem.Slots.Count;
-            CardSlot slot = valid ? cardSystem.Slots[i] : null;
-
-            if (i == selectedSlot)
-            {
-                GUI.color = new Color(0.25f, 0.5f, 0.85f, 0.55f);
-                GUI.DrawTexture(new Rect(panel.x + 6f, y - 2f, panel.width - 12f, 26f), Texture2D.whiteTexture);
-                GUI.color = Color.white;
-            }
-
-            string text;
-            if (slot == null || slot.IsEmpty)
-            {
-                text = "[" + SlotKeys[i] + "] 空";
-            }
-            else
-            {
-                string uses = slot.RemainingForUI < 0 ? "∞" : slot.RemainingForUI.ToString();
-                text = "[" + SlotKeys[i] + "] " + slot.card.cardName +
-                       "   耐力" + slot.card.GetPlayActionCost(player) + "   剩" + uses;
-            }
-            GUI.Label(new Rect(panel.x + 12f, y, panel.width - 24f, 22f), text, smallStyle);
-        }
-    }
-
-    private void DrawEnemyPanel()
-    {
-        CollectEnemies();
-
-        float h = 40f + enemyBuffer.Count * 46f;
-        // 右下角：锚定在"下一回合"按钮上方（底部留 100px 给按钮区）
-        Rect panel = new Rect(Screen.width - 330f - 12f, Screen.height - Mathf.Max(h, 60f) - 100f,
-            330f, Mathf.Max(h, 60f));
-        DrawPanel(panel);
-
-        GUI.Label(new Rect(panel.x + 10f, panel.y + 6f, 300f, 20f),
-            "敌人（本回合预告）", titleStyle);
-
-        if (enemyBuffer.Count == 0)
-        {
-            GUI.Label(new Rect(panel.x + 10f, panel.y + 30f, 300f, 22f), "场上没有敌人", smallStyle);
-            return;
-        }
-
-        for (int i = 0; i < enemyBuffer.Count; i++)
-        {
-            EnemyUnit e = enemyBuffer[i];
-            float y = panel.y + 30f + i * 46f;
-
-            DrawBar(new Rect(panel.x + 10f, y, 200f, 15f),
-                e.GetMaxHealth() > 0 ? (float)e.GetCurrentHealth() / e.GetMaxHealth() : 0f,
-                new Color(0.8f, 0.3f, 0.3f, 0.9f),
-                e.data.unitName + "  " + e.GetCurrentHealth() + "/" + e.GetMaxHealth());
-
-            string intents = "";
-            foreach (CardData card in e.PlannedSkills)
-                intents += (intents.Length > 0 ? " + " : "") + card.cardName;
-            if (string.IsNullOrEmpty(intents)) intents = "（没有预告）";
-
-            GUI.Label(new Rect(panel.x + 216f, y - 2f, 110f, 20f),
-                "d=" + player.GetCoord().Distance(e.GetCoord()), smallStyle);
-            GUI.Label(new Rect(panel.x + 10f, y + 17f, 300f, 20f), "预告：" + intents, smallStyle);
-        }
-    }
-
-    private void CollectEnemies()
-    {
-        enemyBuffer.Clear();
-        foreach (EnemyUnit e in FindObjectsOfType<EnemyUnit>())
-        {
-            if (e != null && !e.IsDead)
-                enemyBuffer.Add(e);
-        }
     }
 
     private void DrawChoosePanel()
@@ -1120,16 +990,4 @@ public class BattleDebugDriver : MonoBehaviour
         GUI.color = Color.white;
     }
 
-    /// <summary>一条进度条 + 居中文字。</summary>
-    private void DrawBar(Rect rect, float ratio, Color color, string text)
-    {
-        GUI.color = new Color(1f, 1f, 1f, 0.14f);
-        GUI.DrawTexture(rect, Texture2D.whiteTexture);
-
-        GUI.color = color;
-        GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width * Mathf.Clamp01(ratio), rect.height), Texture2D.whiteTexture);
-
-        GUI.color = Color.white;
-        GUI.Label(rect, text, centerStyle);
-    }
 }

@@ -21,7 +21,7 @@ MonoBehaviour:
   maxRange: 1
   damage: 1
   damageType: 0
-  targetTypes: 00000000
+  targetTypes: 0100000000000000
   attackTargetRule: 0
   attackAreaRadius: 0
   pierceDepth: 0

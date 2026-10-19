@@ -74,6 +74,19 @@ public enum InfuseSource
 }
 
 /// <summary>
+/// 一次性直接灌注的结果（左侧敌方技能卡面点击"确认"后的反馈）。
+/// </summary>
+public enum InfuseResult
+{
+    成功,
+    槽位已满,      // 三个技能槽都装着技能
+    思绪不足,
+    非玩家回合,
+    选牌进行中,    // 上一次抽卡/窃取还没确认完
+    无效卡牌       // card == null
+}
+
+/// <summary>
 /// 玩家卡牌系统（详细规则见文件顶部注释）。
 /// </summary>
 [RequireComponent(typeof(PlayerUnit))]   // 挂载时自动带上 PlayerUnit，防止漏挂
@@ -394,6 +407,39 @@ public class PlayerCardSystem : MonoBehaviour
     }
 
     // ============================================================
+    //          方式 C：直接灌注（左侧敌方技能卡面点击确认）
+    // ============================================================
+
+    /// <summary>
+    /// 不经过抽卡/待选流程，把一张指定技能直接装进第一个空槽位
+    /// （对应 UI：点击左侧敌方技能卡面 → 确认"花费思绪灌注"）。
+    /// 只扣这张卡的思绪费用，不占抽卡次数；槽位装的是同一张卡牌资产 +
+    /// 各槽独立的剩余次数，等价于"复制了一份技能"。
+    /// </summary>
+    public virtual InfuseResult TryInfuseCardDirectly(CardData card)
+    {
+        if (card == null) return InfuseResult.无效卡牌;
+        if (!CanActNow()) return InfuseResult.非玩家回合;
+        if (IsChoosing) return InfuseResult.选牌进行中;
+        if (!HasEmptySlot)
+        {
+            Debug.Log("直接灌注失败：技能槽已满");
+            return InfuseResult.槽位已满;
+        }
+
+        if (!player.TrySpendThought(card.thoughtCost))
+        {
+            Debug.Log($"直接灌注失败：思绪不足（需要 {card.thoughtCost}）");
+            return InfuseResult.思绪不足;
+        }
+
+        PutIntoFirstEmptySlot(card);
+        Debug.Log($"直接灌注【{card.cardName}】成功，消耗思绪 {card.thoughtCost}");
+        EventManager.Trigger("CardInfused", card);
+        return InfuseResult.成功;
+    }
+
+    // ============================================================
     //                    确认 / 放弃灌注
     // ============================================================
 
@@ -661,6 +707,87 @@ public class PlayerCardSystem : MonoBehaviour
             ? HexGrid.Instance.GetCell(selected[0])?.occupyUnit : player;
         EventManager.Trigger("CardUsed", card, player, target);
         DecrementSlotUse(slotIndex);
+        return true;
+    }
+
+    // ============================================================
+    //        基础技能（推 / 跳：常驻按钮，不占槽位、不限次数）
+    // ============================================================
+
+    /// <summary>
+    /// 使用基础攻击技能（如"推"）：不抽牌、不占槽位、不限次数，但**照常扣耐力**。
+    /// 阶段 / 禁止行动 / 目标类型 / 射程 / 亲密 / 视线六道校验与槽位技能完全共用，
+    /// 避免出现"常驻技能能打到槽位技能打不到的东西"。
+    /// </summary>
+    /// <param name="card">基础技能卡（推）</param>
+    /// <param name="target">目标单位；传 null 时按 ResolveTarget 自动选</param>
+    public virtual bool UseBasicAttack(CardData card, Unit target = null)
+    {
+        if (card == null || !card.IsAttack) return false;
+        if (!CanActNow())
+        {
+            Debug.Log("不是玩家行动阶段，不能使用技能");
+            return false;
+        }
+        if (player.HasEffect(BuffEffectType.禁止行动))
+        {
+            Debug.Log("被禁止行动，无法使用技能");
+            return false;
+        }
+        if (card.attackTargetRule != AttackTargetRule.单位)
+        {
+            Debug.Log($"【{card.cardName}】不是单体技能，无法走基础技能入口");
+            return false;
+        }
+
+        Unit finalTarget = ResolveTarget(card, target);
+        if (!ValidateCardTarget(card, finalTarget)) return false;
+        if (!ValidateCardTargeting(card, finalTarget)) return false;
+
+        int staminaCost = card.GetPlayActionCost(player);
+        if (!player.TrySpendStamina(staminaCost)) return false;
+
+        EventManager.Trigger("PlayerCardAboutToResolve", card, player);
+        AttackOutcome outcome = card.ResolveWithOutcome(player, finalTarget);
+        if (card.attackEffectRule == AttackEffectRule.飞身刺击冲刺 && outcome.KilledTarget)
+            player.RestoreStamina(AttackEffectMath.HalfRefund(staminaCost));
+        EventManager.Trigger("CardUsed", card, player, finalTarget);
+        return true;
+    }
+
+    /// <summary>
+    /// 使用基础防御/位移技能（如"跳"）：按格子使用，不占槽位、不限次数，照常扣耐力。
+    /// 校验与结算全部交给 DefenseSkillResolver，和槽位里的防御卡同一条路径
+    /// （"跳" = DefenseEffectRule.跳跃 → Unit.TeleportTo）。
+    /// </summary>
+    /// <param name="card">基础技能卡（跳）</param>
+    /// <param name="selected">选中的落点；"跳"只需 1 个格子</param>
+    public virtual bool UseBasicDefense(CardData card, IReadOnlyList<HexCoord> selected)
+    {
+        if (card == null || card.IsAttack || HexGrid.Instance == null || selected == null) return false;
+        if (!CanActNow())
+        {
+            Debug.Log("不是玩家行动阶段，不能使用技能");
+            return false;
+        }
+        if (player.HasEffect(BuffEffectType.禁止行动))
+        {
+            Debug.Log("被禁止行动，无法使用技能");
+            return false;
+        }
+        if (!DefenseSkillResolver.CanResolve(card, player, selected)) return false;
+
+        int staminaCost = player.DefenseState.GetStaminaCost(card, player);
+        if (!player.TrySpendStamina(staminaCost)) return false;
+
+        EventManager.Trigger("PlayerCardAboutToResolve", card, player);
+        if (!DefenseSkillResolver.Resolve(card, player, selected))
+        {
+            player.RestoreStamina(staminaCost);   // 结算失败要退费
+            return false;
+        }
+        Unit target = selected.Count > 0 ? HexGrid.Instance.GetCell(selected[0])?.occupyUnit : player;
+        EventManager.Trigger("CardUsed", card, player, target);
         return true;
     }
 

@@ -138,6 +138,15 @@ public class LevelManager : MonoBehaviour
         PlayerCardSystem cards = go.GetComponent<PlayerCardSystem>();
         if (cards == null)
             cards = go.AddComponent<PlayerCardSystem>();
+
+        // 场景里没配牌库时（当前 Battle.unity 就是空的），编辑器下按目录自动装载，
+        // 否则抽卡按钮会直接报"牌库为空"，整条抽卡/插槽链路都用不了。
+#if UNITY_EDITOR
+        if (attackPool.Count == 0)
+            attackPool = LoadCardsFromFolder("Assets/Game/ScriptableObjects/技能/攻击技能");
+        if (defensePool.Count == 0)
+            defensePool = LoadCardsFromFolder("Assets/Game/ScriptableObjects/技能/防御技能");
+#endif
         if (attackPool.Count > 0) cards.attackPool = new List<CardData>(attackPool);
         if (defensePool.Count > 0) cards.defensePool = new List<CardData>(defensePool);
         cards.initialCards = CardPoolRules.MergeInitialCards(cards.initialCards, cards.defensePool);
@@ -150,8 +159,28 @@ public class LevelManager : MonoBehaviour
         EnsureBuffRing(go);
     }
 
-    private void SpawnOne(LevelData.Spawn spawn)
+#if UNITY_EDITOR
+    /// <summary>
+    /// 编辑器下按目录装载卡牌资产：场景里没拖牌库时用它兜底，
+    /// 避免"攻击牌库为空"导致抽卡按钮整条链路失效。
+    /// </summary>
+    private static List<CardData> LoadCardsFromFolder(string folder)
     {
+        var result = new List<CardData>();
+        string[] guids = UnityEditor.AssetDatabase.FindAssets("t:CardData", new[] { folder });
+        foreach (string guid in guids)
+        {
+            string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
+            CardData card = UnityEditor.AssetDatabase.LoadAssetAtPath<CardData>(path);
+            if (card != null) result.Add(card);
+        }
+        result.Sort((a, b) => string.CompareOrdinal(a.cardName, b.cardName));
+        Debug.Log("[LevelManager] 自动装载 " + folder + " 下的 " + result.Count + " 张卡");
+        return result;
+    }
+#endif
+
+    private void SpawnOne(LevelData.Spawn spawn)    {
         if (spawn == null)
             return;
 

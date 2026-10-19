@@ -340,6 +340,15 @@ MonoBehaviour:
   hpSlotSprite: {fileID: 21300000, guid: 3989f40f680c4e829b6e7ce76bca2d00, type: 3}
   staminaSlotSprite: {fileID: 21300000, guid: b99c108680aa4b5fab018af5c5dd029f, type: 3}
   thoughtSlotSprite: {fileID: 21300000, guid: ed8726a5999347cda199c09ab78a5691, type: 3}
+  skillSlotSprite: {fileID: 21300000, guid: 6c03a82d6e2e421bb2888d09089f2cf6, type: 3}
+  drawButtonSprite: {fileID: 21300000, guid: e0796390473548f6adabd602a1d375a3, type: 3}
+  emptyCardFaceSprite: {fileID: 21300000, guid: c72788e0cc5b43b0af417fdf0adf4ca6, type: 3}
+  enemySkillArrowSprite: {fileID: 21300000, guid: 6219323bacc749b79a816e1327c078af, type: 3}
+  enemySkillArrowHoverSprite: {fileID: 21300000, guid: 96556268fdc7412d9e1a8c372b7a4c94, type: 3}
+  endTurnNormalSprite: {fileID: 21300000, guid: d4bed0fa68d44eefbf5ef27abc9caa89, type: 3}
+  endTurnHoverSprite: {fileID: 21300000, guid: 54ddafebd4394d83b95f61cdfe71b810, type: 3}
+  pushCard: {fileID: 11400000, guid: fcf7be3e9a3e5e04e88a86a5f7a2507f, type: 2}
+  jumpCard: {fileID: 11400000, guid: 86b7005bc62c39543978bfe3fece8aef, type: 2}
 --- !u!1 &1375286826
 GameObject:
   m_ObjectHideFlags: 0
@@ -379,6 +388,7 @@ MonoBehaviour:
   minZoom: 2
   maxZoom: 15
   zoomSpeed: 1
+  startZoom: 1.2
   clampToBounds: 1
   minBounds: {x: -10, y: -10}
   maxBounds: {x: 10, y: 10}

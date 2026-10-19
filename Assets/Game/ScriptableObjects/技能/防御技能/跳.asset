@@ -30,7 +30,7 @@ MonoBehaviour:
   defenseValue: 0
   defenseTargetRule: 2
   defenseEffectRule: 14
-  defenseTargetTypes: 01000000
+  defenseTargetTypes: 0100000000000000
   initialOnly: 1
   library: 1
   rarity: 1
