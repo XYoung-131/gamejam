@@ -1,0 +1,75 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ad0923868307d8f458a5c91533f26612, type: 3}
+  m_Name: "Level_2_\u8DEF\u897F\u6CD5BOSS"
+  m_EditorClassIdentifier: 
+  levelName: "\u7B2C\u4E8C\u5C42\u8DEF\u897F\u6CD5BOSS"
+  variants:
+  - variantName: "\u53D8\u79CD1"
+    playerStart:
+      q: 0
+      r: -2
+    spawns:
+    - unit: {fileID: 11400000, guid: a0ab10c2278f0538254d39e93df4eac6, type: 2}
+      obstacle: {fileID: 0}
+      terrain: {fileID: 0}
+      coord:
+        q: 0
+        r: 2
+    - unit: {fileID: 0}
+      obstacle: {fileID: 11400000, guid: 8d1ae48374eec9067bfe33e3c211c6a7, type: 2}
+      terrain: {fileID: 0}
+      coord:
+        q: 2
+        r: 0
+    - unit: {fileID: 0}
+      obstacle: {fileID: 11400000, guid: 8d1ae48374eec9067bfe33e3c211c6a7, type: 2}
+      terrain: {fileID: 0}
+      coord:
+        q: 2
+        r: -1
+    - unit: {fileID: 11400000, guid: 457d9da7e8fc630d44e236bfc0e5133f, type: 2}
+      obstacle: {fileID: 0}
+      terrain: {fileID: 0}
+      coord:
+        q: 2
+        r: -2
+    - unit: {fileID: 11400000, guid: 457d9da7e8fc630d44e236bfc0e5133f, type: 2}
+      obstacle: {fileID: 0}
+      terrain: {fileID: 0}
+      coord:
+        q: -2
+        r: 0
+    - unit: {fileID: 0}
+      obstacle: {fileID: 11400000, guid: 8d1ae48374eec9067bfe33e3c211c6a7, type: 2}
+      terrain: {fileID: 0}
+      coord:
+        q: -2
+        r: 1
+    - unit: {fileID: 0}
+      obstacle: {fileID: 11400000, guid: 8d1ae48374eec9067bfe33e3c211c6a7, type: 2}
+      terrain: {fileID: 0}
+      coord:
+        q: -2
+        r: 2
+    - unit: {fileID: 11400000, guid: f1508b8e3eaa5ffdfd5509ddba9954ca, type: 2}
+      obstacle: {fileID: 0}
+      terrain: {fileID: 0}
+      coord:
+        q: -4
+        r: 4
+    - unit: {fileID: 11400000, guid: f1508b8e3eaa5ffdfd5509ddba9954ca, type: 2}
+      obstacle: {fileID: 0}
+      terrain: {fileID: 0}
+      coord:
+        q: 4
+        r: 0
