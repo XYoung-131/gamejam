@@ -44,7 +44,9 @@ public class BattleEndPanel : MonoBehaviour
     public Sprite buttonHoverSprite;  // 淡蓝色按键_2：奖励按钮悬停/按下
     public Sprite arrowSprite;        // 淡蓝色箭头_1：跳过按钮常态
     public Sprite arrowHoverSprite;   // 淡蓝色箭头_2：跳过按钮悬停/按下
-    public Sprite cardFaceSprite;     // 空技能卡面：技能选择按钮左侧的小图标
+    public Sprite cardFaceSprite;     // 空技能卡面：兜底卡面（显示"空"用不到，素材缺失时退回）
+    public Sprite attackCardFaceSprite;  // 攻击牌：攻击类技能的卡面
+    public Sprite defenseCardFaceSprite; // 防御牌：防御类技能的卡面
 
     // ---------------- 布局常量（素材裁剪后的比例） ----------------
     private const float frameH = 760f;                 // 中央框显示高
@@ -52,7 +54,7 @@ public class BattleEndPanel : MonoBehaviour
     private const float titleBarAspect = 1331f / 217f; // 深蓝色长条_1 宽高比
     private const float buttonAspect = 1247f / 308f;   // 淡蓝色按键 宽高比
     private const float arrowAspect = 587f / 447f;     // 淡蓝色箭头 宽高比
-    private const float statusBarH = 150f;             // 顶部深蓝长条高度：遮罩从长条下沿开始盖
+    private const float statusBarH = 187f;   // 顶部区域高度：深蓝长条 105 + 槽位下探至 187，遮罩从耐力/思绪槽下沿开始盖
     private const float optionGap = 5f;                // 奖励按钮上下间距
 
     // ---------------- 本场战斗的奖励状态 ----------------
@@ -83,6 +85,14 @@ public class BattleEndPanel : MonoBehaviour
     private LootSystem loot;
     private PlayerUnit Player => FindObjectOfType<PlayerUnit>();
 
+    // 卡牌悬停浮层（技能介绍 + 附带 buff 说明，挂在结算 Canvas 上盖住遮罩）
+    private GameObject cardSkillTooltip;
+    private RectTransform cardSkillTooltipRt;
+    private Text cardSkillTooltipText;
+    private GameObject cardBuffTooltip;
+    private RectTransform cardBuffTooltipRt;
+    private Text cardBuffTooltipText;
+
     // ============================================================
     //                       初始化
     // ============================================================
@@ -109,6 +119,8 @@ public class BattleEndPanel : MonoBehaviour
         if (arrowSprite == null) arrowSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(uiDir + "淡蓝色箭头_1.png");
         if (arrowHoverSprite == null) arrowHoverSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(uiDir + "淡蓝色箭头_2.png");
         if (cardFaceSprite == null) cardFaceSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(uiDir + "空技能卡面.png");
+        if (attackCardFaceSprite == null) attackCardFaceSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(uiDir + "攻击牌.png");
+        if (defenseCardFaceSprite == null) defenseCardFaceSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(uiDir + "防御牌.png");
 #endif
 
         // 本场的精英 / BOSS 击杀记录（UnitDied 在敌人死亡瞬间广播）
@@ -515,7 +527,7 @@ public class BattleEndPanel : MonoBehaviour
         titleT.rectTransform.sizeDelta = new Vector2(900f, 60f);
 
         // 卡牌显示与抽卡界面（BattleHUD.MakeChoiceCard）完全一致：
-        // 空技能卡面 320 宽、按素材比例定高（不拉伸），黑字写进卡面下方浅灰文字区。
+        // 按技能类型选攻击牌/防御牌卡面，320 宽、按素材比例定高（不拉伸），黑字写进卡面下方浅灰文字区。
         const float w = 320f, gap = 40f;
         float h = w * 495f / 379f;                 // ≈418
         for (int i = 0; i < choices.Count; i++)
@@ -525,11 +537,16 @@ public class BattleEndPanel : MonoBehaviour
             CardData captured = card;
             float x = (i - (choices.Count - 1) / 2f) * (w + gap);
 
-            Button b = NewImageButton(subPanel.transform, "Card_" + i, cardFaceSprite,
+            Sprite face = FaceForCard(card);
+            Button b = NewImageButton(subPanel.transform, "Card_" + i, face,
                 new Vector2(0.5f, 0.5f), new Vector2(x, 20f), new Vector2(w, h),
                 _ => onPick(captured), 0);
-            if (cardFaceSprite == null)
+            if (face == null)
                 b.image.color = new Color(0.15f, 0.19f, 0.27f, 0.98f);   // 素材缺失时兜底成深色块
+
+            // 鼠标悬停：卡面右侧浮层显示技能介绍（带 buff 时旁边加 buff 浮层）
+            AddHoverTrigger(b.gameObject,
+                () => ShowCardTooltip(captured, b.image.rectTransform), HideCardTooltip);
 
             // 卡名：卡面浅灰文字区上沿
             Text nameT = NewFaceText(b.transform, "【" + card.cardName + "】", 28, Color.black,
@@ -549,6 +566,152 @@ public class BattleEndPanel : MonoBehaviour
             desc.verticalOverflow = VerticalWrapMode.Truncate;
         }
         AddChoiceBackButton();
+    }
+
+    /// <summary>按卡牌类型选卡面：防御卡用防御牌，攻击卡用攻击牌，素材缺失退回空技能卡面</summary>
+    private Sprite FaceForCard(CardData card)
+    {
+        if (card == null) return cardFaceSprite;
+        Sprite s = card.IsAttack ? attackCardFaceSprite : defenseCardFaceSprite;
+        return s != null ? s : cardFaceSprite;
+    }
+
+    // ============================================================
+    //        卡牌悬停浮层：技能介绍 + 附带 buff 说明
+    // ============================================================
+
+    /// <summary>懒建两个悬停浮层（挂在结算 Canvas 上，晚于遮罩创建所以盖在上面）</summary>
+    private void EnsureCardTooltips()
+    {
+        if (cardSkillTooltip != null) return;
+
+        cardSkillTooltip = NewTooltipRoot("CardSkillTooltip", out cardSkillTooltipRt);
+        cardSkillTooltipText = NewText(cardSkillTooltip.transform, "", 18, new Color(0.93f, 0.95f, 0.98f));
+        Text skillT = cardSkillTooltipText;
+        skillT.alignment = TextAnchor.UpperLeft;
+        skillT.horizontalOverflow = HorizontalWrapMode.Wrap;
+        Stretch(skillT.rectTransform);
+        skillT.rectTransform.offsetMin = new Vector2(14f, 10f);
+        skillT.rectTransform.offsetMax = new Vector2(-14f, -10f);
+
+        cardBuffTooltip = NewTooltipRoot("CardBuffTooltip", out cardBuffTooltipRt);
+        cardBuffTooltipText = NewText(cardBuffTooltip.transform, "", 18, new Color(0.93f, 0.95f, 0.98f));
+        Text buffT = cardBuffTooltipText;
+        buffT.alignment = TextAnchor.UpperLeft;
+        buffT.horizontalOverflow = HorizontalWrapMode.Wrap;
+        Stretch(buffT.rectTransform);
+        buffT.rectTransform.offsetMin = new Vector2(14f, 10f);
+        buffT.rectTransform.offsetMax = new Vector2(-14f, -10f);
+    }
+
+    /// <summary>半透明深色浮层底座（raycastTarget=false，不挡卡牌点击）</summary>
+    private GameObject NewTooltipRoot(string name, out RectTransform rt)
+    {
+        GameObject go = new GameObject(name, typeof(RectTransform));
+        go.transform.SetParent(canvas.transform, false);
+        Image bg = go.AddComponent<Image>();
+        bg.color = new Color(0.05f, 0.08f, 0.13f, 0.95f);
+        bg.raycastTarget = false;
+        rt = go.GetComponent<RectTransform>();
+        rt.sizeDelta = new Vector2(430f, 120f);
+        go.SetActive(false);
+        return go;
+    }
+
+    /// <summary>悬停结算选卡：浮层显示在卡面右侧（放不下改左侧），带 buff 时旁边加第二个浮层</summary>
+    private void ShowCardTooltip(CardData card, RectTransform face)
+    {
+        if (card == null || face == null) { HideCardTooltip(); return; }
+        EnsureCardTooltips();
+
+        cardSkillTooltipText.text = "【" + card.cardName + "】  思绪 " + card.thoughtCost +
+            " · 耐力 " + card.actionCost + "\n" + card.description;
+        cardSkillTooltipRt.sizeDelta = new Vector2(430f, 120f);
+        cardSkillTooltipRt.sizeDelta = new Vector2(430f, Mathf.Max(120f, cardSkillTooltipText.preferredHeight + 20f));
+
+        // 卡面中心（世界坐标 = overlay 屏幕像素）换算成 Canvas 本地坐标
+        RectTransform canvasRt = canvas.transform as RectTransform;
+        Vector2 screenPos = RectTransformUtility.WorldToScreenPoint(null, face.position);
+        if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRt, screenPos, null, out Vector2 local))
+        { HideCardTooltip(); return; }
+
+        float hw = face.rect.width / 2f;   // face.rect 已是 Canvas 本地单位
+        cardSkillTooltipRt.anchorMin = new Vector2(0.5f, 0.5f);
+        cardSkillTooltipRt.anchorMax = new Vector2(0.5f, 0.5f);
+        cardSkillTooltipRt.pivot = new Vector2(0f, 0.5f);
+        cardSkillTooltipRt.anchoredPosition = new Vector2(local.x + hw + 8f, local.y);
+        if (local.x + hw + 8f + cardSkillTooltipRt.sizeDelta.x > canvasRt.rect.width / 2f)
+        {
+            cardSkillTooltipRt.pivot = new Vector2(1f, 0.5f);
+            cardSkillTooltipRt.anchoredPosition = new Vector2(local.x - hw - 8f, local.y);
+        }
+        cardSkillTooltip.SetActive(true);
+
+        // ---- 附带 buff：第二个浮层贴在技能浮层旁 ----
+        string buffText = BuildBuffTooltipText(card);
+        if (string.IsNullOrEmpty(buffText))
+        {
+            cardBuffTooltip.SetActive(false);
+            return;
+        }
+        cardBuffTooltipText.text = buffText;
+        cardBuffTooltipRt.sizeDelta = new Vector2(360f, 60f);
+        cardBuffTooltipRt.sizeDelta = new Vector2(360f, Mathf.Max(60f, cardBuffTooltipText.preferredHeight + 20f));
+
+        // 技能浮层右缘（Canvas 本地系）→ buff 左缘贴 8px
+        float sRight = cardSkillTooltipRt.anchoredPosition.x +
+            cardSkillTooltipRt.sizeDelta.x * (1f - cardSkillTooltipRt.pivot.x);
+        cardBuffTooltipRt.anchorMin = new Vector2(0.5f, 0.5f);
+        cardBuffTooltipRt.anchorMax = new Vector2(0.5f, 0.5f);
+        cardBuffTooltipRt.pivot = new Vector2(0f, 0.5f);
+        cardBuffTooltipRt.anchoredPosition = new Vector2(sRight + 8f, cardSkillTooltipRt.anchoredPosition.y);
+        if (cardBuffTooltipRt.anchoredPosition.x + cardBuffTooltipRt.sizeDelta.x > canvasRt.rect.width / 2f)
+        {
+            // 右侧放不下 → 改贴技能浮层左侧
+            float sLeft = cardSkillTooltipRt.anchoredPosition.x -
+                cardSkillTooltipRt.sizeDelta.x * cardSkillTooltipRt.pivot.x;
+            cardBuffTooltipRt.anchoredPosition = new Vector2(sLeft - 8f - cardBuffTooltipRt.sizeDelta.x,
+                cardSkillTooltipRt.anchoredPosition.y);
+        }
+        cardBuffTooltip.SetActive(true);
+    }
+
+    /// <summary>卡牌附带 buff 的说明文本（每个 buff 一段：名称 + 描述；无 buff 返回 null）</summary>
+    private static string BuildBuffTooltipText(CardData card)
+    {
+        if (card == null || card.buffs == null || card.buffs.Count == 0) return null;
+
+        List<string> parts = new List<string>();
+        foreach (BuffData b in card.buffs)
+        {
+            if (b == null) continue;
+            parts.Add(string.IsNullOrEmpty(b.description)
+                ? "【" + b.buffName + "】"
+                : "【" + b.buffName + "】\n" + b.description);
+        }
+        return parts.Count > 0 ? string.Join("\n\n", parts) : null;
+    }
+
+    private void HideCardTooltip()
+    {
+        if (cardSkillTooltip != null) cardSkillTooltip.SetActive(false);
+        if (cardBuffTooltip != null) cardBuffTooltip.SetActive(false);
+    }
+
+    /// <summary>给按钮挂"指针进入 / 离开"回调（EventTrigger，不干扰 Button 自己的点击）</summary>
+    private static void AddHoverTrigger(GameObject go, UnityAction onEnter, UnityAction onExit)
+    {
+        if (go == null) return;
+        EventTrigger et = go.GetComponent<EventTrigger>();
+        if (et == null) et = go.AddComponent<EventTrigger>();
+
+        EventTrigger.Entry enter = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
+        enter.callback.AddListener(_ => onEnter());
+        et.triggers.Add(enter);
+
+        EventTrigger.Entry exit = new EventTrigger.Entry { eventID = EventTriggerType.PointerExit };
+        exit.callback.AddListener(_ => onExit());
+        et.triggers.Add(exit);
     }
 
     /// <summary>卡面上的文字：按卡面归一化锚点定位（anchor.y 越大越靠上），全部黑字</summary>
@@ -643,6 +806,8 @@ public class BattleEndPanel : MonoBehaviour
         if (RunFlowController.Instance != null &&
             RunFlowController.Instance.Progression.Phase == RunPhase.Reward)
         {
+            HideCardTooltip();
+            panelRoot.SetActive(false);
             RunFlowController.Instance.ContinueAfterRewards();
             return;
         }

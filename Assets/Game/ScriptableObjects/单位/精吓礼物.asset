@@ -15,12 +15,21 @@ MonoBehaviour:
   unitName: "\u7CBE\u5413\u793C\u7269"
   maxHealth: 2
   grade: 0
+  attack: 1
   passiveAbility: "\u6D6E\u7A7A\uFF0C\u514D\u75AB\u5730\u5F62\u6548\u679C"
-  aiLogic: "\u4F7F\u7528\u5FEB\u8D70\u671D\u73A9\u5BB6\u76F8\u90BB\u683C\u79FB\u52A8\uFF0C\u4E0E\u73A9\u5BB6\u76F8\u90BB\u65F6\u4F7F\u7528 \u81EA\u7206"
+  aiLogic: "\u4F7F\u7528\u5FEB\u8D70\u671D\u73A9\u5BB6\u76F8\u90BB\u683C\u79FB\u52A8\uFF0C\u4E0E\u73A9\u5BB6\u76F8\u90BB\u65F6\u4F7F\u7528
+    \u81EA\u7206"
   skillGroup1:
   - {fileID: 11400000, guid: bd43dea4962a679448cf5d59bbc2c540, type: 2}
   skillGroup2:
   - {fileID: 11400000, guid: 98c2e8508556a0c48a4444728ee03836, type: 2}
   skillGroup3: []
+  skillGroups:
+  - groupName: "\u6280\u80FD\u7EC41"
+    cards:
+    - {fileID: 11400000, guid: bd43dea4962a679448cf5d59bbc2c540, type: 2}
+  - groupName: "\u6280\u80FD\u7EC42"
+    cards:
+    - {fileID: 11400000, guid: 98c2e8508556a0c48a4444728ee03836, type: 2}
   icon: {fileID: 21300000, guid: 6a72c509d41f4f99989b5a166e514c67, type: 3}
   prefab: {fileID: 5125114976211495250, guid: 67863cafa0104f9cb3aca1643386c072, type: 3}

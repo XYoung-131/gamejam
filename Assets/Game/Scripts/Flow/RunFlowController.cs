@@ -6,11 +6,13 @@ public sealed class RunFlowController : MonoBehaviour
 {
     public static RunFlowController Instance { get; private set; }
     public RunProgression Progression { get; private set; } = new RunProgression();
+    private string lastRequestedEventKey;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
     {
-        if (SceneManager.GetActiveScene().name != "MainMenu" || Instance != null) return;
+        string sceneName = SceneManager.GetActiveScene().name;
+        if ((sceneName != "Start" && sceneName != "MainMenu") || Instance != null) return;
         new GameObject("RunFlowController").AddComponent<RunFlowController>();
     }
 
@@ -42,6 +44,7 @@ public sealed class RunFlowController : MonoBehaviour
             return;
         }
         PlayerRunState.Reset();
+        lastRequestedEventKey = null;
         ShowInterlude();
     }
 
@@ -90,8 +93,11 @@ public sealed class RunFlowController : MonoBehaviour
     public void ReturnToMenu()
     {
         PlayerRunState.Reset();
+        lastRequestedEventKey = null;
         Progression = new RunProgression();
-        SceneManager.LoadScene("MainMenu");
+        LevelManager.pendingNextLevel = null;
+        LevelManager.pendingVariantIndex = null;
+        SceneManager.LoadScene("Start");
     }
 
     private void OnGameStateChanged(GameState state)
@@ -102,6 +108,11 @@ public sealed class RunFlowController : MonoBehaviour
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
+        if (scene.name == "Start" && Progression.Phase == RunPhase.Menu)
+        {
+            GetComponent<RunFlowUI>()?.Hide();
+            return;
+        }
         if (scene.name == "MainMenu" || Progression.Phase == RunPhase.Event ||
             Progression.Phase == RunPhase.Rest || Progression.Phase == RunPhase.Victory ||
             Progression.Phase == RunPhase.Defeat) ShowInterlude();
@@ -115,16 +126,55 @@ public sealed class RunFlowController : MonoBehaviour
     private void ShowInterlude()
     {
         RunFlowUI ui = GetComponent<RunFlowUI>();
-        if (ui != null) ui.Show(Progression);
         if (Progression.Phase == RunPhase.Event)
-            EventManager.Trigger("RunEventRequested", Progression.EventId);
+        {
+            if (ui != null) ui.Hide();
+            RequestCurrentEvent();
+        }
+        else if (ui != null) ui.Show(Progression);
+    }
+
+    private void RequestCurrentEvent()
+    {
+        if (Progression.Phase != RunPhase.Event) return;
+        string key = Progression.ChapterIndex + ":" + Progression.BattleIndex + ":" + Progression.EventId;
+        if (key == lastRequestedEventKey) return;
+        if (!ShowEvent(Progression.EventId))
+        {
+            Debug.LogError("[RunFlow] Unknown event: " + Progression.EventId);
+            return;
+        }
+        lastRequestedEventKey = key;
+        EventManager.Trigger("RunEventRequested", Progression.EventId);
+    }
+
+    private static bool ShowEvent(string eventId)
+    {
+        switch (eventId)
+        {
+            case "实验开始": EventPanel_实验开始.Show(); break;
+            case "垃圾清理": EventPanel_垃圾清理.Show(); break;
+            case "奇怪的药剂": EventPanel_奇怪的药剂.Show(); break;
+            case "小助手": EventPanel_小助手.Show(); break;
+            case "抉择": EventPanel_抉择.Show(); break;
+            case "次元饮料": EventPanel_次元饮料.Show(); break;
+            case "洗礼": EventPanel_洗礼.Show(); break;
+            case "温泉": EventPanel_温泉.Show(); break;
+            case "自助售卖机": EventPanel_自助售卖机.Show(); break;
+            case "重启": EventPanel_重启.Show(); break;
+            default: return false;
+        }
+        return true;
     }
 
     private void EnterBattle()
     {
         LevelData level = Progression.CurrentLevel;
         if (level == null) { Debug.LogError("[RunFlow] Current battle level missing."); return; }
+        int variant = Progression.CurrentVariantIndex;
+        if (variant < 0) { Debug.LogError("[RunFlow] Current battle has no variants."); return; }
         LevelManager.pendingNextLevel = level;
+        LevelManager.pendingVariantIndex = variant;
         RunFlowUI ui = GetComponent<RunFlowUI>();
         if (ui != null) ui.Hide();
         SceneManager.LoadScene("Battle");

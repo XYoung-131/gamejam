@@ -9,6 +9,16 @@ public enum UnitGrade
     BOSS
 }
 
+[System.Serializable]
+public class CardGroup
+{
+    [Header("技能组名称")]
+    public string groupName;
+    
+    [Header("技能卡组")]
+    public List<CardData>  cards = new List<CardData>();
+}
+
 [CreateAssetMenu(fileName = "NewUnit", menuName = "Game/Unit Data")]
 public class UnitData : ScriptableObject
 {
@@ -23,11 +33,9 @@ public class UnitData : ScriptableObject
     [Header("能力")]
     [TextArea] public string passiveAbility;
     [TextArea] public string aiLogic;
-
-    [Header("技能组（引用卡牌）")]
-    public List<CardData> skillGroup1 = new List<CardData>();
-    public List<CardData> skillGroup2 = new List<CardData>();
-    public List<CardData> skillGroup3 = new List<CardData>();
+    
+    [Header("技能组列表")]
+    public List<CardGroup> skillGroups = new List<CardGroup>();
 
     [Header("资源引用")]
     public Sprite icon;

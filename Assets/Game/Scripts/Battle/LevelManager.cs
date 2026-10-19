@@ -17,7 +17,7 @@ public class LevelManager : MonoBehaviour
     [Tooltip("要加载的关卡数据（ScriptableObjects/关卡/ 下的 .asset）")]
     public LevelData level;
 
-    [Tooltip("用第几个变种：0 = 变种1，1 = 变种2")]
+    [Tooltip("单独打开示例场景时使用的变种序号；正式流程会从该关变种池随机选择")]
     public int variantIndex = 0;
 
     [Header("玩家")]
@@ -48,6 +48,7 @@ public class LevelManager : MonoBehaviour
     /// 为 null 时沿用场景里配好的 level（重打本关）。
     /// </summary>
     public static LevelData pendingNextLevel;
+    public static int? pendingVariantIndex;
 
     private readonly List<EnemyUnit> enemies = new List<EnemyUnit>();
 
@@ -70,6 +71,17 @@ public class LevelManager : MonoBehaviour
             pendingNextLevel = null;
             Debug.Log($"[LevelManager] 进入下一关：{level.levelName}");
         }
+        else if (RunFlowController.Instance != null &&
+                 RunFlowController.Instance.Progression.Phase == RunPhase.Battle)
+            level = RunFlowController.Instance.Progression.CurrentLevel;
+        if (pendingVariantIndex.HasValue)
+        {
+            variantIndex = pendingVariantIndex.Value;
+            pendingVariantIndex = null;
+        }
+        else if (RunFlowController.Instance != null &&
+                 RunFlowController.Instance.Progression.Phase == RunPhase.Battle)
+            variantIndex = RunFlowController.Instance.Progression.CurrentVariantIndex;
 
         // 布阵在 Start 里做，所以先让 GameManager 别自动开战
         GameManager manager = GameManager.Instance != null
