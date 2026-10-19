@@ -94,6 +94,7 @@ public class BattleHUD : MonoBehaviour
     private RectTransform enemyHpBar;     // 敌人脚下血条（底槽）
     private Image enemyHpBarFill;         // 红色血量填充
     private Text enemyHpBarText;          // 血条上的数字（当前/上限）
+    private readonly Image[] potionSlotImages = new Image[3];   // 顶部三个空饮料槽位（后续放药水）
     private int plannedLabelSyncFrame = -999;   // 上次同步敌人列表的帧号
 
     private const float hpBarWidth = 96f;        // 血条外框宽
@@ -126,6 +127,9 @@ public class BattleHUD : MonoBehaviour
     [Header("下一回合按钮素材（引用已在 Battle.unity 里配好）")]
     public Sprite endTurnNormalSprite;   // 淡蓝色按键_1：常态底图
     public Sprite endTurnHoverSprite;    // 淡蓝色按键_2：鼠标悬停/按下时底图
+
+    [Header("药水栏素材（引用已在 Battle.unity 里配好）")]
+    public Sprite potionSlotSprite;      // 空饮料槽位：顶部深蓝长条上的三只空瓶占位
 
     [Header("敌人悬停信息（可关）")]
     [Tooltip("勾选后鼠标悬停在敌人立绘上时：脚下显示红色血条、头顶显示本回合准备释放的技能；" +
@@ -247,6 +251,8 @@ public class BattleHUD : MonoBehaviour
             endTurnNormalSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(uiDir + "淡蓝色按键_1.png");
         if (endTurnHoverSprite == null)
             endTurnHoverSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(uiDir + "淡蓝色按键_2.png");
+        if (potionSlotSprite == null)
+            potionSlotSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(uiDir + "空饮料槽位.png");
         // 基础技能卡：场景引用丢失时按资产路径兜底（推 / 跳 各只有一张）
         if (pushCard == null)
             pushCard = UnityEditor.AssetDatabase.LoadAssetAtPath<CardData>(
@@ -282,6 +288,22 @@ public class BattleHUD : MonoBehaviour
         MakeImage(canvas.transform, "StatusBar_Bar", statusBarSprite,
             statusBarSprite == null ? new Color(0.16f, 0.27f, 0.44f, 0.9f) : Color.white,
             new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), Vector2.zero, new Vector2(1920f, 150f));
+
+        // ---- 长条偏右：三个空饮料槽位（药水栏占位），起点在中轴右侧 420px，间隔 5px ----
+        // 素材裁剪后 815×931，显示高 77（0.7 倍）→ 宽 ≈67；垂直居中于 150 高的长条（中心 y=-75）。
+        // 之后拿到药水时把瓶贴图 / 数量替换到对应槽位即可。
+        if (potionSlotSprite != null)
+        {
+            const float potionSlotH = 77f;
+            float potionSlotW = potionSlotH * 815f / 931f;
+            for (int i = 0; i < potionSlotImages.Length; i++)
+            {
+                float x = 420f + potionSlotW / 2f + i * (potionSlotW + 5f);   // 第 i 只瓶子中心的 x 偏移
+                potionSlotImages[i] = MakeImage(canvas.transform, "PotionSlot_" + i, potionSlotSprite,
+                    Color.white, new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f),
+                    new Vector2(x, -75f), new Vector2(potionSlotW, potionSlotH));
+            }
+        }
 
         // ---- 长条下方：耐力槽（左） / 思绪槽（右），关于画面中轴 x=960 对称 ----
         // pivot=(0.5,1)（顶边锚点）；y=-165 = 长条底边(-150) 再下移 15px

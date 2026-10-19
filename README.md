@@ -519,6 +519,8 @@ defenseValue / defenseTargetTypes / library / rarity / tags / buffs / devNotes`�
     头顶显示本回合准备释放的技能；瞄准 / 抽牌 / 敌方回合 / 弹窗期间自动隐藏。浮层整体比其他 UI 大 1.2 倍便于阅读。
   - **右下角按钮组**：下一回合按钮换 `UI/淡蓝色按键_1.png`，悬停 / 按下换 `淡蓝色按键_2.png`
     （SpriteSwap 过渡）；按钮右缘距屏幕右边界 10px，插槽组右缘再往左 20px，全部锚定右下角。
+  - **顶部药水栏**：深蓝长条中轴右侧 420px 起，横排三只 `UI/空饮料槽位.png`（0.7 倍大小，间隔 5px），
+    作为药水槽占位；引用存在 `potionSlotImages[3]`，接药水系统时替换贴图与数量即可。
 
 修改
 

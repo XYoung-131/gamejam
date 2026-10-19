@@ -347,6 +347,7 @@ MonoBehaviour:
   enemySkillArrowHoverSprite: {fileID: 21300000, guid: 96556268fdc7412d9e1a8c372b7a4c94, type: 3}
   endTurnNormalSprite: {fileID: 21300000, guid: d4bed0fa68d44eefbf5ef27abc9caa89, type: 3}
   endTurnHoverSprite: {fileID: 21300000, guid: 54ddafebd4394d83b95f61cdfe71b810, type: 3}
+  potionSlotSprite: {fileID: 21300000, guid: 2f9e03a88e48454eb30d7116b8de05c4, type: 3}
   pushCard: {fileID: 11400000, guid: fcf7be3e9a3e5e04e88a86a5f7a2507f, type: 2}
   jumpCard: {fileID: 11400000, guid: 86b7005bc62c39543978bfe3fece8aef, type: 2}
 --- !u!1 &1375286826
