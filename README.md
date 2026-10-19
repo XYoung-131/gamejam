@@ -536,3 +536,27 @@ defenseValue / defenseTargetTypes / library / rarity / tags / buffs / devNotes`�
 - `Art/UI/*.png` —— `技能插槽 / 抽牌按键 / 空技能卡面 / 淡蓝色箭头_1,2 / 淡蓝色按键_1,2` 按按钮实际可点击区域裁剪，
   去掉四周大片透明边（guid 不变，引用无需重配）。
 - `Scenes/Battle.unity` —— BattleHUD 补齐上述素材引用，相机 `startZoom` 序列化为 1.2。
+
+## 小羊：药水/遗物接入 HUD + 技能介绍 + 抽卡卡面化 + 战斗结算奖励图标
+
+新增
+
+- `Battle/BattleHUD.cs`（扩充）：
+  - **顶部药水栏启用**：三个饮料槽改成可点按钮，持有药水时换成药水立绘（`PotionData.icon`，
+    最多 3 瓶，`PlayerUnit.maxPotions=3`）；鼠标停在瓶子上浮层显示药水名 + 效果说明 + "点击使用"，
+    点击直接 `UsePotion`（非玩家行动阶段 / 本场已喝完会弹提示），喝完自动换回空瓶素材；
+    跟随 `PotionChanged` 事件刷新。
+  - **遗物栏**：血量槽红圆右缘 +10px 起横排遗物图标（64×64，间隔 5px，`preserveAspect`），
+    跟随 `RelicChanged` 事件刷新，跨关由 `PlayerRunState` 回放后自动补上。
+  - **技能介绍浮层**：鼠标停在底部三个技能槽卡面（浮层在卡面上方）或左侧怪物技能卡（浮层在卡面右侧）
+    时，显示【卡名】+ 思绪/耐力消耗 + `CardData.description`；浮层不挡点击。
+  - **抽卡三张卡改成空技能卡面**：底图用 `UI/空技能卡面.png`（320×418 等比），浅灰文字区写
+    卡名 + 思绪/耐力消耗 + 技能介绍（自动换行，放不下截断），点击整张卡灌注。
+
+修改
+
+- `Battle/BattleEndPanel.cs` —— 结算奖励按钮左侧加美术图标：技能选择用空卡面小图、
+  药水用 `PotionData.icon`、思维碎片用候选遗物图标（三件候选在面板打开时一次抽好，点开与图标一致）；
+  文字整体右移让位，`preserveAspect` 防拉伸。
+- `Art/Potions/*.png`、`Art/Relics/*.png`（33 张）—— 原地裁掉四周透明边（guid 不变），
+  药水立绘裁剪后与空饮料槽素材等大，放进槽位不会显得偏小。

@@ -14,6 +14,9 @@ public class LevelData : ScriptableObject
     [Header("基本信息")]
     public string levelName = "第一关";
 
+    [Tooltip("战斗结束界面点\"跳过奖励\"要进入的下一关（不配则重打本关）")]
+    public LevelData nextLevel;
+
     [Header("变种（每个变种是一套完整布阵）")]
     public List<Variant> variants = new List<Variant>();
 

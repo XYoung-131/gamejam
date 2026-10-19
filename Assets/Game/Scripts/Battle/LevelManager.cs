@@ -42,6 +42,13 @@ public class LevelManager : MonoBehaviour
     /// <summary>当前场上的玩家（外部只读）</summary>
     public PlayerUnit Player { get; private set; }
 
+    /// <summary>
+    /// 战斗结束奖励界面"跳过奖励"指定的下一关：
+    /// 面板写入 → 本脚本 Awake 取走并换用（场景重载后静态字段仍在）。
+    /// 为 null 时沿用场景里配好的 level（重打本关）。
+    /// </summary>
+    public static LevelData pendingNextLevel;
+
     private readonly List<EnemyUnit> enemies = new List<EnemyUnit>();
 
     public void RegisterSummonedEnemy(EnemyUnit enemy)
@@ -56,6 +63,14 @@ public class LevelManager : MonoBehaviour
 
     private void Awake()
     {
+        // 战斗结束界面"跳过奖励"指定的下一关优先（没有则用场景配好的关卡）
+        if (pendingNextLevel != null)
+        {
+            level = pendingNextLevel;
+            pendingNextLevel = null;
+            Debug.Log($"[LevelManager] 进入下一关：{level.levelName}");
+        }
+
         // 布阵在 Start 里做，所以先让 GameManager 别自动开战
         GameManager manager = GameManager.Instance != null
             ? GameManager.Instance
@@ -157,6 +172,9 @@ public class LevelManager : MonoBehaviour
 
         EnsureFlipEffect(go);
         EnsureBuffRing(go);
+
+        // 上一关战斗结束奖励（技能 / 遗物 / 药水 / 上限提升）回放给新玩家
+        PlayerRunState.ApplyTo(Player);
     }
 
 #if UNITY_EDITOR

@@ -886,7 +886,8 @@ public class BattleDebugDriver : MonoBehaviour
         if (cardSystem != null && cardSystem.IsChoosing && BattleHUD.Instance == null)
             DrawChoosePanel();
 
-        if (IsBattleOver)
+        // 战斗结束：胜利的界面交给 BattleEndPanel（奖励结算），这里只画失败提示
+        if (IsBattleOver && game.CurrentState == GameState.Defeat)
             DrawResultPanel();
     }
 

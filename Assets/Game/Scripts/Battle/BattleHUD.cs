@@ -95,6 +95,33 @@ public class BattleHUD : MonoBehaviour
     private Image enemyHpBarFill;         // 红色血量填充
     private Text enemyHpBarText;          // 血条上的数字（当前/上限）
     private readonly Image[] potionSlotImages = new Image[3];   // 顶部三个空饮料槽位（后续放药水）
+    private readonly Button[] potionSlotButtons = new Button[3]; // 同上：可点（喝药水）+ 可悬停（看介绍）
+    private float potionSlotW = 67f;              // 饮料槽显示尺寸（BuildUI 里按素材比例算）
+    private float potionSlotH = 77f;
+    private GameObject potionTooltip;             // 鼠标停在饮料槽上：药水名 + 效果说明
+    private RectTransform potionTooltipRt;
+    private Text potionTooltipText;
+
+    // 顶部：血量槽右侧的遗物图标（每件遗物一个，从左往右排）
+    private GameObject relicRow;
+    private readonly List<Image> relicIcons = new List<Image>();
+    private const float relicIconSize = 64f;
+    private const float relicIconGap = 5f;
+
+    // 技能介绍浮层：底部三个技能槽 / 左侧怪物技能卡 悬停时显示（内容取 CardData.description）
+    private GameObject skillTooltip;
+    private RectTransform skillTooltipRt;
+    private Text skillTooltipTitle;
+    private Text skillTooltipBody;
+
+    // 底部插槽 / 左侧卡面的布局参数（建 UI 时记下，悬停浮层要按它们定位）
+    private float slotCardW = 203f;
+    private float slotCardFaceH = 265f;
+    private float slotRightGapX = 281f;
+    private const float enemyCardW = 150f;
+    private float enemyCardH = 196f;
+    private float enemyCardFirstTopY = 230f;
+    private const float enemyCardGap = 8f;
     private int plannedLabelSyncFrame = -999;   // 上次同步敌人列表的帧号
 
     private const float hpBarWidth = 96f;        // 血条外框宽
@@ -171,9 +198,16 @@ public class BattleHUD : MonoBehaviour
         EventManager.AddListener<HexCell>("CellClicked", OnCellClickedEvent);
         // 玩家回合开始：重新收集"上回合怪物准备释放的技能"填左侧卡面
         EventManager.AddListener<int>("PlayerTurnStarted", OnPlayerTurnStarted);
+        // 药水 / 遗物变化：刷新顶部饮料槽与血量槽右侧的遗物图标
+        EventManager.AddListener<PlayerUnit>("PotionChanged", OnPotionChanged);
+        EventManager.AddListener<PlayerUnit>("RelicChanged", OnRelicChanged);
 
         uiFont = LoadBuiltinFont();
         BuildUI();
+
+        // 战斗结束奖励界面（独立 Canvas 盖在 HUD 之上；胜利时自动弹出）
+        if (FindObjectOfType<BattleEndPanel>() == null)
+            new GameObject("BattleEndPanel").AddComponent<BattleEndPanel>();
     }
 
     private void OnDestroy()
@@ -182,7 +216,12 @@ public class BattleHUD : MonoBehaviour
         EventManager.RemoveListener<PlayerCardSystem>("SlotChanged", OnSlotChanged);
         EventManager.RemoveListener<HexCell>("CellClicked", OnCellClickedEvent);
         EventManager.RemoveListener<int>("PlayerTurnStarted", OnPlayerTurnStarted);
+        EventManager.RemoveListener<PlayerUnit>("PotionChanged", OnPotionChanged);
+        EventManager.RemoveListener<PlayerUnit>("RelicChanged", OnRelicChanged);
     }
+
+    private void OnPotionChanged(PlayerUnit player) => RefreshPotionSlots();
+    private void OnRelicChanged(PlayerUnit player) => RefreshRelicIcons();
 
     /// <summary>选牌结束（成功/放弃）：关掉牌堆选择与待选卡弹窗，恢复小怪透明度</summary>
     private void OnCardOfferClosed()
@@ -289,19 +328,29 @@ public class BattleHUD : MonoBehaviour
             statusBarSprite == null ? new Color(0.16f, 0.27f, 0.44f, 0.9f) : Color.white,
             new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), Vector2.zero, new Vector2(1920f, 150f));
 
-        // ---- 长条偏右：三个空饮料槽位（药水栏占位），起点在中轴右侧 420px，间隔 5px ----
-        // 素材裁剪后 815×931，显示高 77（0.7 倍）→ 宽 ≈67；垂直居中于 150 高的长条（中心 y=-75）。
-        // 之后拿到药水时把瓶贴图 / 数量替换到对应槽位即可。
+        // ---- 长条偏右：三个饮料槽位，起点在中轴右侧 420px，间隔 5px ----
+        // 空槽显示空饮料槽位素材；拿到药水后换成药水立绘（最多 3 瓶）。
+        // 鼠标停上去看效果说明，点一下直接喝掉，喝完 / 空槽自动换回空瓶素材。
         if (potionSlotSprite != null)
         {
-            const float potionSlotH = 77f;
-            float potionSlotW = potionSlotH * 815f / 931f;
+            potionSlotH = 77f;
+            potionSlotW = potionSlotH * 815f / 931f;
             for (int i = 0; i < potionSlotImages.Length; i++)
             {
                 float x = 420f + potionSlotW / 2f + i * (potionSlotW + 5f);   // 第 i 只瓶子中心的 x 偏移
-                potionSlotImages[i] = MakeImage(canvas.transform, "PotionSlot_" + i, potionSlotSprite,
-                    Color.white, new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f),
-                    new Vector2(x, -75f), new Vector2(potionSlotW, potionSlotH));
+                Button slot = MakeImageButton(canvas.transform, "PotionSlot_" + i, potionSlotSprite,
+                    new Vector2(0.5f, 1f), Vector2.zero, new Vector2(potionSlotW, potionSlotH),
+                    OnPotionSlotClicked, i);
+                RectTransform rt = slot.GetComponent<RectTransform>();
+                rt.pivot = new Vector2(0.5f, 0.5f);              // 让 x/y 直接表示瓶子中心
+                rt.anchoredPosition = new Vector2(x, -75f);      // 垂直居中于 150 高的长条
+                slot.GetComponent<Image>().preserveAspect = true;
+                potionSlotButtons[i] = slot;
+                potionSlotImages[i] = slot.GetComponent<Image>();
+
+                int captured = i;
+                AddHoverTrigger(slot.gameObject,
+                    () => ShowPotionTooltip(captured), HidePotionTooltip);
             }
         }
 
@@ -328,6 +377,9 @@ public class BattleHUD : MonoBehaviour
             new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(24f, -24f), new Vector2(132f, 132f));
         hpText = MakeText(hpSlot.transform, "12/12", 30, TextAnchor.MiddleCenter, Color.white);
         Stretch(hpText.rectTransform);
+
+        // ---- 血量槽右侧：遗物图标一列排开（距红圆右缘 10px，每个间隔 5px） ----
+        BuildRelicRow();
 
         // ---- 左下角：攻击 / 位移 按钮 + 三张技能插槽 + 右下角插卡按钮 ----
         // （选技能时整组隐藏，只留状态条和"取消"）
@@ -363,6 +415,12 @@ public class BattleHUD : MonoBehaviour
         // 素材裁剪后 379×495：中上部是透明窗口（预留技能图标），下方浅灰区是文字区。
         // 卡面本体就是按钮（整张卡可点 → 释放该槽技能），插槽横条叠在上面只作边框。
         float faceH = slotW * 495f / 379f;
+
+        // 记下布局参数：悬停技能卡时浮层要按这些数值定位
+        slotCardW = slotW;
+        slotCardFaceH = faceH;
+        slotRightGapX = slotRightX;
+
         for (int i = 0; i < 3; i++)
         {
             // anchor/pivot=(1,0)，pos.x = 该槽右缘到屏幕右边的距离；i=2 最靠右
@@ -373,6 +431,11 @@ public class BattleHUD : MonoBehaviour
             faceBtn.transform.SetAsFirstSibling();   // 压到最底层：所有插槽元素都盖在卡面上
             slotFaceButtons[i] = faceBtn;
 
+            // 鼠标停在卡面上：显示该技能的介绍（内容取 CardData.description）
+            int capturedSlot = i;
+            AddHoverTrigger(faceBtn.gameObject,
+                () => ShowSlotSkillTooltip(capturedSlot), HideSkillTooltip);
+
             // 卡名：写进素材浅灰空白区（图像坐标 y251~470 → 归一化 0.25~0.04，取中部）
             // anchorY 0.34 ≈ 卡面高度 34% 处，正好落在插槽横条上沿之上，不会被框线压住
             Text nameT = MakeText(faceBtn.transform, "", 26, TextAnchor.MiddleCenter, Color.black,
@@ -381,9 +444,9 @@ public class BattleHUD : MonoBehaviour
             nameT.horizontalOverflow = HorizontalWrapMode.Wrap;   // 长名字自动换行，不溢出卡面
             slotNameTexts[i] = nameT;
 
-            // 剩余次数：卡面下方小字（插槽框中间是透明的，能看到）
+            // 剩余次数：卡面下方小字（插槽框中间是透明的，能看到）。卡面文字统一黑字
             Text useT = MakeText(faceBtn.transform, "", 17, TextAnchor.MiddleCenter,
-                new Color(0.24f, 0.24f, 0.26f),
+                Color.black,
                 new Vector2(0.5f, 0.19f), new Vector2(0.5f, 0.19f), Vector2.zero,
                 new Vector2(0.5f, 0.19f), new Vector2(slotW * 0.8f, faceH * 0.12f));
             slotUseTexts[i] = useT;
@@ -423,6 +486,258 @@ public class BattleHUD : MonoBehaviour
         BuildEnemySkillPanel();
         BuildInfuseConfirmPanel();
         BuildMessagePanel();
+
+        // ---- 悬停浮层（药水说明 / 技能介绍）：最后建，保证压在所有元素之上 ----
+        BuildTooltips();
+
+        // 顶部饮料槽 / 遗物栏先按当前存档刷一次
+        RefreshPotionSlots();
+        RefreshRelicIcons();
+    }
+
+    // ============================================================
+    //   顶部药水栏 / 遗物栏 + 悬停说明浮层
+    // ============================================================
+
+    /// <summary>血量槽右侧的遗物图标列：红圆右缘 +10px 起，每个间隔 5px，垂直居中于红圆</summary>
+    private void BuildRelicRow()
+    {
+        relicRow = new GameObject("RelicRow", typeof(RectTransform));
+        relicRow.transform.SetParent(canvas.transform, false);
+        RectTransform rt = relicRow.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0f, 1f);
+        rt.anchorMax = new Vector2(0f, 1f);
+        rt.pivot = new Vector2(0f, 0.5f);
+        // 血量槽：左上角 (24,24)、132×132 → 右缘 156，再右移 10px；y 取红圆圆心 -90
+        rt.anchoredPosition = new Vector2(24f + 132f + 10f, -90f);
+        rt.sizeDelta = new Vector2(620f, relicIconSize);
+    }
+
+    /// <summary>按玩家当前持有的遗物刷新图标（拿到遗物 → 追加一个；换关重来 → 清空）</summary>
+    private void RefreshRelicIcons()
+    {
+        if (relicRow == null) return;
+
+        PlayerUnit player = FindObjectOfType<PlayerUnit>();
+        IReadOnlyList<RelicData> relics = player != null ? player.Relics : null;
+        int count = relics != null ? relics.Count : 0;
+
+        // 不够就补图标节点（够用时只重新排位置）
+        while (relicIcons.Count < count)
+        {
+            Image icon = MakeImage(relicRow.transform, "RelicIcon_" + relicIcons.Count, null, Color.white,
+                new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), Vector2.zero,
+                new Vector2(relicIconSize, relicIconSize));
+            icon.preserveAspect = true;   // 遗物立绘保持原始比例
+            relicIcons.Add(icon);
+        }
+
+        for (int i = 0; i < relicIcons.Count; i++)
+        {
+            bool used = i < count;
+            if (relicIcons[i].gameObject.activeSelf != used)
+                relicIcons[i].gameObject.SetActive(used);
+            if (!used) continue;
+
+            RelicData relic = relics[i];
+            relicIcons[i].sprite = relic.icon;
+            // 没有配图标的遗物先用浅色方块占位，至少能看出"有这一件"
+            relicIcons[i].color = relic.icon != null ? Color.white : new Color(0.78f, 0.84f, 0.95f, 0.9f);
+            relicIcons[i].rectTransform.anchoredPosition =
+                new Vector2(i * (relicIconSize + relicIconGap), 0f);
+        }
+    }
+
+    /// <summary>药水槽：有药水就换成立绘，没药水（或刚喝完）换回空瓶素材</summary>
+    private void RefreshPotionSlots()
+    {
+        PlayerUnit player = FindObjectOfType<PlayerUnit>();
+        int count = player != null ? player.Potions.Count : 0;
+
+        for (int i = 0; i < potionSlotImages.Length; i++)
+        {
+            Image img = potionSlotImages[i];
+            if (img == null) continue;
+
+            PotionData potion = i < count ? player.Potions[i] : null;
+            Sprite want = potion != null && potion.icon != null ? potion.icon : potionSlotSprite;
+            if (img.sprite != want) img.sprite = want;
+            img.color = Color.white;
+        }
+    }
+
+    /// <summary>点饮料槽：喝掉这一瓶（没药水的空槽点了没反应）</summary>
+    private void OnPotionSlotClicked(int i)
+    {
+        PlayerUnit player = FindObjectOfType<PlayerUnit>();
+        if (player == null || i < 0 || i >= player.Potions.Count) return;
+        if (BattleEndPanel.IsOpen) return;   // 结算界面盖住时不吃药（提示框会被压在下面看不见）
+
+        PotionData potion = player.Potions[i];
+
+        if (!IsPlayerPhase())
+        {
+            ShowMessage("现在不是你的行动阶段，不能使用药水");
+            return;
+        }
+
+        if (player.UsePotion(i))
+        {
+            HidePotionTooltip();
+            ShowStatus($"使用了【{potion.potionName}】");
+        }
+        else
+        {
+            // UsePotion 会挡下"本场次数已用完"的情况，此时道具没有被消耗
+            ShowMessage($"【{potion.potionName}】本场已经喝过了，不能再喝");
+        }
+    }
+
+    /// <summary>建两个悬停浮层：药水说明（饮料槽）/ 技能介绍（插槽卡面 + 左侧怪物技能卡）</summary>
+    private void BuildTooltips()
+    {
+        potionTooltip = MakeTooltipRoot("PotionTooltip", 360f, out potionTooltipRt);
+        potionTooltipText = MakeText(potionTooltip.transform, "", 18, TextAnchor.UpperLeft, Color.white);
+        RectTransform pt = potionTooltipText.rectTransform;
+        Stretch(pt);
+        pt.offsetMin = new Vector2(14f, 10f);
+        pt.offsetMax = new Vector2(-14f, -10f);
+        potionTooltipText.horizontalOverflow = HorizontalWrapMode.Wrap;
+
+        skillTooltip = MakeTooltipRoot("SkillTooltip", 430f, out skillTooltipRt);
+        skillTooltipTitle = MakeText(skillTooltip.transform, "", 22, TextAnchor.MiddleLeft,
+            new Color(1f, 0.94f, 0.72f),
+            new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -12f),
+            new Vector2(0.5f, 1f), new Vector2(-28f, 30f));
+        skillTooltipBody = MakeText(skillTooltip.transform, "", 18, TextAnchor.UpperLeft,
+            new Color(0.93f, 0.95f, 0.98f),
+            new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -48f),
+            new Vector2(0.5f, 1f), new Vector2(-28f, 80f));
+        skillTooltipBody.horizontalOverflow = HorizontalWrapMode.Wrap;
+        skillTooltipBody.verticalOverflow = VerticalWrapMode.Truncate;
+    }
+
+    /// <summary>半透明深色浮层底座（raycastTarget=false，绝不挡点击）</summary>
+    private GameObject MakeTooltipRoot(string name, float width, out RectTransform rt)
+    {
+        GameObject go = new GameObject(name, typeof(RectTransform));
+        go.transform.SetParent(canvas.transform, false);
+        Image bg = go.AddComponent<Image>();
+        bg.color = new Color(0.05f, 0.08f, 0.13f, 0.95f);
+        bg.raycastTarget = false;
+        rt = go.GetComponent<RectTransform>();
+        rt.sizeDelta = new Vector2(width, 120f);
+        go.SetActive(false);
+        return go;
+    }
+
+    /// <summary>鼠标停在饮料槽：显示药水名 + 效果说明 + 点击提示</summary>
+    private void ShowPotionTooltip(int i)
+    {
+        if (potionTooltip == null) return;
+
+        PlayerUnit player = FindObjectOfType<PlayerUnit>();
+        if (player == null || i < 0 || i >= player.Potions.Count) { HidePotionTooltip(); return; }
+
+        PotionData potion = player.Potions[i];
+        potionTooltipText.text = $"【{potion.potionName}】\n{potion.description}\n点击使用";
+
+        const float w = 360f;
+        potionTooltipRt.sizeDelta = new Vector2(w, 120f);            // 先定宽，下面按换行后高度收紧
+        potionTooltipRt.sizeDelta = new Vector2(w, potionTooltipText.preferredHeight + 20f);
+
+        // 挂在对应瓶子正下方（瓶子中心 x 与长条里一致）
+        float x = 420f + potionSlotW / 2f + i * (potionSlotW + 5f);
+        potionTooltipRt.anchorMin = new Vector2(0.5f, 1f);
+        potionTooltipRt.anchorMax = new Vector2(0.5f, 1f);
+        potionTooltipRt.pivot = new Vector2(0.5f, 1f);
+        potionTooltipRt.anchoredPosition = new Vector2(x, -(75f + potionSlotH / 2f + 8f));
+        potionTooltip.SetActive(true);
+    }
+
+    private void HidePotionTooltip()
+    {
+        if (potionTooltip != null) potionTooltip.SetActive(false);
+    }
+
+    /// <summary>鼠标停在底部技能插槽卡面：浮层显示在卡面上方</summary>
+    private void ShowSlotSkillTooltip(int slotIndex)
+    {
+        if (cardSystem == null) cardSystem = FindCardSystem();
+        if (cardSystem == null || slotIndex >= cardSystem.Slots.Count) { HideSkillTooltip(); return; }
+
+        CardSlot slot = cardSystem.Slots[slotIndex];
+        if (slot == null || slot.IsEmpty) { HideSkillTooltip(); return; }
+
+        SetSkillTooltipText(slot.card);
+
+        float rightGap = slotRightGapX + (2 - slotIndex) * (slotCardW + 10f);
+        float cx = 960f - rightGap - slotCardW / 2f;     // 卡面中线相对屏幕中心
+        float halfW = skillTooltipRt.sizeDelta.x / 2f;
+        cx = Mathf.Clamp(cx, -960f + halfW + 12f, 960f - halfW - 12f);
+
+        skillTooltipRt.anchorMin = new Vector2(0.5f, 0f);
+        skillTooltipRt.anchorMax = new Vector2(0.5f, 0f);
+        skillTooltipRt.pivot = new Vector2(0.5f, 0f);
+        skillTooltipRt.anchoredPosition = new Vector2(cx, 25f + slotCardFaceH + 8f);
+        skillTooltip.SetActive(true);
+    }
+
+    /// <summary>鼠标停在左侧怪物技能卡面：浮层显示在卡面右侧</summary>
+    private void ShowEnemySkillTooltip(int faceIndex)
+    {
+        int idx = enemySkillScroll + faceIndex;
+        if (idx < 0 || idx >= enemySkillEntries.Count) { HideSkillTooltip(); return; }
+
+        CardData card = enemySkillEntries[idx].Card;
+        if (card == null) { HideSkillTooltip(); return; }
+
+        SetSkillTooltipText(card);
+
+        float top = enemyCardFirstTopY + faceIndex * (enemyCardH + enemyCardGap);
+        skillTooltipRt.anchorMin = new Vector2(0f, 1f);
+        skillTooltipRt.anchorMax = new Vector2(0f, 1f);
+        skillTooltipRt.pivot = new Vector2(0f, 1f);
+        skillTooltipRt.anchoredPosition = new Vector2(24f + enemyCardW + 8f, -top);
+        skillTooltip.SetActive(true);
+    }
+
+    /// <summary>填充技能介绍：标题 = 卡名 + 思绪/耐力消耗，正文 = CardData.description</summary>
+    private void SetSkillTooltipText(CardData card)
+    {
+        if (skillTooltip == null || card == null) return;
+
+        skillTooltipTitle.text = $"【{card.cardName}】  思绪 {card.thoughtCost} · 耐力 {card.actionCost}";
+        skillTooltipBody.text = card.description;
+
+        // 先定宽，再按正文换行后的实际高度收紧浮层（Text.preferredHeight 只跟宽度有关）
+        const float w = 430f;
+        skillTooltipRt.sizeDelta = new Vector2(w, 150f);
+        float bodyH = Mathf.Max(24f, skillTooltipBody.preferredHeight);
+        float total = 12f + 30f + 6f + bodyH + 12f;
+        skillTooltipRt.sizeDelta = new Vector2(w, total);
+        skillTooltipBody.rectTransform.sizeDelta = new Vector2(-28f, bodyH + 2f);
+    }
+
+    private void HideSkillTooltip()
+    {
+        if (skillTooltip != null) skillTooltip.SetActive(false);
+    }
+
+    /// <summary>给按钮挂"指针进入 / 离开"回调（EventTrigger，不干扰 Button 自己的点击）</summary>
+    private static void AddHoverTrigger(GameObject go, UnityAction onEnter, UnityAction onExit)
+    {
+        if (go == null) return;
+        EventTrigger et = go.GetComponent<EventTrigger>();
+        if (et == null) et = go.AddComponent<EventTrigger>();
+
+        EventTrigger.Entry enter = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
+        enter.callback.AddListener(_ => onEnter());
+        et.triggers.Add(enter);
+
+        EventTrigger.Entry exit = new EventTrigger.Entry { eventID = EventTriggerType.PointerExit };
+        exit.callback.AddListener(_ => onExit());
+        et.triggers.Add(exit);
     }
 
     private Image MakeImage(Transform parent, string name, Sprite sprite, Color color,
@@ -677,6 +992,11 @@ public class BattleHUD : MonoBehaviour
 
         // 三张卡面：整张可点 → 弹"是否灌注"确认
         float firstCardY = topY + arrowH + 5f;    // 第一张卡面上沿：距顶部箭头下沿 5px
+
+        // 记下布局参数：悬停技能介绍浮层要按这些数值定位到卡面右侧
+        enemyCardH = cardH;
+        enemyCardFirstTopY = firstCardY;
+
         for (int i = 0; i < 3; i++)
         {
             float y = firstCardY + i * (cardH + gap);
@@ -685,6 +1005,11 @@ public class BattleHUD : MonoBehaviour
                 new Vector2(24f, -y), new Vector2(cardW, cardH), OnEnemySkillCardClicked, i);
             enemySkillFaces[i] = face;
 
+            // 鼠标停在这张卡上：右侧浮层显示该技能的介绍
+            int capturedFace = i;
+            AddHoverTrigger(face.gameObject,
+                () => ShowEnemySkillTooltip(capturedFace), HideSkillTooltip);
+
             // 技能名：素材浅灰文字区（图像 y251~470 → 距底 5%~49%，取中部）
             Text nameT = MakeText(face.transform, "", 20, TextAnchor.MiddleCenter, Color.black,
                 new Vector2(0.5f, 0.30f), new Vector2(0.5f, 0.30f), Vector2.zero,
@@ -692,9 +1017,9 @@ public class BattleHUD : MonoBehaviour
             nameT.horizontalOverflow = HorizontalWrapMode.Wrap;
             enemySkillNameTexts[i] = nameT;
 
-            // 思绪费用：文字区下部小字
+            // 思绪费用：文字区下部小字（卡面文字统一黑字）
             Text costT = MakeText(face.transform, "", 14, TextAnchor.MiddleCenter,
-                new Color(0.25f, 0.25f, 0.28f),
+                Color.black,
                 new Vector2(0.5f, 0.13f), new Vector2(0.5f, 0.13f), Vector2.zero,
                 new Vector2(0.5f, 0.13f), new Vector2(cardW * 0.84f, cardH * 0.10f));
             enemySkillCostTexts[i] = costT;
@@ -760,8 +1085,8 @@ public class BattleHUD : MonoBehaviour
             {
                 string wantName = card != null ? card.cardName : "空";
                 if (enemySkillNameTexts[i].text != wantName) enemySkillNameTexts[i].text = wantName;
-                Color wantColor = card != null ? Color.black : new Color(0.55f, 0.55f, 0.56f);
-                if (enemySkillNameTexts[i].color != wantColor) enemySkillNameTexts[i].color = wantColor;
+                // 卡面文字统一黑字（空位也是黑字，不再用灰色）
+                if (enemySkillNameTexts[i].color != Color.black) enemySkillNameTexts[i].color = Color.black;
             }
 
             if (enemySkillCostTexts[i] != null)
@@ -790,7 +1115,7 @@ public class BattleHUD : MonoBehaviour
         RefreshEnemySkillCards();
     }
 
-    /// <summary>点左侧卡面：弹出"是否花费思绪灌注"确认框</summary>
+    /// <summary>点左侧卡面：先查下方三个技能栏是否已满，未满才弹"是否花费思绪灌注"确认框</summary>
     private void OnEnemySkillCardClicked(int i)
     {
         if (!IsPlayerPhase()) return;
@@ -802,7 +1127,34 @@ public class BattleHUD : MonoBehaviour
         CardData card = enemySkillEntries[idx].Card;
         if (card == null) return;
 
+        // 下方三张技能插槽已经全部有技能 → 直接提示，不再走灌注确认
+        if (IsVisibleSlotFull())
+        {
+            ShowMessage("当前技能槽已满，无法进行灌注");
+            return;
+        }
+
         ShowInfuseConfirm(card);
+    }
+
+    /// <summary>
+    /// 下方三张技能插槽（屏幕底部，UI 固定 3 格）是否已全部占用。
+    /// 槽位数据可能配置了超过 3 个（PlayerCardSystem.slotCount 默认 5），
+    /// 这里按"玩家能看到的三个技能栏"判断，取前 3 个槽位。
+    /// </summary>
+    private bool IsVisibleSlotFull()
+    {
+        if (cardSystem == null) cardSystem = FindCardSystem();
+        if (cardSystem == null) return false;
+
+        IReadOnlyList<CardSlot> slots = cardSystem.Slots;
+        int visible = Mathf.Min(3, slots.Count);
+        if (visible <= 0) return false;
+
+        for (int i = 0; i < visible; i++)
+            if (slots[i] == null || slots[i].IsEmpty)
+                return false;   // 还有空槽 → 可以灌注
+        return true;            // 三格都有技能 → 已满
     }
 
     // ------------------------------------------------------------
@@ -986,32 +1338,36 @@ public class BattleHUD : MonoBehaviour
         }
     }
 
-    /// <summary>一张待选卡：居中排列（三张时关于屏幕中轴对称），点击灌注</summary>
+    /// <summary>一张待选卡：空技能卡面 + 卡名 + 消耗 + 技能介绍，居中排列，点击灌注</summary>
     private void MakeChoiceCard(Transform parent, CardData card, int index, int total)
     {
-        const float w = 320f, h = 440f, gap = 40f;
+        const float w = 320f, gap = 40f;
+        float h = w * 495f / 379f;                 // ≈418：与空技能卡面同比例，不拉伸
         float x = (index - (total - 1) / 2f) * (w + gap);
         CardData captured = card;
 
-        Button b = MakeCenteredButton(parent, "", new Vector2(x, 30f), new Vector2(w, h),
-            new Color(0.15f, 0.19f, 0.27f, 0.97f), () => TryInfuse(captured));
+        Button b = MakeImageButton(parent, "ChoiceCard_" + index, emptyCardFaceSprite,
+            new Vector2(0.5f, 0.5f), new Vector2(x, 30f), new Vector2(w, h),
+            _ => TryInfuse(captured), 0);
 
-        // 卡名
-        MakeText(b.transform, "【" + card.cardName + "】", 30, TextAnchor.UpperCenter, Color.white,
-            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -22f),
-            new Vector2(0.5f, 1f), new Vector2(w - 24f, 44f));
+        // 卡名：写进卡面下方浅灰文字区的上沿（图像 y251~470 → 归一化 0.49~0.05）
+        Text nameT = MakeText(b.transform, "【" + card.cardName + "】", 28, TextAnchor.MiddleCenter,
+            Color.black,
+            new Vector2(0.5f, 0.45f), new Vector2(0.5f, 0.45f), Vector2.zero,
+            new Vector2(0.5f, 0.45f), new Vector2(w * 0.86f, 34f));
+        nameT.horizontalOverflow = HorizontalWrapMode.Wrap;
 
-        // 消耗
+        // 消耗（卡面文字统一黑字）
         MakeText(b.transform, "思绪 " + card.thoughtCost + " · 耐力 " + card.actionCost,
-            22, TextAnchor.UpperCenter, new Color(0.85f, 0.88f, 0.95f),
-            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -74f),
-            new Vector2(0.5f, 1f), new Vector2(w - 24f, 32f));
+            19, TextAnchor.MiddleCenter, Color.black,
+            new Vector2(0.5f, 0.385f), new Vector2(0.5f, 0.385f), Vector2.zero,
+            new Vector2(0.5f, 0.385f), new Vector2(w * 0.86f, 26f));
 
-        // 描述（自动换行）
-        Text desc = MakeText(b.transform, card.description, 19, TextAnchor.UpperCenter,
-            new Color(0.9f, 0.92f, 0.96f),
-            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -118f),
-            new Vector2(0.5f, 1f), new Vector2(w - 32f, h - 150f));
+        // 技能介绍（CardData.description，自动换行，放不下就截断）
+        Text desc = MakeText(b.transform, card.description, 16, TextAnchor.UpperCenter,
+            Color.black,
+            new Vector2(0.5f, 0.35f), new Vector2(0.5f, 0.35f), Vector2.zero,
+            new Vector2(0.5f, 1f), new Vector2(w * 0.86f, h * 0.29f));
         desc.horizontalOverflow = HorizontalWrapMode.Wrap;
         desc.verticalOverflow = VerticalWrapMode.Truncate;
     }
@@ -1340,13 +1696,12 @@ public class BattleHUD : MonoBehaviour
             CardSlot slot = (cardSystem != null && i < cardSystem.Slots.Count) ? cardSystem.Slots[i] : null;
             bool hasCard = slot != null && !slot.IsEmpty;
 
-            // 名称：写进卡面空白区（黑字）；空槽写灰色"空"
+            // 名称：写进卡面空白区（黑字）；空槽同样黑字
             if (slotNameTexts[i] != null)
             {
                 string wantName = hasCard ? slot.card.cardName : "空";
                 if (slotNameTexts[i].text != wantName) slotNameTexts[i].text = wantName;
-                Color wantColor = hasCard ? Color.black : new Color(0.55f, 0.55f, 0.56f);
-                if (slotNameTexts[i].color != wantColor) slotNameTexts[i].color = wantColor;
+                if (slotNameTexts[i].color != Color.black) slotNameTexts[i].color = Color.black;
             }
 
             // 剩余次数：只有限次卡才显示
@@ -1612,6 +1967,7 @@ public class BattleHUD : MonoBehaviour
         if (plannedLabelLayer == null) return;
 
         bool visible = showEnemyPlannedSkills && IsPlayerPhase() && mode == SelectMode.无
+                       && !BattleEndPanel.IsOpen   // 战斗结束奖励界面打开时：悬停信息全部隐藏
                        && (deckPanel == null || !deckPanel.activeSelf)
                        && (cardSystem == null || !cardSystem.IsChoosing)
                        && (confirmPanel == null || !confirmPanel.activeSelf)
