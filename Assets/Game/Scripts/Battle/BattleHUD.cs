@@ -114,6 +114,11 @@ public class BattleHUD : MonoBehaviour
     private Text skillTooltipTitle;
     private Text skillTooltipBody;
 
+    // buff 说明浮层：悬停的卡牌带 buff 时，出现在技能介绍浮层旁边的第二个弹窗
+    private GameObject buffTooltip;
+    private RectTransform buffTooltipRt;
+    private Text buffTooltipText;
+
     // 底部插槽 / 左侧卡面的布局参数（建 UI 时记下，悬停浮层要按它们定位）
     private float slotCardW = 203f;
     private float slotCardFaceH = 265f;
@@ -122,6 +127,12 @@ public class BattleHUD : MonoBehaviour
     private float enemyCardH = 196f;
     private float enemyCardFirstTopY = 230f;
     private const float enemyCardGap = 8f;
+
+    // 左下角 推 / 跳 基础技能卡面（与左侧怪物技能卡同宽，纵向立起）
+    // x 起点在左侧怪物技能栏（卡面右缘 174 + 底部翻页箭头）之右，避免与其重叠
+    private const float baseCardX = 190f;
+    private const float baseCardW = 150f;
+    private float baseCardH = 150f * 495f / 379f;   // ≈196：与空技能卡面同比例
     private int plannedLabelSyncFrame = -999;   // 上次同步敌人列表的帧号
 
     private const float hpBarWidth = 96f;        // 血条外框宽
@@ -145,7 +156,11 @@ public class BattleHUD : MonoBehaviour
     [Header("插槽素材（引用已在 Battle.unity 里配好）")]
     public Sprite skillSlotSprite;    // 技能插槽：左下角三连槽
     public Sprite drawButtonSprite;   // 抽牌按键：下一回合下方的插卡按钮
-    public Sprite emptyCardFaceSprite; // 空技能卡面：插槽背后一层的卡面底图
+    public Sprite emptyCardFaceSprite; // 空技能卡面：空槽位的卡面底图（显示"空"）
+    public Sprite attackCardFaceSprite;  // 攻击牌：攻击类技能的卡面
+    public Sprite defenseCardFaceSprite; // 防御牌：防御类技能的卡面
+    public Sprite deckAttackIconSprite;  // 攻击.png：牌堆选择层左侧按钮顶部图标
+    public Sprite deckDefenseIconSprite; // 技能.png：牌堆选择层右侧按钮顶部图标
 
     [Header("左侧敌方技能栏素材（引用已在 Battle.unity 里配好）")]
     public Sprite enemySkillArrowSprite;      // 淡蓝色箭头_1：翻页箭头常态底图（下箭头旋转 180°）
@@ -282,6 +297,14 @@ public class BattleHUD : MonoBehaviour
             drawButtonSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(uiDir + "抽牌按键.png");
         if (emptyCardFaceSprite == null)
             emptyCardFaceSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(uiDir + "空技能卡面.png");
+        if (attackCardFaceSprite == null)
+            attackCardFaceSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(uiDir + "攻击牌.png");
+        if (defenseCardFaceSprite == null)
+            defenseCardFaceSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(uiDir + "防御牌.png");
+        if (deckAttackIconSprite == null)
+            deckAttackIconSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(uiDir + "攻击.png");
+        if (deckDefenseIconSprite == null)
+            deckDefenseIconSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(uiDir + "技能.png");
         if (enemySkillArrowSprite == null)
             enemySkillArrowSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(uiDir + "淡蓝色箭头_1.png");
         if (enemySkillArrowHoverSprite == null)
@@ -326,7 +349,7 @@ public class BattleHUD : MonoBehaviour
         // ---- 最底层：深蓝色长条_2 铺满屏幕顶部（Canvas 在两张战斗背景之上） ----
         MakeImage(canvas.transform, "StatusBar_Bar", statusBarSprite,
             statusBarSprite == null ? new Color(0.16f, 0.27f, 0.44f, 0.9f) : Color.white,
-            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), Vector2.zero, new Vector2(1920f, 150f));
+            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), Vector2.zero, new Vector2(1920f, 105f));
 
         // ---- 长条偏右：三个饮料槽位，起点在中轴右侧 420px，间隔 5px ----
         // 空槽显示空饮料槽位素材；拿到药水后换成药水立绘（最多 3 瓶）。
@@ -343,7 +366,7 @@ public class BattleHUD : MonoBehaviour
                     OnPotionSlotClicked, i);
                 RectTransform rt = slot.GetComponent<RectTransform>();
                 rt.pivot = new Vector2(0.5f, 0.5f);              // 让 x/y 直接表示瓶子中心
-                rt.anchoredPosition = new Vector2(x, -75f);      // 垂直居中于 150 高的长条
+                rt.anchoredPosition = new Vector2(x, -52.5f);    // 垂直居中于 105 高的长条
                 slot.GetComponent<Image>().preserveAspect = true;
                 potionSlotButtons[i] = slot;
                 potionSlotImages[i] = slot.GetComponent<Image>();
@@ -355,18 +378,18 @@ public class BattleHUD : MonoBehaviour
         }
 
         // ---- 长条下方：耐力槽（左） / 思绪槽（右），关于画面中轴 x=960 对称 ----
-        // pivot=(0.5,1)（顶边锚点）；y=-165 = 长条底边(-150) 再下移 15px
+        // pivot=(0.5,1)（顶边锚点）；y=-110 = 长条底边(-105) 再下移 5px
         // 尺寸：横向长度 448×1.2≈538，竖向宽度 110×0.7=77（正好贴合素材 400×69 原始比例）
         Image staminaSlot = MakeImage(canvas.transform, "StatusBar_Stamina", staminaSlotSprite,
             staminaSlotSprite == null ? new Color(0.85f, 0.85f, 0.87f, 0.9f) : Color.white,
-            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(-340f, -165f), new Vector2(538f, 77f));
+            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(-340f, -110f), new Vector2(538f, 77f));
         staminaText = MakeText(staminaSlot.transform, "20/20", 30, TextAnchor.MiddleCenter,
             new Color(0.15f, 0.15f, 0.18f));
         Stretch(staminaText.rectTransform);
 
         Image thoughtSlot = MakeImage(canvas.transform, "StatusBar_Thought", thoughtSlotSprite,
             thoughtSlotSprite == null ? new Color(0.65f, 0.8f, 0.97f, 0.9f) : Color.white,
-            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(340f, -165f), new Vector2(538f, 77f));
+            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(340f, -110f), new Vector2(538f, 77f));
         thoughtText = MakeText(thoughtSlot.transform, "20/20", 30, TextAnchor.MiddleCenter,
             new Color(0.15f, 0.15f, 0.18f));
         Stretch(thoughtText.rectTransform);
@@ -389,16 +412,28 @@ public class BattleHUD : MonoBehaviour
         Stretch(skillGroup.GetComponent<RectTransform>());   // 铺满画布，子按钮的左下角锚点才正确
 
         string[] labels = { "推", "跳" };
-        UnityAction[] actions =
-        {
-            () => EnterMode(SelectMode.推),
-            () => EnterMode(SelectMode.跳)
-        };
+        // 推 = 攻击技能 → 攻击牌卡面；跳 = 防御/位移技能 → 防御牌卡面。
+        // 卡面立起放在左下角（与左侧怪物技能卡同宽），黑字写卡名，悬停出介绍浮层。
+        CardData[] baseCards = { pushCard, jumpCard };
         for (int i = 0; i < labels.Length; i++)
         {
-            MakeButton(skillGroup.transform, labels[i],
-                new Vector2(30f + i * 150f, 28f), new Vector2(132f, 56f),
-                new Color(0.32f, 0.32f, 0.34f), actions[i]);
+            SelectMode targetMode = i == 0 ? SelectMode.推 : SelectMode.跳;
+            Button faceBtn = MakeImageButton(skillGroup.transform, "BaseSkill_" + labels[i],
+                FaceForCard(baseCards[i]), new Vector2(0f, 0f),
+                new Vector2(baseCardX + i * (baseCardW + 10f), 28f), new Vector2(baseCardW, baseCardH),
+                _ => EnterMode(targetMode), 0);
+
+            // 卡名黑字：与底部插槽卡面同位（卡面浅灰文字区）
+            Text nameT = MakeText(faceBtn.transform, labels[i], 22, TextAnchor.MiddleCenter,
+                Color.black,
+                new Vector2(0.5f, 0.34f), new Vector2(0.5f, 0.34f), Vector2.zero,
+                new Vector2(0.5f, 0.34f), new Vector2(baseCardW * 0.84f, baseCardH * 0.2f));
+            nameT.horizontalOverflow = HorizontalWrapMode.Wrap;
+
+            // 鼠标停在卡面上：上方浮层显示技能介绍（带 buff 时旁边加 buff 浮层）
+            int capturedBase = i;
+            AddHoverTrigger(faceBtn.gameObject,
+                () => ShowBaseSkillTooltip(capturedBase), HideSkillTooltip);
         }
 
         // ---- 右下按钮组定位参数（插槽与按钮共用，都锚定右下角） ----
@@ -615,6 +650,16 @@ public class BattleHUD : MonoBehaviour
             new Vector2(0.5f, 1f), new Vector2(-28f, 80f));
         skillTooltipBody.horizontalOverflow = HorizontalWrapMode.Wrap;
         skillTooltipBody.verticalOverflow = VerticalWrapMode.Truncate;
+
+        // 第二个浮层：卡牌附带 buff 的说明（悬停带 buff 的卡时出现在技能浮层旁边）
+        buffTooltip = MakeTooltipRoot("BuffTooltip", 360f, out buffTooltipRt);
+        buffTooltipText = MakeText(buffTooltip.transform, "", 18, TextAnchor.UpperLeft,
+            new Color(0.93f, 0.95f, 0.98f));
+        RectTransform bt = buffTooltipText.rectTransform;
+        Stretch(bt);
+        bt.offsetMin = new Vector2(14f, 10f);
+        bt.offsetMax = new Vector2(-14f, -10f);
+        buffTooltipText.horizontalOverflow = HorizontalWrapMode.Wrap;
     }
 
     /// <summary>半透明深色浮层底座（raycastTarget=false，绝不挡点击）</summary>
@@ -681,6 +726,7 @@ public class BattleHUD : MonoBehaviour
         skillTooltipRt.pivot = new Vector2(0.5f, 0f);
         skillTooltipRt.anchoredPosition = new Vector2(cx, 25f + slotCardFaceH + 8f);
         skillTooltip.SetActive(true);
+        PlaceBuffTooltipBesideSkill();
     }
 
     /// <summary>鼠标停在左侧怪物技能卡面：浮层显示在卡面右侧</summary>
@@ -700,9 +746,32 @@ public class BattleHUD : MonoBehaviour
         skillTooltipRt.pivot = new Vector2(0f, 1f);
         skillTooltipRt.anchoredPosition = new Vector2(24f + enemyCardW + 8f, -top);
         skillTooltip.SetActive(true);
+        PlaceBuffTooltipBesideSkill();
     }
 
-    /// <summary>填充技能介绍：标题 = 卡名 + 思绪/耐力消耗，正文 = CardData.description</summary>
+    /// <summary>鼠标停在左下角 推 / 跳 卡面：浮层显示在卡面上方（卡面位置固定，直接算）</summary>
+    private void ShowBaseSkillTooltip(int i)
+    {
+        CardData card = i == 0 ? pushCard : jumpCard;
+        if (card == null) { HideSkillTooltip(); return; }
+
+        SetSkillTooltipText(card);
+
+        // 卡面锚定左下角 (0,0)：pos.x = 左缘到屏幕左边的距离 → 中线相对屏幕中心
+        float cx = baseCardX + i * (baseCardW + 10f) + baseCardW / 2f - 960f;
+        float halfW = skillTooltipRt.sizeDelta.x / 2f;
+        cx = Mathf.Clamp(cx, -960f + halfW + 12f, 960f - halfW - 12f);
+
+        skillTooltipRt.anchorMin = new Vector2(0.5f, 0f);
+        skillTooltipRt.anchorMax = new Vector2(0.5f, 0f);
+        skillTooltipRt.pivot = new Vector2(0.5f, 0f);
+        skillTooltipRt.anchoredPosition = new Vector2(cx, 28f + baseCardH + 8f);
+        skillTooltip.SetActive(true);
+        PlaceBuffTooltipBesideSkill();
+    }
+
+    /// <summary>填充技能介绍：标题 = 卡名 + 思绪/耐力消耗，正文 = CardData.description；
+    /// 卡牌带 buff 时同步填充 buff 说明浮层（没有则藏起来）</summary>
     private void SetSkillTooltipText(CardData card)
     {
         if (skillTooltip == null || card == null) return;
@@ -717,11 +786,78 @@ public class BattleHUD : MonoBehaviour
         float total = 12f + 30f + 6f + bodyH + 12f;
         skillTooltipRt.sizeDelta = new Vector2(w, total);
         skillTooltipBody.rectTransform.sizeDelta = new Vector2(-28f, bodyH + 2f);
+
+        // ---- 附带 buff：填进旁边的第二个浮层 ----
+        if (buffTooltip == null) return;
+        string buffText = BuildBuffTooltipText(card);
+        if (string.IsNullOrEmpty(buffText))
+        {
+            buffTooltip.SetActive(false);
+            return;
+        }
+        buffTooltipText.text = buffText;
+        const float bw = 360f;
+        buffTooltipRt.sizeDelta = new Vector2(bw, 60f);
+        buffTooltipRt.sizeDelta = new Vector2(bw, Mathf.Max(60f, buffTooltipText.preferredHeight + 20f));
+        buffTooltip.SetActive(true);
+    }
+
+    /// <summary>卡牌附带 buff 的说明文本（每个 buff 一段：名称 + 描述；无 buff 返回 null）</summary>
+    private static string BuildBuffTooltipText(CardData card)
+    {
+        if (card == null || card.buffs == null || card.buffs.Count == 0) return null;
+
+        List<string> parts = new List<string>();
+        foreach (BuffData b in card.buffs)
+        {
+            if (b == null) continue;
+            parts.Add(string.IsNullOrEmpty(b.description)
+                ? "【" + b.buffName + "】"
+                : "【" + b.buffName + "】\n" + b.description);
+        }
+        return parts.Count > 0 ? string.Join("\n\n", parts) : null;
+    }
+
+    /// <summary>把 buff 浮层摆到技能浮层右侧（贴 8px）；右侧放不下就改贴左侧</summary>
+    private void PlaceBuffTooltipBesideSkill()
+    {
+        if (buffTooltip == null || skillTooltip == null) return;
+        if (!buffTooltip.activeSelf) return;
+
+        // 与技能浮层共用锚点和 pivot，纵向对齐后横向平移一个浮层宽 + 8px
+        buffTooltipRt.anchorMin = skillTooltipRt.anchorMin;
+        buffTooltipRt.anchorMax = skillTooltipRt.anchorMax;
+        buffTooltipRt.pivot = skillTooltipRt.pivot;
+
+        float w = skillTooltipRt.sizeDelta.x;
+        float bw = buffTooltipRt.sizeDelta.x;
+        float skillX = skillTooltipRt.anchoredPosition.x;
+        float y = skillTooltipRt.anchoredPosition.y;
+
+        // 技能浮层右缘（锚点系内）：pivot.x=0.5 时 = x + w/2；pivot.x=0 时 = x + w
+        float rightEdge = skillX + w * (1f - skillTooltipRt.pivot.x);
+        buffTooltipRt.anchoredPosition = new Vector2(rightEdge + 8f + bw / 2f, y);
+
+        // 超出屏幕右边 → 改贴技能浮层左侧
+        Vector3[] c = new Vector3[4];
+        buffTooltipRt.GetWorldCorners(c);
+        if (c[2].x > Screen.width - 8f)
+            buffTooltipRt.anchoredPosition =
+                new Vector2(skillX - w * skillTooltipRt.pivot.x - 8f - bw / 2f, y);
+    }
+
+    /// <summary>按卡牌类型选卡面：防御卡用防御牌，攻击卡用攻击牌，空位用空技能卡面</summary>
+    private Sprite FaceForCard(CardData card)
+    {
+        if (card == null) return emptyCardFaceSprite;
+        Sprite s = card.IsAttack ? attackCardFaceSprite : defenseCardFaceSprite;
+        return s != null ? s : emptyCardFaceSprite;   // 素材缺失时退回空技能卡面
     }
 
     private void HideSkillTooltip()
     {
         if (skillTooltip != null) skillTooltip.SetActive(false);
+        if (buffTooltip != null) buffTooltip.SetActive(false);
     }
 
     /// <summary>给按钮挂"指针进入 / 离开"回调（EventTrigger，不干扰 Button 自己的点击）</summary>
@@ -914,20 +1050,23 @@ public class BattleHUD : MonoBehaviour
             new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 220f),
             new Vector2(0.5f, 0.5f), new Vector2(900f, 60f));
 
-        // 两个大型按钮：中轴对称，各距中轴 300px
+        // 两个大型按钮：中轴对称，各距中轴 300px。
+        // 顶部放牌堆图标（攻击.png / 技能.png），文字在图标下一行；防御按钮底色改绿色。
         Button atk = MakeCenteredButton(deckPanel.transform, "攻击牌堆\n抽取攻击技能",
-            new Vector2(-300f, 20f), new Vector2(420f, 190f),
+            new Vector2(-300f, 20f), new Vector2(420f, 240f),
             new Color(0.55f, 0.2f, 0.2f, 0.96f), () => DrawFromDeck(CardPool.攻击), 34);
         Button def = MakeCenteredButton(deckPanel.transform, "防御牌堆\n抽取防御技能",
-            new Vector2(300f, 20f), new Vector2(420f, 190f),
-            new Color(0.2f, 0.34f, 0.55f, 0.96f), () => DrawFromDeck(CardPool.防御), 34);
+            new Vector2(300f, 20f), new Vector2(420f, 240f),
+            new Color(0.2f, 0.52f, 0.3f, 0.96f), () => DrawFromDeck(CardPool.防御), 34);
+        AddDeckIcon(atk, deckAttackIconSprite);
+        AddDeckIcon(def, deckDefenseIconSprite);
 
         deckCostTexts.Add(MakeText(atk.transform, "消耗思绪 5", 22, TextAnchor.LowerCenter,
             new Color(1f, 0.9f, 0.9f, 0.85f),
             new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 18f),
             new Vector2(0.5f, 0f), new Vector2(380f, 30f)));
         deckCostTexts.Add(MakeText(def.transform, "消耗思绪 5", 22, TextAnchor.LowerCenter,
-            new Color(0.9f, 0.95f, 1f, 0.85f),
+            new Color(0.9f, 1f, 0.92f, 0.85f),
             new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 18f),
             new Vector2(0.5f, 0f), new Vector2(380f, 30f)));
 
@@ -1080,6 +1219,17 @@ public class BattleHUD : MonoBehaviour
         {
             int idx = enemySkillScroll + i;
             CardData card = idx < enemySkillEntries.Count ? enemySkillEntries[idx].Card : null;
+
+            // 卡面随技能类型切换：攻击卡 → 攻击牌，防御卡 → 防御牌（无技能时保持空技能卡面）
+            if (enemySkillFaces[i] != null && enemySkillFaces[i].image != null)
+            {
+                Sprite wantFace = FaceForCard(card);
+                if (enemySkillFaces[i].image.sprite != wantFace)
+                {
+                    enemySkillFaces[i].image.sprite = wantFace;
+                    enemySkillFaces[i].image.color = Color.white;
+                }
+            }
 
             if (enemySkillNameTexts[i] != null)
             {
@@ -1305,6 +1455,32 @@ public class BattleHUD : MonoBehaviour
             DimEnemies(false);
     }
 
+    /// <summary>牌堆按钮顶部图标：图标居中放在按钮最上方，文字块整体下移一行让位</summary>
+    private void AddDeckIcon(Button btn, Sprite icon)
+    {
+        if (btn == null) return;
+
+        // 文字块：从"撑满按钮"改为锚在图标下方（两行居中，缩小一号）
+        Text label = btn.GetComponentInChildren<Text>();
+        if (label != null)
+        {
+            RectTransform lrt = label.rectTransform;
+            lrt.anchorMin = new Vector2(0.5f, 1f);
+            lrt.anchorMax = new Vector2(0.5f, 1f);
+            lrt.pivot = new Vector2(0.5f, 1f);
+            lrt.anchoredPosition = new Vector2(0f, -114f);
+            lrt.sizeDelta = new Vector2(380f, 74f);
+            label.fontSize = 30;
+        }
+
+        // 图标：按钮顶部居中，preserveAspect 防拉伸；纯装饰图不挡点击
+        if (icon == null) return;
+        Image img = MakeImage(btn.transform, "DeckIcon", icon, Color.white,
+            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+            new Vector2(0f, -10f), new Vector2(110f, 84f));
+        img.preserveAspect = true;
+    }
+
     /// <summary>选了牌堆：抽对应牌库，成功后切到 3 张居中卡牌</summary>
     private void DrawFromDeck(CardPool pool)
     {
@@ -1338,7 +1514,7 @@ public class BattleHUD : MonoBehaviour
         }
     }
 
-    /// <summary>一张待选卡：空技能卡面 + 卡名 + 消耗 + 技能介绍，居中排列，点击灌注</summary>
+    /// <summary>一张待选卡：按类型选攻击牌/防御牌卡面 + 卡名 + 消耗 + 技能介绍，居中排列，点击灌注</summary>
     private void MakeChoiceCard(Transform parent, CardData card, int index, int total)
     {
         const float w = 320f, gap = 40f;
@@ -1346,9 +1522,13 @@ public class BattleHUD : MonoBehaviour
         float x = (index - (total - 1) / 2f) * (w + gap);
         CardData captured = card;
 
-        Button b = MakeImageButton(parent, "ChoiceCard_" + index, emptyCardFaceSprite,
+        Button b = MakeImageButton(parent, "ChoiceCard_" + index, FaceForCard(card),
             new Vector2(0.5f, 0.5f), new Vector2(x, 30f), new Vector2(w, h),
             _ => TryInfuse(captured), 0);
+
+        // 鼠标悬停：卡面右侧浮层显示技能介绍（带 buff 时旁边加 buff 浮层）
+        AddHoverTrigger(b.gameObject,
+            () => ShowChoiceCardTooltip(captured, b.image.rectTransform), HideSkillTooltip);
 
         // 卡名：写进卡面下方浅灰文字区的上沿（图像 y251~470 → 归一化 0.49~0.05）
         Text nameT = MakeText(b.transform, "【" + card.cardName + "】", 28, TextAnchor.MiddleCenter,
@@ -1384,6 +1564,35 @@ public class BattleHUD : MonoBehaviour
                 return;
             }
         }
+    }
+
+    /// <summary>鼠标停在抽卡待选卡上：浮层显示在卡面右侧（卡面已印介绍，这里主要补 buff 说明）</summary>
+    private void ShowChoiceCardTooltip(CardData card, RectTransform face)
+    {
+        if (card == null || face == null) { HideSkillTooltip(); return; }
+
+        SetSkillTooltipText(card);
+
+        // 卡面中心（世界坐标 = overlay 屏幕像素）换算成 Canvas 本地坐标再摆浮层
+        RectTransform canvasRt = canvas.transform as RectTransform;
+        Vector2 screenPos = RectTransformUtility.WorldToScreenPoint(null, face.position);
+        if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRt, screenPos, null, out Vector2 local))
+        { HideSkillTooltip(); return; }
+
+        float hw = face.rect.width / 2f;   // face.rect 已是 Canvas 本地单位
+        skillTooltipRt.anchorMin = new Vector2(0.5f, 0.5f);
+        skillTooltipRt.anchorMax = new Vector2(0.5f, 0.5f);
+        skillTooltipRt.pivot = new Vector2(0f, 0.5f);
+        skillTooltipRt.anchoredPosition = new Vector2(local.x + hw + 8f, local.y);
+
+        // 右侧放不下 → 改挂卡面左侧
+        if (local.x + hw + 8f + skillTooltipRt.sizeDelta.x > canvasRt.rect.width / 2f)
+        {
+            skillTooltipRt.pivot = new Vector2(1f, 0.5f);
+            skillTooltipRt.anchoredPosition = new Vector2(local.x - hw - 8f, local.y);
+        }
+        skillTooltip.SetActive(true);
+        PlaceBuffTooltipBesideSkill();
     }
 
     private PlayerCardSystem FindCardSystem()
@@ -1695,6 +1904,17 @@ public class BattleHUD : MonoBehaviour
         {
             CardSlot slot = (cardSystem != null && i < cardSystem.Slots.Count) ? cardSystem.Slots[i] : null;
             bool hasCard = slot != null && !slot.IsEmpty;
+
+            // 卡面随技能类型切换：攻击卡 → 攻击牌，防御卡 → 防御牌（空槽保持空技能卡面）
+            if (slotFaceButtons[i] != null && slotFaceButtons[i].image != null)
+            {
+                Sprite wantFace = FaceForCard(hasCard ? slot.card : null);
+                if (slotFaceButtons[i].image.sprite != wantFace)
+                {
+                    slotFaceButtons[i].image.sprite = wantFace;
+                    slotFaceButtons[i].image.color = Color.white;
+                }
+            }
 
             // 名称：写进卡面空白区（黑字）；空槽同样黑字
             if (slotNameTexts[i] != null)
