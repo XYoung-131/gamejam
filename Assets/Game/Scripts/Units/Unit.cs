@@ -70,6 +70,7 @@ public abstract class Unit : MonoBehaviour
 
     [Header("运行时状态")]
     [SerializeField] protected int currentHealth;    // 当前血量
+    [SerializeField] protected int runtimeMaxHealth;
     [SerializeField] protected int shield;          // 护盾（回合结束清零）
     [SerializeField] protected HexCoord currentCoord; // 当前所在六边形坐标
 
@@ -119,6 +120,7 @@ public abstract class Unit : MonoBehaviour
     {
         data = unitData;
         currentHealth = unitData.maxHealth;
+        runtimeMaxHealth = unitData.maxHealth;
         shield = 0;
         currentCoord = startCoord;
         activeBuffs.Clear();
@@ -374,7 +376,7 @@ public abstract class Unit : MonoBehaviour
         }
 
         int before = currentHealth;
-        currentHealth = Mathf.Min(currentHealth + amount, data.maxHealth);
+        currentHealth = Mathf.Min(currentHealth + amount, GetMaxHealth());
 
         // 满血时治疗不该刷新事件（否则 UI 会一直闪"回复"特效）
         if (currentHealth != before)
@@ -1247,20 +1249,26 @@ public abstract class Unit : MonoBehaviour
 
     public HexCoord GetCoord() => currentCoord;
     public int GetCurrentHealth() => currentHealth;
-    public int GetMaxHealth() => data != null ? data.maxHealth : 0;
+    public int GetMaxHealth() => runtimeMaxHealth > 0 ? runtimeMaxHealth : (data != null ? data.maxHealth : 0);
+    public void SetRunHealth(int current, int maximum)
+    {
+        runtimeMaxHealth = Mathf.Max(1, maximum);
+        currentHealth = Mathf.Clamp(current, 1, runtimeMaxHealth);
+        EventManager.Trigger("UnitHealthChanged", this);
+    }
     public int GetShield() => shield;
 
     /// <summary>血量百分比（0~1），UI 血条直接用</summary>
     public float GetHealthPercent()
     {
-        if (data == null || data.maxHealth <= 0) return 0f;
-        return Mathf.Clamp01((float)currentHealth / data.maxHealth);
+        if (GetMaxHealth() <= 0) return 0f;
+        return Mathf.Clamp01((float)currentHealth / GetMaxHealth());
     }
 
     /// <summary>是否满血</summary>
     public bool IsFullHealth()
     {
-        return data != null && currentHealth >= data.maxHealth;
+        return GetMaxHealth() > 0 && currentHealth >= GetMaxHealth();
     }
 
     /// <summary>当前是否有护盾</summary>

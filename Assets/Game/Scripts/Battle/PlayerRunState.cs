@@ -15,6 +15,16 @@ using UnityEngine;
 // ============================================================
 public static class PlayerRunState
 {
+    public static bool HasSnapshot { get; private set; }
+    public static int Health { get; private set; }
+    public static int MaxHealth { get; private set; }
+    public static int MaxStamina { get; private set; }
+    public static int MaxThought { get; private set; }
+    public static int StaminaRegen { get; private set; }
+    public static int ThoughtRegen { get; private set; }
+    public static int PotionMisses { get; set; }
+    private static readonly List<CardData> savedAttack = new List<CardData>();
+    private static readonly List<CardData> savedDefense = new List<CardData>();
     /// <summary>战斗结束界面"进行 1 次技能选择"选中的技能（加入抽卡池）</summary>
     public static readonly List<CardData> ExtraCards = new List<CardData>();
 
@@ -28,6 +38,24 @@ public static class PlayerRunState
     public static int BonusStamina;
     public static int BonusThought;
 
+    public static void Capture(PlayerUnit player)
+    {
+        if (player == null) return;
+        PlayerCardSystem cards = player.GetComponent<PlayerCardSystem>();
+        if (cards == null) return;
+        Health = player.GetCurrentHealth();
+        MaxHealth = player.GetMaxHealth();
+        MaxStamina = player.maxStamina;
+        MaxThought = player.maxThought;
+        StaminaRegen = player.staminaRegenPerTurnEnd;
+        ThoughtRegen = player.thoughtRegenPerTurnEnd;
+        savedAttack.Clear(); savedAttack.AddRange(cards.attackPool);
+        savedDefense.Clear(); savedDefense.AddRange(cards.defensePool);
+        Potions.Clear(); Potions.AddRange(player.Potions);
+        Relics.Clear(); Relics.AddRange(player.Relics);
+        HasSnapshot = true;
+    }
+
     /// <summary>
     /// 把暂存的奖励回放到玩家身上。
     /// 由 LevelManager.SpawnPlayer 在 Initialize 之后调用——
@@ -39,6 +67,22 @@ public static class PlayerRunState
         if (player == null) return;
 
         PlayerCardSystem cards = player.GetComponent<PlayerCardSystem>();
+        if (HasSnapshot)
+        {
+            player.SetRunHealth(Health, MaxHealth);
+            player.maxStamina = MaxStamina;
+            player.maxThought = MaxThought;
+            player.staminaRegenPerTurnEnd = StaminaRegen;
+            player.thoughtRegenPerTurnEnd = ThoughtRegen;
+            if (cards != null)
+            {
+                cards.attackPool = new List<CardData>(savedAttack);
+                cards.defensePool = new List<CardData>(savedDefense);
+            }
+            foreach (RelicData relic in Relics) player.RestoreOwnedRelic(relic);
+            foreach (PotionData potion in Potions) player.AddPotion(potion);
+            return;
+        }
         if (cards != null)
         {
             foreach (CardData card in ExtraCards)
@@ -47,14 +91,14 @@ public static class PlayerRunState
                 // 奖励技能进对应的抽卡池（攻击 / 防御），不是直接塞进开局槽位——
                 // 这样它在后续关卡里是"可以抽到"的牌，符合"加入卡池"的规则。
                 List<CardData> pool = card.library == CardPool.防御 ? cards.defensePool : cards.attackPool;
-                if (pool != null && !pool.Contains(card))
+                if (pool != null)
                     pool.Add(card);
             }
         }
 
         foreach (RelicData relic in Relics)
             if (relic != null && !player.HasRelic(relic))
-                player.AddRelic(relic);
+                player.RestoreOwnedRelic(relic);
 
         foreach (PotionData potion in Potions)
             if (potion != null)
@@ -80,5 +124,8 @@ public static class PlayerRunState
         Potions.Clear();
         BonusStamina = 0;
         BonusThought = 0;
+        HasSnapshot = false;
+        savedAttack.Clear(); savedDefense.Clear();
+        PotionMisses = 0;
     }
 }

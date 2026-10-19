@@ -64,6 +64,7 @@ public class BattleEndPanel : MonoBehaviour
     private bool potionTaken;
     private bool relicTaken;
     private bool statTaken;
+    private bool rewardOpening;
 
     // ---------------- UI 引用 ----------------
     private Canvas canvas;
@@ -168,6 +169,8 @@ public class BattleEndPanel : MonoBehaviour
     {
         if (state == GameState.Victory)
         {
+            if (rewardOpening) return;
+            rewardOpening = true;
             // LootSystem 也监听同一事件，事件顺序不保证——
             // 延迟一帧再打开，确保 LastBattlePotionDrop 已经掷完
             StartCoroutine(OpenNextFrame());
@@ -187,10 +190,17 @@ public class BattleEndPanel : MonoBehaviour
     /// <summary>打开战斗结束奖励界面：收集本场奖励 → 生成按钮列表</summary>
     private void Open()
     {
+        if (panelRoot.activeSelf) return;
         pendingPotion = loot != null ? loot.LastBattlePotionDrop : null;
 
         // 思维碎片的三件候选提前抽好：按钮左侧要显示图标，点开时也复用同一批，避免两次抽到不同遗物
         pendingRelicChoices.Clear();
+        if (RunFlowController.Instance != null)
+        {
+            int battleIndex = RunFlowController.Instance.Progression.BattleIndex;
+            defeatedElite = battleIndex == 3;
+            defeatedBoss = battleIndex == 7;
+        }
         if (defeatedElite || defeatedBoss)
         {
             RelicPool pool = defeatedBoss ? RelicPool.BOSS : RelicPool.精英;
@@ -311,8 +321,8 @@ public class BattleEndPanel : MonoBehaviour
 
     private string OptionSkillLabel()
     {
-        PlayerCardSystem cards = FindObjectOfType<PlayerCardSystem>();
-        int poolCount = cards != null ? cards.attackPool.Count + cards.defensePool.Count : 0;
+        RewardCardCatalog catalog = Resources.Load<RewardCardCatalog>("RewardCardCatalog");
+        int poolCount = catalog != null ? catalog.cards.Count : 0;
         return poolCount > 0 ? "进行 1 次技能选择" : "进行 1 次技能选择（牌库为空）";
     }
 
@@ -369,27 +379,14 @@ public class BattleEndPanel : MonoBehaviour
         if (skillTaken) return;
         if (subPanel != null) return;   // 子选择层已打开
 
-        PlayerCardSystem cards = FindObjectOfType<PlayerCardSystem>();
-        if (cards == null) return;
-
-        // 攻击 + 防御牌库合并，按抽卡同一套资格规则过滤，随机取 3 张
-        List<CardData> pool = new List<CardData>();
-        foreach (CardData c in cards.attackPool)
-            if (CardPoolRules.IsOfferEligible(c, CardPool.攻击)) pool.Add(c);
-        foreach (CardData c in cards.defensePool)
-            if (CardPoolRules.IsOfferEligible(c, CardPool.防御)) pool.Add(c);
-        if (pool.Count == 0)
+        RewardCardCatalog catalog = Resources.Load<RewardCardCatalog>("RewardCardCatalog");
+        if (catalog == null)
         {
-            Debug.LogWarning("[BattleEndPanel] 攻击/防御牌库为空，技能选择不可用");
+            Debug.LogWarning("[BattleEndPanel] RewardCardCatalog missing");
             return;
         }
-        for (int i = pool.Count - 1; i > 0; i--)
-        {
-            int j = Random.Range(0, i + 1);
-            (pool[i], pool[j]) = (pool[j], pool[i]);
-        }
-        int count = Mathf.Min(3, pool.Count);
-        List<CardData> choices = pool.GetRange(0, count);
+        List<CardData> choices = catalog.Roll(3);
+        if (choices.Count == 0) return;
 
         ShowCardChoice("选择 1 个技能加入卡池", choices, card =>
         {
@@ -406,13 +403,12 @@ public class BattleEndPanel : MonoBehaviour
         });
     }
 
-    /// <summary>把奖励技能塞进对应的抽卡池；池里已有同一张卡就不重复加。返回是否真的新增。</summary>
+    /// <summary>Each reward is one physical copy, including repeated rewards.</summary>
     private static bool AddCardToPool(PlayerCardSystem sys, CardData card)
     {
         if (sys == null || card == null) return false;
         List<CardData> pool = card.library == CardPool.防御 ? sys.defensePool : sys.attackPool;
         if (pool == null) return false;
-        if (pool.Contains(card)) return false;
         pool.Add(card);
         return true;
     }
@@ -552,6 +548,7 @@ public class BattleEndPanel : MonoBehaviour
                 new Vector2(w * 0.86f, h * 0.29f), TextAnchor.UpperCenter);
             desc.verticalOverflow = VerticalWrapMode.Truncate;
         }
+        AddChoiceBackButton();
     }
 
     /// <summary>卡面上的文字：按卡面归一化锚点定位（anchor.y 越大越靠上），全部黑字</summary>
@@ -618,6 +615,17 @@ public class BattleEndPanel : MonoBehaviour
             descT.horizontalOverflow = HorizontalWrapMode.Wrap;
             descT.verticalOverflow = VerticalWrapMode.Truncate;
         }
+        AddChoiceBackButton();
+    }
+
+    private void AddChoiceBackButton()
+    {
+        Button back = NewImageButton(subPanel.transform, "BackToRewards", buttonSprite,
+            new Vector2(0.5f, 0.5f), new Vector2(0f, -330f), new Vector2(260f, 64f),
+            _ => CloseSubPanel(), 0);
+        ApplyHoverSpriteSwap(back, buttonHoverSprite);
+        Text label = NewText(back.transform, "返回奖励列表", 24, new Color(0.14f, 0.22f, 0.36f));
+        Stretch(label.rectTransform);
     }
 
     private void CloseSubPanel()
@@ -632,6 +640,12 @@ public class BattleEndPanel : MonoBehaviour
 
     private void NextLevel()
     {
+        if (RunFlowController.Instance != null &&
+            RunFlowController.Instance.Progression.Phase == RunPhase.Reward)
+        {
+            RunFlowController.Instance.ContinueAfterRewards();
+            return;
+        }
         LevelManager lm = FindObjectOfType<LevelManager>();
         LevelData next = lm != null && lm.level != null ? lm.level.nextLevel : null;
 

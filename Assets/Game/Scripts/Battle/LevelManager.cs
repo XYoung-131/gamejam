@@ -121,7 +121,13 @@ public class LevelManager : MonoBehaviour
 
         // ③ 一切就位后才开战
         if (startBattleAfterSpawn && GameManager.Instance != null)
-            GameManager.Instance.StartBattle();
+        {
+            if (RunFlowController.Instance != null &&
+                RunFlowController.Instance.Progression.Phase == RunPhase.Battle)
+                GameManager.Instance.StartLevel(RunFlowController.Instance.Progression.ChapterIndex + 1);
+            else
+                GameManager.Instance.StartBattle();
+        }
     }
 
     // ============================================================
@@ -153,18 +159,16 @@ public class LevelManager : MonoBehaviour
         PlayerCardSystem cards = go.GetComponent<PlayerCardSystem>();
         if (cards == null)
             cards = go.AddComponent<PlayerCardSystem>();
-
-        // 场景里没配牌库时（当前 Battle.unity 就是空的），编辑器下按目录自动装载，
-        // 否则抽卡按钮会直接报"牌库为空"，整条抽卡/插槽链路都用不了。
-#if UNITY_EDITOR
-        if (attackPool.Count == 0)
-            attackPool = LoadCardsFromFolder("Assets/Game/ScriptableObjects/技能/攻击技能");
-        if (defensePool.Count == 0)
-            defensePool = LoadCardsFromFolder("Assets/Game/ScriptableObjects/技能/防御技能");
-#endif
-        if (attackPool.Count > 0) cards.attackPool = new List<CardData>(attackPool);
-        if (defensePool.Count > 0) cards.defensePool = new List<CardData>(defensePool);
-        cards.initialCards = CardPoolRules.MergeInitialCards(cards.initialCards, cards.defensePool);
+        StartingDeckData startingDeck = Resources.Load<StartingDeckData>("StartingDeck");
+        if (startingDeck != null)
+            startingDeck.ApplyTo(cards);
+        else
+        {
+            Debug.LogError("[LevelManager] 缺少 Resources/StartingDeck 开局牌库配置");
+            if (attackPool.Count > 0) cards.attackPool = new List<CardData>(attackPool);
+            if (defensePool.Count > 0) cards.defensePool = new List<CardData>(defensePool);
+            cards.initialCards = CardPoolRules.MergeInitialCards(cards.initialCards, cards.defensePool);
+        }
 
         // 遗物条件触发总调度（RelicData.Trigger 的唯一驱动者，必须和 PlayerUnit 同物体）
         if (go.GetComponent<RelicController>() == null)

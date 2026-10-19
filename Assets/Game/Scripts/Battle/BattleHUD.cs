@@ -663,6 +663,7 @@ public class BattleHUD : MonoBehaviour
     /// <summary>鼠标停在底部技能插槽卡面：浮层显示在卡面上方</summary>
     private void ShowSlotSkillTooltip(int slotIndex)
     {
+        slotIndex += 2;
         if (cardSystem == null) cardSystem = FindCardSystem();
         if (cardSystem == null || slotIndex >= cardSystem.Slots.Count) { HideSkillTooltip(); return; }
 
@@ -671,7 +672,7 @@ public class BattleHUD : MonoBehaviour
 
         SetSkillTooltipText(slot.card);
 
-        float rightGap = slotRightGapX + (2 - slotIndex) * (slotCardW + 10f);
+        float rightGap = slotRightGapX + (4 - slotIndex) * (slotCardW + 10f);
         float cx = 960f - rightGap - slotCardW / 2f;     // 卡面中线相对屏幕中心
         float halfW = skillTooltipRt.sizeDelta.x / 2f;
         cx = Mathf.Clamp(cx, -960f + halfW + 12f, 960f - halfW - 12f);
@@ -1148,11 +1149,11 @@ public class BattleHUD : MonoBehaviour
         if (cardSystem == null) return false;
 
         IReadOnlyList<CardSlot> slots = cardSystem.Slots;
-        int visible = Mathf.Min(3, slots.Count);
+        int visible = Mathf.Min(3, Mathf.Max(0, slots.Count - 2));
         if (visible <= 0) return false;
 
         for (int i = 0; i < visible; i++)
-            if (slots[i] == null || slots[i].IsEmpty)
+            if (slots[i + 2] == null || slots[i + 2].IsEmpty)
                 return false;   // 还有空槽 → 可以灌注
         return true;            // 三格都有技能 → 已满
     }
@@ -1508,6 +1509,7 @@ public class BattleHUD : MonoBehaviour
     /// <summary>点击第 i 张技能插槽：进入该技能的瞄准模式；再点同一张 = 取消</summary>
     private void EnterSlotMode(int slotIndex)
     {
+        slotIndex += 2;
         if (!IsPlayerPhase()) return;
         cardSystem = FindCardSystem();
         if (cardSystem == null || slotIndex >= cardSystem.Slots.Count) return;
@@ -1693,7 +1695,7 @@ public class BattleHUD : MonoBehaviour
         if (cardSystem == null) cardSystem = FindCardSystem();
         for (int i = 0; i < slotTexts.Length; i++)
         {
-            CardSlot slot = (cardSystem != null && i < cardSystem.Slots.Count) ? cardSystem.Slots[i] : null;
+            CardSlot slot = (cardSystem != null && i + 2 < cardSystem.Slots.Count) ? cardSystem.Slots[i + 2] : null;
             bool hasCard = slot != null && !slot.IsEmpty;
 
             // 名称：写进卡面空白区（黑字）；空槽同样黑字

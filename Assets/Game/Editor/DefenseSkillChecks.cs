@@ -37,7 +37,7 @@ public static class DefenseSkillChecks
                 Require(card.specialBuff != null, card.cardName + " has no Buff");
         }
         Require(enemyOnly == 13, "Expected 13 enemy-only defense cards");
-        foreach (string starter in new[] { "跳", "格挡", "远跳" })
+        foreach (string starter in new[] { "跳" })
         {
             Require(names.Contains(starter), "Missing starting card: " + starter);
             CardData card = LoadByName(starter);
@@ -45,7 +45,14 @@ public static class DefenseSkillChecks
             Require(!CardPoolRules.IsOfferEligible(card, CardPool.防御),
                 starter + " entered ordinary offers");
         }
-        Debug.Log("Defense skill assets passed: 29 cards, 13 enemy-only, 3 starters.");
+        foreach (string deckCard in new[] { "格挡", "远跳" })
+        {
+            CardData card = LoadByName(deckCard);
+            Require(card != null && !card.initialOnly, deckCard + " must be in the starting deck");
+            Require(CardPoolRules.IsOfferEligible(card, CardPool.防御),
+                deckCard + " cannot be offered from the defense deck");
+        }
+        Debug.Log("Defense skill assets passed: 29 cards, 13 enemy-only, 1 starter.");
     }
 
     private static CardData LoadByName(string name)
