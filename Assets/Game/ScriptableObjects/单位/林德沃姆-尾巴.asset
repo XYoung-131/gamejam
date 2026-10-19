@@ -15,11 +15,16 @@ MonoBehaviour:
   unitName: "\u6797\u5FB7\u6C83\u59C6-\u5C3E\u5DF4"
   maxHealth: 6
   grade: 1
+  attack: 1
   passiveAbility: "\u5206\u88C2\u65F6\u7729\u66551\u56DE\u5408\uFF0C\u4FDD\u7559\u5206\u88C2\u524D\u7684\u654F\u6377\u6548\u679C"
-  aiLogic: ""
+  aiLogic: 
   skillGroup1:
   - {fileID: 11400000, guid: 98c2e8508556a0c48a4444728ee03836, type: 2}
   skillGroup2: []
   skillGroup3: []
+  skillGroups:
+  - groupName: "\u6280\u80FD\u7EC41"
+    cards:
+    - {fileID: 11400000, guid: 98c2e8508556a0c48a4444728ee03836, type: 2}
   icon: {fileID: 21300000, guid: e76f259e9f6445c1ad22e550c041cb11, type: 3}
   prefab: {fileID: 5125114976211495250, guid: 48c841db76c44f519f1e9c51c19e2207, type: 3}

@@ -60,7 +60,7 @@ public class EnemyUnit : Unit
     public override void Initialize(UnitData unitData, HexCoord startCoord)
     {
         base.Initialize(unitData, startCoord);
-        currentSkillGroup = 1;
+        currentSkillGroup = Random.Range(0,data.skillGroups.Count);
         hasActedThisTurn = false;
     }
 
@@ -89,14 +89,11 @@ public class EnemyUnit : Unit
     /// </summary>
     public virtual List<CardData> GetActiveSkillGroup()
     {
-        if (data == null) return new List<CardData>();
+        currentSkillGroup = Random.Range(0,data.skillGroups.Count);
+        
+        if (data == null || data.skillGroups[currentSkillGroup].cards.Count == 0) return new List<CardData>();
 
-        switch (currentSkillGroup)
-        {
-            case 2: return data.skillGroup2;
-            case 3: return data.skillGroup3;
-            default: return data.skillGroup1;   // 1 或其他异常值都用第一组
-        }
+        return data.skillGroups[currentSkillGroup].cards;
     }
 
     /// <summary>
@@ -119,8 +116,8 @@ public class EnemyUnit : Unit
             return;
         }
 
-        for (int i = 0; i < skillsPerTurn; i++)
-            plannedSkills.Add(group[Random.Range(0, group.Count)]);
+        for (int i = 0; i < group.Count; i++)
+            plannedSkills.Add(group[i]);
 
         // 按"怪物行动顺序"给预告技能排序（文档：瞄准 → 带位移的攻击 → 位移 → 特技 → 纯攻击）
         ReorderByPriority();
