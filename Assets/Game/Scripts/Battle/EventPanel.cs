@@ -292,7 +292,7 @@ public class EventPanel : MonoBehaviour
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                 new Vector2(rightEdge - ws[i] / 2f, -(bottom + slotH / 2f)),
                 new Vector2(ws[i], slotH),
-                actions != null && actions[i] != null ? () => actions[i](captured) :
+                actions != null && actions[i] != null ? () => actions[captured](captured) :
                     (UnityEngine.Events.UnityAction)(() => { /* TODO: 接选项效果 */ }));
             Text t = MakeChildText(slot.image.rectTransform, options[i], 26, Color.black);
             t.alignment = TextAnchor.MiddleCenter;
