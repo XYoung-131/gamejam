@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   potionName: "桃子饮料"
   description: "获得3层轻盈"
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: d07a82c105a740cea5943e0e71d4d1c5, type: 3}
   rarity: 1
   maxUsesPerBattle: 0
   effects:

@@ -15,11 +15,26 @@ MonoBehaviour:
   unitName: "\u98CE\u72F8"
   maxHealth: 3
   grade: 0
+  attack: 1
   passiveAbility: "\u53D7\u4F24\u540E\u7ACB\u523B\u989D\u5916\u4F7F\u75281\u6B21\u5FEB\u8D70\u8FDC\u79BB\u73A9\u5BB6"
-  aiLogic: "\u76F8\u90BB\u683C\u6CA1\u6709\u73A9\u5BB6\u65F6\uFF0C\u4F7F\u7528 \u5FEB\u8D70 \u671D\u73A9\u5BB6\u79FB\u52A8\uFF0C\u76F8\u90BB\u683C\u6709\u73A9\u5BB6\u65F6\u4F7F\u7528 \u5288\u780D\uFF0C\u53D7\u4F24\u540E\u4E0B\u56DE\u5408\u4F7F\u75281\u6B21 \u77E2\u9A70\uFF0C\u5176\u4ED6\u60C5\u51B5\u4E0D\u4F7F\u7528"
+  aiLogic: "\u76F8\u90BB\u683C\u6CA1\u6709\u73A9\u5BB6\u65F6\uFF0C\u4F7F\u7528 \u5FEB\u8D70
+    \u671D\u73A9\u5BB6\u79FB\u52A8\uFF0C\u76F8\u90BB\u683C\u6709\u73A9\u5BB6\u65F6\u4F7F\u7528
+    \u5288\u780D\uFF0C\u53D7\u4F24\u540E\u4E0B\u56DE\u5408\u4F7F\u75281\u6B21 \u77E2\u9A70\uFF0C\u5176\u4ED6\u60C5\u51B5\u4E0D\u4F7F\u7528"
   skillGroup1:
   - {fileID: 11400000, guid: bf0e6db8f72e29243ba41570d33a049d, type: 2}
   skillGroup2:
   - {fileID: 11400000, guid: 98c2e8508556a0c48a4444728ee03836, type: 2}
   skillGroup3:
   - {fileID: 11400000, guid: d31cafff51f2d9f4594bed39c0d67631, type: 2}
+  skillGroups:
+  - groupName: "\u6280\u80FD\u7EC41"
+    cards:
+    - {fileID: 11400000, guid: bf0e6db8f72e29243ba41570d33a049d, type: 2}
+  - groupName: "\u6280\u80FD\u7EC42"
+    cards:
+    - {fileID: 11400000, guid: 98c2e8508556a0c48a4444728ee03836, type: 2}
+  - groupName: "\u6280\u80FD\u7EC43"
+    cards:
+    - {fileID: 11400000, guid: d31cafff51f2d9f4594bed39c0d67631, type: 2}
+  icon: {fileID: 21300000, guid: 403943edf4a5480bb5bbc9352b2084db, type: 3}
+  prefab: {fileID: 5125114976211495250, guid: 6468cc16ec2e47d99e6c34fd9b67d069, type: 3}

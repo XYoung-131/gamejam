@@ -13,14 +13,28 @@ MonoBehaviour:
   m_Name: "\u5543\u54AC"
   m_EditorClassIdentifier: 
   cardName: "\u5543\u54AC"
-  description: "\u9009\u62E91\u4E2A\u76F8\u90BB\u76EE\u6807\uFF0C\u9020\u62101\u70B9\u7269\u7406\u4F24\u5BB3\uFF0C\u51FB\u6740\u654C\u4EBA\u540E\u4E0B\u56DE\u5408\u83B7\u5F971\u70B9\u4E34\u65F6\u529B\u91CF\uFF0C\u4E0D\u53EF\u53E0\u52A0"
+  description: "\u9009\u62E91\u4E2A\u76F8\u90BB\u76EE\u6807\uFF0C\u9020\u62101\u70B9\u7269\u7406\u4F24\u5BB3\uFF0C\u51FB\u6740\u654C\u4EBA\u540E\u4E0B\u56DE\u5408\u83B7\u5F971\u70B9\u4E34\u65F6\u529B\u91CF\uFF0C\u4E0D\u53EF\u53E0\u52A0\n\u654C\u4EBA\u4F7F\u7528\u65F6\uFF0C\u547D\u4E2D\u4E0B\u56DE\u5408\u5C31\u4F1A\u83B7\u5F971\u70B9\u4E34\u65F6\u529B\u91CF"
   thoughtCost: 15
   actionCost: 4
   maxUses: 3
-  minRange: 0
+  minRange: 1
   maxRange: 1
   damage: 1
+  damageType: 0
   targetTypes: 00000000
+  attackTargetRule: 0
+  attackAreaRadius: 0
+  pierceDepth: 0
+  requiresStraightLine: 0
+  ignoresLineBlock: 0
+  randomHitCount: 0
+  attackEffectRule: 8
+  specialBuff: {fileID: 11400000, guid: ad3dc91e534f3fb4ab97bc85ae9cdf96, type: 2}
+  pierceSecondaryDamage: 0
+  causesDisplacement: 0
+  displacementType: 0
+  displacementDistance: 1
+  displaceSelf: 0
   defenseEffectType: 1
   defenseValue: 0
   defenseTargetTypes: 01000000
@@ -28,4 +42,4 @@ MonoBehaviour:
   rarity: 0
   tags: 0000000008000000
   buffs: []
-  devNotes: 
+  devNotes: "\u51FB\u6740\u540E\u4E0B\u56DE\u5408\u83B7\u5F971\u5C42\u4E34\u65F6\u529B\u91CF\uFF08\u654C\u4EBA\u7248\u547D\u4E2D\u5373\u83B7\u5F97\uFF09\u2014\u2014\u9700\u51FB\u6740\u5224\u5B9A\uFF0CResolve \u6682\u65E0\u8BE5\u5206\u652F"

@@ -158,6 +158,7 @@ public class TerrainSystem : MonoBehaviour
         {
             if (cell.occupyUnit == null) continue;
             TerrainData t = cell.terrain;
+            if (!CanAffect(t, cell.occupyUnit)) continue;   // 小皮鞋：免疫负面地形
             // 文档：对上面的所有单位造成真实伤害
             cell.occupyUnit.TakeDamage(t.trueDamagePerTurnEnd, DamageType.真实);
         }
@@ -169,10 +170,28 @@ public class TerrainSystem : MonoBehaviour
         foreach (var cell in GetTerrainCells(type))
         {
             if (cell.occupyUnit == null) continue;
+            if (!CanAffect(cell.terrain, cell.occupyUnit)) continue;   // 小皮鞋：免疫负面地形
             BuffData buff = pickBuff(cell.terrain);
             if (buff != null)
                 ApplyStacks(cell.occupyUnit, buff, cell.terrain.stacksPerTurnEnd);
         }
+    }
+
+    /// <summary>
+    /// 这块地形能不能作用于这个单位。
+    /// 遗物「小皮鞋」免疫负面地形：站在负面地板上不会被挂灼烧 / 中毒 / 流血，
+    /// 也不吃吸血地板的真实伤害。
+    /// 只有 TerrainData.isNegative 勾上的地板才受免疫影响（绒毯、烟雾不是负面）。
+    /// </summary>
+    private bool CanAffect(TerrainData terrain, Unit unit)
+    {
+        if (terrain == null || unit == null) return true;
+        if (!terrain.isNegative) return true;
+
+        if (unit is PlayerUnit player)
+            return !RelicData.HasEffect(player.Relics, RelicEffectType.免疫地形效果);
+
+        return true;
     }
 
     /// <summary>按层数调用多次 ApplyBuff（ApplyBuff 每次只叠 1 层）</summary>

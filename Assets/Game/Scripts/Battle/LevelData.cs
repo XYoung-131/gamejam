@@ -14,6 +14,9 @@ public class LevelData : ScriptableObject
     [Header("基本信息")]
     public string levelName = "第一关";
 
+    [Tooltip("战斗结束界面点\"跳过奖励\"要进入的下一关（不配则重打本关）")]
+    public LevelData nextLevel;
+
     [Header("变种（每个变种是一套完整布阵）")]
     public List<Variant> variants = new List<Variant>();
 
@@ -28,6 +31,20 @@ public class LevelData : ScriptableObject
 
         [Tooltip("敌人与障碍物（unit 和 obstacle 二选一）")]
         public List<Spawn> spawns = new List<Spawn>();
+
+        [Tooltip("特殊地形（把 TerrainData 铺到指定格子上，由 TerrainSystem 结算）")]
+        public List<TerrainSpawn> terrains = new List<TerrainSpawn>();
+    }
+
+    /// <summary>一块特殊地形的摆放信息</summary>
+    [System.Serializable]
+    public class TerrainSpawn
+    {
+        [Tooltip("地形数据（灼热/剧毒/刀刃/烟雾/吸血/克勒妮绒毯）")]
+        public TerrainData terrain;
+
+        [Tooltip("格子坐标 (q, r)")]
+        public HexCoord coord;
     }
 
     /// <summary>单个棋子的摆放信息</summary>

@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   relicName: "垃圾毁灭者"
   description: "一击便能摧毁所有障碍物（包括柱子）"
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: 98c1eee79e344bfd855cda7e809b129d, type: 3}
   relicType: 1
   pool: 0
   effects:

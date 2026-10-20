@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   relicName: "回归本质"
   description: "所有稀有度为普通的技能伤害加1"
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: 51b07a470d4f4794bf0c7c46036b8f14, type: 3}
   relicType: 1
   pool: 0
   effects:

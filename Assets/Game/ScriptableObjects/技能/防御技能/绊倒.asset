@@ -13,20 +13,29 @@ MonoBehaviour:
   m_Name: "\u7ECA\u5012"
   m_EditorClassIdentifier: 
   cardName: "\u7ECA\u5012"
-  description: "\u9009\u62E91\u4E2A\u76F8\u90BB\u76EE\u6807\uFF0C\u65BD\u52A02\u5C42
-    \u4E34\u65F6\u6B8B\u5E9F\uFF0C\u6301\u7EED2\u56DE\u5408"
+  description: "\u9009\u62E91\u4E2A\u76F8\u90BB\u76EE\u6807\uFF0C\u65BD\u52A02\u5C42 \u4E34\u65F6\u6B8B\u5E9F\uFF0C\u6301\u7EED2\u56DE\u5408"
   thoughtCost: 20
   actionCost: 7
   maxUses: 2
-  minRange: 0
+  minRange: 1
   maxRange: 1
   damage: 0
-  targetTypes: 
+  damageType: 0
+  targetTypes: 00000000
+  causesDisplacement: 0
+  displacementType: 0
+  displacementDistance: 1
+  displaceSelf: 0
   defenseEffectType: 1
   defenseValue: 0
   defenseTargetTypes: 00000000
+  defenseTargetRule: 1
+  defenseEffectRule: 15
+  specialBuff: {fileID: 11400000, guid: b95e1d95546388d4c9db0b44aed7479b, type: 2}
   library: 1
   rarity: 0
   tags: 04000000
-  buffs: []
-  devNotes: 
+  buffs:
+  - {fileID: 11400000, guid: b95e1d95546388d4c9db0b44aed7479b, type: 2}
+  - {fileID: 11400000, guid: b95e1d95546388d4c9db0b44aed7479b, type: 2}
+  devNotes: "\u8868\u4E3A\u300E2 \u5C42\u4E34\u65F6\u6B8B\u5E9F\uFF0C\u6301\u7EED 2 \u56DE\u5408\u300F\u2014\u2014\u5F53\u524D\u6CA1\u6709 \u4E34\u65F6\u6B8B\u5E9F \u8D44\u4EA7\uFF0C\u5148\u6302\u5E38\u9A7B\u7248 \u6B8B\u5E9F"

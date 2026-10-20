@@ -15,17 +15,24 @@ MonoBehaviour:
   cardName: "\u9519\u4E71\u4F20\u9001"
   description: "\u5C06\u81EA\u5DF1\u968F\u673A\u4F20\u9001\u5230\u8DDD\u79BB3\u683C\u7684\u683C\u5B50\u4E0A"
   thoughtCost: 15
-  actionCost: 10
-  maxUses: 2
-  minRange: 0
+  actionCost: 8
+  maxUses: 3
+  minRange: 3
   maxRange: 3
   damage: 0
-  targetTypes: 
+  damageType: 0
+  targetTypes: 00000000
+  causesDisplacement: 1
+  displacementType: 2
+  displacementDistance: 3
+  displaceSelf: 1
   defenseEffectType: 1
   defenseValue: 0
+  defenseTargetRule: 0
+  defenseEffectRule: 22
   defenseTargetTypes: 01000000
   library: 1
   rarity: 2
   tags: 0200000005000000
   buffs: []
-  devNotes: "\u4F18\u5148\u4F20\u9001\u81F3\u975E\u7279\u6B8A\u5730\u5F62"
+  devNotes: "\u968F\u673A\u4F20\u9001\u5230\u8DDD\u79BB 3 \u683C\u7684\u683C\u5B50\uFF0C\u4F18\u5148\u975E\u7279\u6B8A\u5730\u5F62\uFF08\u843D\u70B9\u968F\u673A\u9009\u62E9\u672A\u5B9E\u73B0\uFF09\n\u8865\u5145\uFF1A\u4F18\u5148\u4F20\u9001\u81F3\u975E\u7279\u6B8A\u5730\u5F62"

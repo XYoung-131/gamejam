@@ -17,21 +17,25 @@ MonoBehaviour:
   thoughtCost: 20
   actionCost: 10
   maxUses: 2
-  minRange: 1
+  minRange: 2
   maxRange: 2
   damage: 0
   damageType: 0
-  targetTypes: 
+  targetTypes: 00000000
   causesDisplacement: 1
   displacementType: 2
   displacementDistance: 2
   displaceSelf: 1
   defenseEffectType: 1
   defenseValue: 0
+  defenseTargetRule: 2
+  defenseEffectRule: 24
   defenseTargetTypes: 01000000
+  specialBuff: {fileID: 11400000, guid: 38dea84538eb44148b4c535b8f5163f7, type: 2}
   library: 1
   rarity: 2
   tags: 0500000004000000
   buffs:
   - {fileID: 11400000, guid: 38dea84538eb44148b4c535b8f5163f7, type: 2}
-  devNotes: "\u4F20\u9001\u5BF9\u8C61=\u65BD\u6CD5\u8005\u81EA\u5DF1\uFF1B\u5BF9\u539F\u4F4D\u7F6E\u76F8\u90BB\u683C\u7ED3\u7B97\u5F85\u8865"
+  - {fileID: 11400000, guid: 38dea84538eb44148b4c535b8f5163f7, type: 2}
+  devNotes: "\u4F20\u9001\u5230 2 \u683C\u5916\uFF1B\u5BF9\u539F\u4F4D\u7F6E\u76F8\u90BB\u683C\u7684\u76EE\u6807\u65BD\u52A0 2 \u5C42\u4E2D\u6BD2\uFF08\u5F53\u524D buff \u4F1A\u6302\u5728\u65BD\u6CD5\u8005/\u76EE\u6807\u8EAB\u4E0A\uFF0C\u53D6\u300E\u539F\u4F4D\u7F6E\u76F8\u90BB\u300F\u9700\u989D\u5916\u903B\u8F91\uFF09"

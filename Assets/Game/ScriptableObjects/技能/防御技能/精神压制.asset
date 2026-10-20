@@ -13,20 +13,30 @@ MonoBehaviour:
   m_Name: "\u7CBE\u795E\u538B\u5236"
   m_EditorClassIdentifier: 
   cardName: "\u7CBE\u795E\u538B\u5236"
-  description: "\u9009\u62E91\u4E2A2\u683C\u5185\u76EE\u6807\uFF0C\u65BD\u52A02\u5C42
-    \u4E34\u65F6\u65E0\u529B \u548C \u4E34\u65F6\u6B8B\u5E9F \uFF0C\u6301\u7EED2\u56DE\u5408"
+  description: "\u9009\u62E91\u4E2A2\u683C\u5185\u76EE\u6807\uFF0C\u65BD\u52A02\u5C42 \u4E34\u65F6\u65E0\u529B \u548C \u4E34\u65F6\u6B8B\u5E9F \uFF0C\u6301\u7EED2\u56DE\u5408"
   thoughtCost: 20
-  actionCost: 8
-  maxUses: 0
-  minRange: 0
+  actionCost: 12
+  maxUses: 2
+  minRange: 1
   maxRange: 2
   damage: 0
-  targetTypes: 
+  damageType: 0
+  targetTypes: 00000000
+  causesDisplacement: 0
+  displacementType: 0
+  displacementDistance: 1
+  displaceSelf: 0
   defenseEffectType: 1
   defenseValue: 0
   defenseTargetTypes: 00000000
+  defenseTargetRule: 1
+  defenseEffectRule: 23
   library: 1
   rarity: 2
   tags: 04000000
-  buffs: []
-  devNotes: 
+  buffs:
+  - {fileID: 11400000, guid: 9734a5bd57087b442ade7d762ed77a45, type: 2}
+  - {fileID: 11400000, guid: 9734a5bd57087b442ade7d762ed77a45, type: 2}
+  - {fileID: 11400000, guid: b95e1d95546388d4c9db0b44aed7479b, type: 2}
+  - {fileID: 11400000, guid: b95e1d95546388d4c9db0b44aed7479b, type: 2}
+  devNotes: "2 \u5C42\u4E34\u65F6\u65E0\u529B + 2 \u5C42\u4E34\u65F6\u6B8B\u5E9F\uFF0C\u6301\u7EED 2 \u56DE\u5408\u2014\u2014\u5F53\u524D\u6302\u5E38\u9A7B\u7248\u4E14\u6301\u7EED\u65F6\u95F4\u7531 buff \u8D44\u4EA7\u51B3\u5B9A"

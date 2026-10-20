@@ -21,7 +21,7 @@ MonoBehaviour:
   maxRange: 999
   damage: 0
   damageType: 0
-  targetTypes: 
+  targetTypes: 00000000
   causesDisplacement: 0
   displacementType: 0
   displacementDistance: 1
@@ -29,8 +29,11 @@ MonoBehaviour:
   defenseEffectType: 1
   defenseValue: 0
   defenseTargetTypes: 01000000
+  defenseTargetRule: 0
+  defenseEffectRule: 5
+  summonUnit: {fileID: 11400000, guid: 25bc9e03166119ebd1e6d3dff96040af, type: 2}
   library: 1
   rarity: 4
   tags: 04000000
   buffs: []
-  devNotes: "\u53EC\u5524\u5F85\u8865"
+  devNotes: "\u5168\u573A\u968F\u673A\u683C\u5B50\u53EC\u5524 5 \u53EA\u5C0F\u62B1\u62B1\u2014\u2014\u53EC\u5524\u672A\u5B9E\u73B0"

@@ -12,20 +12,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ad0923868307d8f458a5c91533f26612, type: 3}
   m_Name: Level_1_6
   m_EditorClassIdentifier: 
-  levelName: "\u7B2C\u516D\u5173"
+  levelName: "\u7B2C\u4E00\u5C42\u7B2C\u516D\u5173"
+  nextLevel: {fileID: 0}
   variants:
   - variantName: "\u53D8\u79CD1"
     playerStart:
       q: 0
       r: 0
     spawns:
-    - unit: {fileID: 0}
-      obstacle: {fileID: 11400000, guid: 370a6958c6c3e434ea05e3254bf7be26, type: 2}
+    - unit: {fileID: 11400000, guid: 4b8728d76671b949f0477d1330a5271e, type: 2}
+      obstacle: {fileID: 0}
       coord:
         q: -2
         r: 3
-    - unit: {fileID: 0}
-      obstacle: {fileID: 11400000, guid: 370a6958c6c3e434ea05e3254bf7be26, type: 2}
+    - unit: {fileID: 11400000, guid: 4b8728d76671b949f0477d1330a5271e, type: 2}
+      obstacle: {fileID: 0}
       coord:
         q: 2
         r: -3
@@ -49,6 +50,7 @@ MonoBehaviour:
       coord:
         q: 2
         r: -1
+    terrains: []
   - variantName: "\u53D8\u79CD2"
     playerStart:
       q: 0
@@ -59,18 +61,18 @@ MonoBehaviour:
       coord:
         q: 0
         r: 2
-    - unit: {fileID: 0}
-      obstacle: {fileID: 11400000, guid: 370a6958c6c3e434ea05e3254bf7be26, type: 2}
+    - unit: {fileID: 11400000, guid: 4b8728d76671b949f0477d1330a5271e, type: 2}
+      obstacle: {fileID: 0}
       coord:
         q: 0
         r: 3
-    - unit: {fileID: 0}
-      obstacle: {fileID: 11400000, guid: 370a6958c6c3e434ea05e3254bf7be26, type: 2}
+    - unit: {fileID: 11400000, guid: 4b8728d76671b949f0477d1330a5271e, type: 2}
+      obstacle: {fileID: 0}
       coord:
         q: 2
         r: -2
-    - unit: {fileID: 0}
-      obstacle: {fileID: 11400000, guid: 370a6958c6c3e434ea05e3254bf7be26, type: 2}
+    - unit: {fileID: 11400000, guid: 4b8728d76671b949f0477d1330a5271e, type: 2}
+      obstacle: {fileID: 0}
       coord:
         q: -1
         r: -2
@@ -79,8 +81,9 @@ MonoBehaviour:
       coord:
         q: -2
         r: 2
-    - unit: {fileID: 0}
-      obstacle: {fileID: 11400000, guid: 370a6958c6c3e434ea05e3254bf7be26, type: 2}
+    - unit: {fileID: 11400000, guid: 4b8728d76671b949f0477d1330a5271e, type: 2}
+      obstacle: {fileID: 0}
       coord:
         q: -1
         r: 0
+    terrains: []

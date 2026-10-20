@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   potionName: "\u52A3\u8D28\u6DF7\u5408\u996E\u6599"
   description: "\u56DE\u590D8\u70B9\u8010\u529B\u548C8\u70B9\u601D\u7EEA\uFF1B\u540C\u4E00\u573A\u6218\u6597\u4E2D\u7B2C3\u6B21\u4F7F\u7528\u540E\u6263\u9664\u6240\u6709\u8010\u529B\u548C\u601D\u7EEA\uFF0C\u5E76\u7729\u66551\u56DE\u5408\uFF0C\u6218\u6597\u7ED3\u675F\u6389\u843D\u9057\u7269\u201C\u996E\u6599\u6210\u763E\u201D"
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: 92eeb7294f824858b151fe93c4e883dd, type: 3}
   rarity: 2
   maxUsesPerBattle: 0
   effects:
