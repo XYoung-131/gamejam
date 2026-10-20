@@ -74,6 +74,7 @@ LightmapSettings:
     m_BakeBackend: 0
     m_PVRSampling: 1
     m_PVRDirectSampleCount: 32
+    m_PVRSampleCount: 500
     m_PVRBounces: 2
     m_PVREnvironmentSampleCount: 500
     m_PVREnvironmentReferencePointCount: 2048
@@ -85,25 +86,15 @@ LightmapSettings:
     m_PVRFilterTypeIndirect: 0
     m_PVRFilterTypeAO: 0
     m_PVREnvironmentMIS: 0
-    m_PVROcclusionBake: 0
-    m_PVROcclusionBakeSettings:
-      occlusionBakeSampleCountPerCell: 0
-      occlusionBakeBlockSize: 0
-      occlusionBakeBorderSize: 0
-    m_PVRTiles: 10
-    m_PVRBudget: 500
-    m_PVRChangePBRRenderer: 2
-    m_PVRSampleCount: 500
-    m_PVRBounces: 2
-    m_PVREnvironmentSampleCount: 500
-    m_PVREnvironmentBounces: 2
-    m_PVREnvironmentBouncesAtHeight: 15
-    m_PVRFilteringAtmosphere: 1
+    m_PVRCulling: 1
+    m_PVRFilteringGaussRadiusDirect: 1
+    m_PVRFilteringGaussRadiusIndirect: 5
+    m_PVRFilteringGaussRadiusAO: 2
     m_PVRFilteringAtrousPositionSigmaDirect: 0.5
     m_PVRFilteringAtrousPositionSigmaIndirect: 2
     m_PVRFilteringAtrousPositionSigmaAO: 1
-    m_PVRExportTrainingData: 0
-    m_PVRTrainingDataDestination: TrainingData
+    m_ExportTrainingData: 0
+    m_TrainingDataDestination: TrainingData
     m_LightProbeSampleCountMultiplier: 4
   m_LightingDataAsset: {fileID: 0}
   m_LightingSettings: {fileID: 0}
@@ -265,8 +256,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: cf47d7cba2c444bc838b35c241c71cb3, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   backgroundSprite: {fileID: 0}
   menuSprites:
   - {fileID: 0}
@@ -275,3 +266,9 @@ MonoBehaviour:
   - {fileID: 0}
   menuHoverSprite: {fileID: 0}
   battleSceneName: Battle
+--- !u!1660057539 &9223372036854775807
+SceneRoots:
+  m_ObjectHideFlags: 0
+  m_Roots:
+  - {fileID: 715000002}
+  - {fileID: 715000012}

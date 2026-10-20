@@ -136,6 +136,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   data: {fileID: 11400000, guid: 2cf0020d1b38e8f79ebf2a3a4c05d5c9, type: 2}
   currentHealth: 0
+  runtimeMaxHealth: 0
   shield: 0
   currentCoord:
     q: 0
@@ -144,9 +145,11 @@ MonoBehaviour:
   collisionBlockerDamage: 2
   reflectsDisplacement: 0
   activeBuffs: []
+  skipDecayOnAppliedTurn: 0
   thinkDelay: 0.8
   stepDelay: 0.3
   skillsPerTurn: 1
+  maxStepsPerTurn: 3
 --- !u!114 &7033390731918600057
 MonoBehaviour:
   m_ObjectHideFlags: 0

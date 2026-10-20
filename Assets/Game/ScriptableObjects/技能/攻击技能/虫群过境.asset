@@ -51,7 +51,7 @@ MonoBehaviour:
   alternateSummonUnit: {fileID: 0}
   generatedTerrain: {fileID: 0}
   library: 0
-  rarity: 0
+  rarity: 4
   tags: 
   buffs: []
   devNotes: 
