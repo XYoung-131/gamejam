@@ -86,6 +86,28 @@ public static class PlayerRunState
         if (!Relics.Contains(relic)) Relics.Add(relic);
     }
 
+    /// <summary>事件里改当前生命值（负数 = 扣血，最少留 1 点），然后刷新快照</summary>
+    public static void ApplyHealthDelta(PlayerUnit player, int delta)
+    {
+        if (delta == 0) return;
+        if (player != null)
+        {
+            int hp = Mathf.Max(1, player.GetCurrentHealth() + delta);
+            player.SetRunHealth(hp, player.GetMaxHealth());
+            Capture(player);
+            return;
+        }
+        Health = Mathf.Max(1, Health + delta);
+    }
+
+    /// <summary>事件里按最大生命的比例回血（"回复10%血量"），然后刷新快照</summary>
+    public static void HealPercent(PlayerUnit player, float ratio)
+    {
+        if (player == null || ratio <= 0f) return;
+        player.Heal(Mathf.CeilToInt(player.GetMaxHealth() * ratio));
+        Capture(player);
+    }
+
     /// <summary>事件里发一瓶药水（背包满则拿不到，返回 false），然后刷新快照</summary>
     public static bool GrantPotion(PlayerUnit player, PotionData potion)
     {

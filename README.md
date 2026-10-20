@@ -804,3 +804,53 @@ defenseValue / defenseTargetTypes / library / rarity / tags / buffs / devNotes`�
 
 占位遗物不在资产表里，选项文案里的名字本来不会变黄加下划线。现在事件可以运行时补登物品名，
 效果与真实资产一致（黄字 + `[]` + 下划线 + 悬停弹效果浮层）。
+
+## 小羊：按飞书「思维碎片（遗物）大全」补齐 6 件遗物（2026-10-20）
+
+读取飞书表 `tblCUdqSZFR8MpzF`（29 条记录，其中 1 条空行 → 28 件遗物），
+与工程里已有的 22 件逐个比对，**缺 6 件**，本次全部补上（含逻辑与事件适配）：
+
+| 遗物 | 类型 | 效果（表内原文） | 新资产 guid（…后 2 位） | 掉落池 |
+|---|---|---|---|---|
+| 焦黑十字架 | 事件掉落 | 关卡开始时，对自身施加神圣 | `…17` | 事件专属（洗礼） |
+| 黑鹅项圈 | 事件掉落 | 回合开始额外回 7 耐力 + 7 思绪，但每回合最多行动 5 次 | `…18` | 事件专属（自助售卖机） |
+| 残缺护符 | 精英怪掉落 | 下次从卡牌获得的护盾翻倍，2 回合冷却 | `…19` | 精英池 |
+| 药水腰带 | 事件掉落 | 药水携带上限 +2 | `…1a` | 事件专属（自助售卖机） |
+| 草席卷 | 事件掉落 | 在休息处额外恢复 1 点生命值 | `…1b` | 事件专属（自助售卖机） |
+| 灵甲 | BOSS 掉落 | 回合结束若没有护盾，则获得 3 点护盾 | `…1c` | BOSS 池 |
+
+- 资产在 `Assets/Game/ScriptableObjects/遗物/`，模板与老遗物完全一致（`RelicData`）。
+  guid 沿用项目里遗物专用的 `200000000000000000000000000000XX` 序列（老资产到 `…16`，新资产 `…17~…1c`）。
+- **活动专属的 4 件（十字架/项圈/腰带/席卷）没有进 `LootSystem.generalPool`**：
+  它们只从对应事件获得，避免随机掉落 + 事件重复给、导致事件白扣属性。
+  残缺护符 → `elitePool`，灵甲 → `bossPool`（Battle.unity 已加）。
+
+### `RelicEffectType` 追加 5 个成员（一律追加在末尾，不能插队）
+
+`药水携带上限加成=22` / `行动次数上限=23` / `护盾获取倍率=24` / `获得护盾=25` / `休息恢复加成=26`；
+`RelicCondition` 追加 `持有者没有护盾=4`（灵甲用）；`RelicEffect` 追加 `cooldownTurns`（残缺护符 = 2）。
+
+### 各条逻辑落在哪
+
+| 遗物 | 实现位置 | 做法 |
+|---|---|---|
+| 焦黑十字架 | `RelicData.ApplyEffect` 的 `施加Buff` 分支（已有） | `触发时机=关卡开始` + `scope=自身` + `buff=Buff/神圣`。关卡开始由 `GameManager.StartLevel` 广播，`LevelManager` 先 `PlayerRunState.ApplyTo` 回放遗物再开战，顺序正确 |
+| 黑鹅项圈 +7/+7 | `回复耐力` / `回复思绪` + `触发时机=回合开始` | 由 `RelicController` 在 `PlayerTurnStarted` 驱动 |
+| 黑鹅项圈 行动次数 | `PlayerUnit`：`actionsThisTurn` / `MaxActionsPerTurn` / `CheckActionBudget()` | 计数点 = `TrySpendStamina`（出牌 / 推 / 跳）+ `TryMoveTo` + `TryAttack`；药水、抽卡、灌注都不经过这里，正好对上"这些不算行动"。超额时广播 `PlayerActionLimitReached`，`BattleHUD` 监听后弹窗「本回合行动次数已用完」 |
+| 残缺护符 | `PlayerUnit.AddShield` 重写 + `relicCooldowns` 字典 | 获得护盾时若冷却为 0 则 ×2 并置冷却 2；冷却在 `OnTurnStart` 每回合 -1。**注意：所有护盾来源（药水/遗物/卡牌）都会触发**，策划原文只写"从卡牌中获取" |
+| 药水腰带 | `PlayerUnit.ApplyRelicPassiveAttributes` | `AddRelic` / `RestoreOwnedRelic` 时 `maxPotions += 2`；`BattleHUD` 的饮料槽改成可增长（`EnsurePotionSlotCount`），上限变 5 就补出 5 个槽，否则第 4、5 瓶看不到 |
+| 草席卷 | `RunFlowController.ChooseRest` | 任何休息选项结束后按 `GetTotalValue(休息恢复加成)` 额外回血 |
+| 灵甲 | `RelicData.ApplyEffect` 新增 `获得护盾` 分支 + `ConditionPasses()` | `触发时机=回合结束` + `条件=持有者没有护盾` + `value=3`。护盾在"回合开始"才清，所以这 3 点盾正好挡敌人回合 |
+
+### 事件适配
+
+- **洗礼**（`EventPanel_洗礼.cs`）：选项 1 → 当前生命 -2（最少留 1）+ 获得「焦黑十字架」+ 刷新长条遗物栏；
+  选项 2 → 回复 10% 最大生命。两个分支都走 `PlayerRunState` 的新入口并立刻 `Capture()`。
+- **自助售卖机**：三档连拍原本发的是"占位遗物"，现在三件资产齐了，`EventItemLibrary.FindRelic` 直接命中，
+  自动变成真遗物（耐力上限 -3/-5/-7，遗物栏与悬停说明都会正常显示）。占位逻辑保留作兜底。
+- `PlayerRunState` 新增 `ApplyHealthDelta()` / `HealPercent()`（事件改血量后立刻刷新快照）。
+
+### 还缺的
+
+- 这 6 件遗物**没有美术图标**（`Assets/Game/Art/Relics/` 里只有老 22 张），`icon` 留空：
+  战斗 HUD 与事件长条会画浅色方块占位，悬停仍能看到名称与效果。美术出了图直接拖到 `icon` 即可。

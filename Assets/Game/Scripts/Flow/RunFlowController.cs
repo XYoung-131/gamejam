@@ -74,6 +74,16 @@ public sealed class RunFlowController : MonoBehaviour
                 player.maxThought += 5;
                 break;
         }
+
+        // 「草席卷」：在休息处额外恢复 1 点生命值（任何休息选项都加）
+        int restBonus = Mathf.RoundToInt(
+            RelicData.GetTotalValue(player.Relics, RelicEffectType.休息恢复加成));
+        if (restBonus > 0)
+        {
+            player.Heal(restBonus);
+            Debug.Log($"草席卷：休息额外恢复 {restBonus} 点生命值");
+        }
+
         PlayerRunState.Capture(player);
         if (Progression.ChooseRest(option)) EnterBattle();
     }

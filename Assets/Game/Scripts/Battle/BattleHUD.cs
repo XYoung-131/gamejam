@@ -94,8 +94,11 @@ public class BattleHUD : MonoBehaviour
     private RectTransform enemyHpBar;     // 敌人脚下血条（底槽）
     private Image enemyHpBarFill;         // 红色血量填充
     private Text enemyHpBarText;          // 血条上的数字（当前/上限）
-    private readonly Image[] potionSlotImages = new Image[3];   // 顶部三个空饮料槽位（后续放药水）
-    private readonly Button[] potionSlotButtons = new Button[3]; // 同上：可点（喝药水）+ 可悬停（看介绍）
+    // 顶部饮料槽位（默认 3 个）。「药水腰带」会把 maxPotions 提到 5，
+    // 所以这里改成可增长的 List，RefreshPotionSlots 时按上限补齐槽位。
+    private readonly List<Image> potionSlotImages = new List<Image>();
+    private readonly List<Button> potionSlotButtons = new List<Button>();
+    private const int basePotionSlots = 3;        // 没吃遗物时的槽位数（= 玩家默认药水上限）
     private float potionSlotW = 67f;              // 饮料槽显示尺寸（BuildUI 里按素材比例算）
     private float potionSlotH = 77f;
     private GameObject potionTooltip;             // 鼠标停在饮料槽上：药水名 + 效果说明
@@ -216,6 +219,8 @@ public class BattleHUD : MonoBehaviour
         // 药水 / 遗物变化：刷新顶部饮料槽与血量槽右侧的遗物图标
         EventManager.AddListener<PlayerUnit>("PotionChanged", OnPotionChanged);
         EventManager.AddListener<PlayerUnit>("RelicChanged", OnRelicChanged);
+        // 行动次数用尽（「黑鹅项圈」）：弹窗提示，别让玩家以为是卡了
+        EventManager.AddListener<PlayerUnit>("PlayerActionLimitReached", OnActionLimitReached);
 
         uiFont = LoadBuiltinFont();
         BuildUI();
@@ -233,10 +238,20 @@ public class BattleHUD : MonoBehaviour
         EventManager.RemoveListener<int>("PlayerTurnStarted", OnPlayerTurnStarted);
         EventManager.RemoveListener<PlayerUnit>("PotionChanged", OnPotionChanged);
         EventManager.RemoveListener<PlayerUnit>("RelicChanged", OnRelicChanged);
+        EventManager.RemoveListener<PlayerUnit>("PlayerActionLimitReached", OnActionLimitReached);
     }
 
     private void OnPotionChanged(PlayerUnit player) => RefreshPotionSlots();
     private void OnRelicChanged(PlayerUnit player) => RefreshRelicIcons();
+
+    /// <summary>每回合行动次数用尽（「黑鹅项圈」=5 次）：弹窗说明，避免玩家反复点却没反应</summary>
+    private void OnActionLimitReached(PlayerUnit player)
+    {
+        int max = player != null ? player.MaxActionsPerTurn : 0;
+        ShowMessage(max > 0
+            ? $"本回合行动次数已用完（上限 {max} 次）"
+            : "本回合行动次数已用完");
+    }
 
     /// <summary>选牌结束（成功/放弃）：关掉牌堆选择与待选卡弹窗，恢复小怪透明度</summary>
     private void OnCardOfferClosed()
@@ -351,30 +366,15 @@ public class BattleHUD : MonoBehaviour
             statusBarSprite == null ? new Color(0.16f, 0.27f, 0.44f, 0.9f) : Color.white,
             new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), Vector2.zero, new Vector2(1920f, 105f));
 
-        // ---- 长条偏右：三个饮料槽位，起点在中轴右侧 420px，间隔 5px ----
-        // 空槽显示空饮料槽位素材；拿到药水后换成药水立绘（最多 3 瓶）。
+        // ---- 长条偏右：饮料槽位，起点在中轴右侧 420px，间隔 5px ----
+        // 空槽显示空饮料槽位素材；拿到药水后换成药水立绘。
+        // 槽位数默认 3 个，吃完「药水腰带」（上限 +2）后由 RefreshPotionSlots 补到 5 个。
         // 鼠标停上去看效果说明，点一下直接喝掉，喝完 / 空槽自动换回空瓶素材。
         if (potionSlotSprite != null)
         {
             potionSlotH = 77f;
             potionSlotW = potionSlotH * 815f / 931f;
-            for (int i = 0; i < potionSlotImages.Length; i++)
-            {
-                float x = 420f + potionSlotW / 2f + i * (potionSlotW + 5f);   // 第 i 只瓶子中心的 x 偏移
-                Button slot = MakeImageButton(canvas.transform, "PotionSlot_" + i, potionSlotSprite,
-                    new Vector2(0.5f, 1f), Vector2.zero, new Vector2(potionSlotW, potionSlotH),
-                    OnPotionSlotClicked, i);
-                RectTransform rt = slot.GetComponent<RectTransform>();
-                rt.pivot = new Vector2(0.5f, 0.5f);              // 让 x/y 直接表示瓶子中心
-                rt.anchoredPosition = new Vector2(x, -52.5f);    // 垂直居中于 105 高的长条
-                slot.GetComponent<Image>().preserveAspect = true;
-                potionSlotButtons[i] = slot;
-                potionSlotImages[i] = slot.GetComponent<Image>();
-
-                int captured = i;
-                AddHoverTrigger(slot.gameObject,
-                    () => ShowPotionTooltip(captured), HidePotionTooltip);
-            }
+            EnsurePotionSlotCount(basePotionSlots, canvas.transform);
         }
 
         // ---- 长条下方：耐力槽（左） / 思绪槽（右），关于画面中轴 x=960 对称 ----
@@ -589,7 +589,11 @@ public class BattleHUD : MonoBehaviour
         PlayerUnit player = FindObjectOfType<PlayerUnit>();
         int count = player != null ? player.Potions.Count : 0;
 
-        for (int i = 0; i < potionSlotImages.Length; i++)
+        // 「药水腰带」把药水携带上限 +2 → 槽位跟着补出来（3 → 5）
+        if (player != null)
+            EnsurePotionSlotCount(Mathf.Max(basePotionSlots, player.maxPotions));
+
+        for (int i = 0; i < potionSlotImages.Count; i++)
         {
             Image img = potionSlotImages[i];
             if (img == null) continue;
@@ -598,6 +602,38 @@ public class BattleHUD : MonoBehaviour
             Sprite want = potion != null && potion.icon != null ? potion.icon : potionSlotSprite;
             if (img.sprite != want) img.sprite = want;
             img.color = Color.white;
+        }
+    }
+
+    /// <summary>
+    /// 把饮料槽补齐到 want 个（只增不减）。
+    /// parent 传空时沿用已有槽位的父节点；「药水腰带」把上限提到 5 时靠它多建两个槽。
+    /// </summary>
+    private void EnsurePotionSlotCount(int want, Transform parent = null)
+    {
+        if (potionSlotSprite == null) return;
+        if (want <= potionSlotImages.Count) return;
+
+        if (parent == null && potionSlotImages.Count > 0)
+            parent = potionSlotImages[0].transform.parent;
+        if (parent == null) return;
+
+        for (int i = potionSlotImages.Count; i < want; i++)
+        {
+            int captured = i;
+            float x = 420f + potionSlotW / 2f + i * (potionSlotW + 5f);   // 第 i 只瓶子中心的 x 偏移
+            Button slot = MakeImageButton(parent, "PotionSlot_" + i, potionSlotSprite,
+                new Vector2(0.5f, 1f), Vector2.zero, new Vector2(potionSlotW, potionSlotH),
+                OnPotionSlotClicked, captured);
+            RectTransform rt = slot.GetComponent<RectTransform>();
+            rt.pivot = new Vector2(0.5f, 0.5f);              // 让 x/y 直接表示瓶子中心
+            rt.anchoredPosition = new Vector2(x, -52.5f);    // 垂直居中于 105 高的长条
+            slot.GetComponent<Image>().preserveAspect = true;
+            potionSlotButtons.Add(slot);
+            potionSlotImages.Add(slot.GetComponent<Image>());
+
+            AddHoverTrigger(slot.gameObject,
+                () => ShowPotionTooltip(captured), HidePotionTooltip);
         }
     }
 

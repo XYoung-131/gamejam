@@ -104,7 +104,14 @@ public enum RelicEffectType
     一击摧毁障碍物 = 18,
     自动闪避到安全格 = 19,
     技能基础伤害加成 = 20,
-    永久技能伤害成长 = 21
+    永久技能伤害成长 = 21,
+
+    // ---------- 2026-10-20 新增（策划补的 6 件遗物用到）----------
+    药水携带上限加成 = 22,   // 药水腰带（+2）：获得时直接加 PlayerUnit.maxPotions
+    行动次数上限 = 23,       // 黑鹅项圈（5）：每回合最多行动几次，0/负 = 不限
+    护盾获取倍率 = 24,       // 残缺护符（×2）：下次获得的护盾翻倍，配合 cooldownTurns 冷却
+    获得护盾 = 25,           // 灵甲（3）：触发时机到时直接给自己加护盾
+    休息恢复加成 = 26        // 草席卷（+1）：休息处的额外回血，由 RunFlowController 读取
 }
 
 /// <summary>
@@ -132,7 +139,8 @@ public enum RelicCondition
     无 = 0,
     持有者生命比例高于 = 1,
     目标具有指定Buff = 2,
-    目标没有指定Buff = 3
+    目标没有指定Buff = 3,
+    持有者没有护盾 = 4        // 灵甲：回合结束时"如果你没有护盾"才给盾
 }
 
 /// <summary>
@@ -214,6 +222,10 @@ public class RelicEffect
     [Min(1)] public int buffStacks = 1;
     [Tooltip("0=沿用 Buff 配置；正数=本次施加的目标回合数。需要运行时创建实例时消费。")]
     [Min(0)] public int buffDurationOverride;
+
+    [Header("冷却（effectType = 护盾获取倍率）")]
+    [Tooltip("触发一次后要等几回合才能再触发。残缺护符填 2；0 = 无冷却")]
+    [Min(0)] public int cooldownTurns;
 }
 
 [CreateAssetMenu(fileName = "NewRelic", menuName = "Game/Relic Data")]
@@ -428,6 +440,19 @@ public class RelicData : ScriptableObject
                 ApplyBuffToScope(effect, owner);
                 break;
 
+            // ---------- 护盾类（灵甲）----------
+            case RelicEffectType.获得护盾:
+            {
+                if (!ConditionPasses(effect, owner, target)) break;
+
+                int shield = Mathf.RoundToInt(effect.value);
+                if (shield <= 0) break;
+
+                owner.AddShield(shield);
+                Debug.Log($"{owner.data.unitName} 的遗物【{relicName}】获得 {shield} 点护盾");
+                break;
+            }
+
             // ---------- 直接造成伤害（次元抹杀）----------
             case RelicEffectType.造成伤害:
             {
@@ -460,6 +485,13 @@ public class RelicData : ScriptableObject
             case RelicEffectType.免疫Buff:
             case RelicEffectType.免疫伤害来源:
             case RelicEffectType.免疫地形效果:
+            // 2026-10-20 新增的常驻类：同样不在这里改数值
+            // （药水腰带 → PlayerUnit.AddRelic 改 maxPotions；黑鹅项圈 → PlayerUnit 行动次数判定；
+            //   残缺护符 → PlayerUnit.AddShield 里乘倍率扣冷却；草席卷 → RunFlowController.ChooseRest）
+            case RelicEffectType.药水携带上限加成:
+            case RelicEffectType.行动次数上限:
+            case RelicEffectType.护盾获取倍率:
+            case RelicEffectType.休息恢复加成:
                 // 这些效果不在这里改数值，而是由伤害结算 / 卡牌系统
                 // 通过 GetTotalValue() / HasEffect() 主动反查。
                 break;
@@ -481,6 +513,40 @@ public class RelicData : ScriptableObject
                 EventManager.Trigger("RelicSpecialEffect", this, owner, target);
                 break;
         }
+    }
+
+    /// <summary>
+    /// 效果条件是否满足（目前由"获得护盾"这条主动结算路径消费；
+    /// 其它路径保持原行为不动，避免改动老遗物的既有表现）。
+    /// </summary>
+    protected virtual bool ConditionPasses(RelicEffect effect, Unit owner, Unit target)
+    {
+        if (effect == null || owner == null) return false;
+
+        switch (effect.condition)
+        {
+            case RelicCondition.无:
+                return true;
+
+            case RelicCondition.持有者生命比例高于:
+            {
+                int max = owner.GetMaxHealth();
+                if (max <= 0) return false;
+                return (float)owner.GetCurrentHealth() / max > effect.healthRatioThreshold;
+            }
+
+            case RelicCondition.持有者没有护盾:
+                return !owner.HasShield();
+
+            case RelicCondition.目标具有指定Buff:
+                return target != null && effect.requiredTargetBuff != null &&
+                       target.HasNamedBuff(effect.requiredTargetBuff.buffName);
+
+            case RelicCondition.目标没有指定Buff:
+                return target != null && effect.requiredTargetBuff != null &&
+                       !target.HasNamedBuff(effect.requiredTargetBuff.buffName);
+        }
+        return true;
     }
 
     /// <summary>
