@@ -22,15 +22,6 @@ MonoBehaviour:
   damage: 3
   damageType: 0
   targetTypes: 00000000
-  attackTargetRule: 4
-  attackAreaRadius: 0
-  pierceDepth: 0
-  requiresStraightLine: 0
-  ignoresLineBlock: 0
-  randomHitCount: 0
-  attackEffectRule: 18
-  specialBuff: {fileID: 0}
-  pierceSecondaryDamage: 0
   causesDisplacement: 0
   displacementType: 0
   displacementDistance: 1
@@ -42,4 +33,4 @@ MonoBehaviour:
   rarity: 3
   tags: 0100000006000000
   buffs: []
-  devNotes: "\u9501\u5B9A\u5730\u5757\uFF1B\u76EE\u6807\u79FB\u52A8\u540E\u91CD\u65B0\u9501\u5B9A\uFF0C\u6700\u591A 2 \u6B21\uFF08\u9501\u5B9A\u672A\u5B9E\u73B0\uFF09\n\u8865\u5145\uFF1A\u4EF2\u88C1\u4EBA\u4F7F\u7528\u540E\u4F1A\u9000\u51FA\u795E\u5723\u72B6\u6001"
+  devNotes: "\u26A0 \u91CD\u65B0\u9501\u5B9A\u673A\u5236\u5F85\u8865\uFF1B\u4EF2\u88C1\u4EBA\u4F7F\u7528\u540E\u4F1A\u9000\u51FA\u795E\u5723\u72B6\u6001"

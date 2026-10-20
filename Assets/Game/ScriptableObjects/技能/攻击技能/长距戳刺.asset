@@ -17,20 +17,11 @@ MonoBehaviour:
   thoughtCost: 18
   actionCost: 8
   maxUses: 3
-  minRange: 1
+  minRange: 0
   maxRange: 1
   damage: 2
   damageType: 0
   targetTypes: 00000000
-  attackTargetRule: 8
-  attackAreaRadius: 0
-  pierceDepth: 1
-  requiresStraightLine: 0
-  ignoresLineBlock: 0
-  randomHitCount: 0
-  attackEffectRule: 0
-  specialBuff: {fileID: 0}
-  pierceSecondaryDamage: 0
   causesDisplacement: 0
   displacementType: 0
   displacementDistance: 1
@@ -42,4 +33,4 @@ MonoBehaviour:
   rarity: 2
   tags: 00000000
   buffs: []
-  devNotes: "\u540C\u65F6\u547D\u4E2D\u76EE\u6807\u8EAB\u540E 1 \u683C\u7684\u5355\u4F4D\uFF08\u7A7F\u900F\uFF09"
+  devNotes: "\u26A0 \u8D2F\u7A7F\u7B2C\u4E8C\u683C\u76EE\u6807\u5C5E\u4E8E\u7279\u6B8A\u7ED3\u7B97\uFF0C\u5F85\u8865"

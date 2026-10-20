@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   relicName: "强韧布料"
   description: "受到的伤害减1"
-  icon: {fileID: 21300000, guid: 7d920746c5e24c349bb0710c5664cafc, type: 3}
+  icon: {fileID: 0}
   relicType: 3
   pool: 2
   effects:

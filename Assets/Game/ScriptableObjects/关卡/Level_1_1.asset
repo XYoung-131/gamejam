@@ -12,8 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ad0923868307d8f458a5c91533f26612, type: 3}
   m_Name: Level_1_1
   m_EditorClassIdentifier: 
-  levelName: "\u7B2C\u4E00\u5C42\u7B2C\u4E00\u5173"
-  nextLevel: {fileID: 0}
+  levelName: "\u7B2C\u4E00\u5173"
   variants:
   - variantName: "\u53D8\u79CD1"
     playerStart:
@@ -40,7 +39,6 @@ MonoBehaviour:
       coord:
         q: -1
         r: -1
-    terrains: []
   - variantName: "\u53D8\u79CD2"
     playerStart:
       q: 0
@@ -61,4 +59,3 @@ MonoBehaviour:
       coord:
         q: -2
         r: 0
-    terrains: []

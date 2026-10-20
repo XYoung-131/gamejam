@@ -135,9 +135,6 @@ GameObject:
   - component: {fileID: 1215248925}
   - component: {fileID: 1215248924}
   - component: {fileID: 1215248928}
-  - component: {fileID: 1215248929}
-  - component: {fileID: 1215248930}
-  - component: {fileID: 1215248940}
   m_Layer: 0
   m_Name: Managers
   m_TagString: Untagged
@@ -161,21 +158,44 @@ MonoBehaviour:
   variantIndex: 0
   playerData: {fileID: 11400000, guid: 116edd0292d07c9438d77fc829e977bf, type: 2}
   attackPool:
-  - {fileID: 11400000, guid: 9c31d8376031086449ce86947857b9bc, type: 2}
-  - {fileID: 11400000, guid: 9c31d8376031086449ce86947857b9bc, type: 2}
-  - {fileID: 11400000, guid: 9c31d8376031086449ce86947857b9bc, type: 2}
-  - {fileID: 11400000, guid: 9c31d8376031086449ce86947857b9bc, type: 2}
+  - {fileID: 11400000, guid: bf0e6db8f72e29243ba41570d33a049d, type: 2}
+  - {fileID: 11400000, guid: c8556fa9799688241bc65c2bd495cfcb, type: 2}
+  - {fileID: 11400000, guid: ad55db8715277f4489e464ae77193914, type: 2}
+  - {fileID: 11400000, guid: ec9a1098d15ebb646822702a67439af1, type: 2}
+  - {fileID: 11400000, guid: d3300c1a7eef5f7408f2b84ea133455b, type: 2}
+  - {fileID: 11400000, guid: 021562eec9a0d434b9b201a28c722744, type: 2}
+  - {fileID: 11400000, guid: c861695b56d492e4caaed37b9dede72b, type: 2}
+  - {fileID: 11400000, guid: c4d3f6affd88ea745a9b6e0440bc4975, type: 2}
   - {fileID: 11400000, guid: 66fbacae3dde1b34ead7821a36bbe0e9, type: 2}
-  - {fileID: 11400000, guid: 66fbacae3dde1b34ead7821a36bbe0e9, type: 2}
+  - {fileID: 11400000, guid: 9c31d8376031086449ce86947857b9bc, type: 2}
+  - {fileID: 11400000, guid: fcf7be3e9a3e5e04e88a86a5f7a2507f, type: 2}
+  - {fileID: 11400000, guid: dff237341f35a02429a262ccc621e6b5, type: 2}
+  - {fileID: 11400000, guid: 54e3c91338ac7a941a2fc58167480d17, type: 2}
   - {fileID: 11400000, guid: 85c31f0d16d1abf4eb442787e24a7471, type: 2}
+  - {fileID: 11400000, guid: d31cafff51f2d9f4594bed39c0d67631, type: 2}
+  - {fileID: 11400000, guid: d44510026cb422743bdbfda1a0795531, type: 2}
+  - {fileID: 11400000, guid: bd43dea4962a679448cf5d59bbc2c540, type: 2}
+  - {fileID: 11400000, guid: 3bd228247c9727e40917d1c53075f3e5, type: 2}
+  - {fileID: 11400000, guid: df1a332a9aca65e42875846e0821c0f7, type: 2}
+  - {fileID: 11400000, guid: f51a5ad644e4f6342b9e1baabc2801f7, type: 2}
+  - {fileID: 11400000, guid: 1783be519a124a64c9a6ffdf881f06f7, type: 2}
+  - {fileID: 11400000, guid: b82a125580437864080e140496299f4c, type: 2}
   defensePool:
-  - {fileID: 11400000, guid: 8d831682c8a89a948a68062ab542cb58, type: 2}
-  - {fileID: 11400000, guid: 8d831682c8a89a948a68062ab542cb58, type: 2}
+  - {fileID: 11400000, guid: 0e2ff39f744961343b68d6ff437854b9, type: 2}
+  - {fileID: 11400000, guid: 667772554bc77c641a819ca182044246, type: 2}
+  - {fileID: 11400000, guid: 29a5c9d210be34543bba7f4efbea3b86, type: 2}
+  - {fileID: 11400000, guid: 98c2e8508556a0c48a4444728ee03836, type: 2}
+  - {fileID: 11400000, guid: d0422fb118a698b4181b6c42836a1c06, type: 2}
+  - {fileID: 11400000, guid: 7cd987b38b1f08040abebb47b05cfa25, type: 2}
+  - {fileID: 11400000, guid: 7f07ab426c6c40140aa3e359895ae7c8, type: 2}
+  - {fileID: 11400000, guid: 3772d9e2d574be04a88fd3376c4b2a87, type: 2}
+  - {fileID: 11400000, guid: b4a35da8e361c454c8b046cecfe7edd6, type: 2}
   - {fileID: 11400000, guid: 1fc11264252f3e24db62f1ba61595b89, type: 2}
-  - {fileID: 11400000, guid: 1fc11264252f3e24db62f1ba61595b89, type: 2}
-  - {fileID: 11400000, guid: 7cd987b38b1f08040abebb47b05cfa25, type: 2}
-  - {fileID: 11400000, guid: 7cd987b38b1f08040abebb47b05cfa25, type: 2}
-  - {fileID: 11400000, guid: 7cd987b38b1f08040abebb47b05cfa25, type: 2}
+  - {fileID: 11400000, guid: bd1d12a3997e6fb4680957dcbae193a1, type: 2}
+  - {fileID: 11400000, guid: 86b7005bc62c39543978bfe3fece8aef, type: 2}
+  - {fileID: 11400000, guid: 8d831682c8a89a948a68062ab542cb58, type: 2}
+  - {fileID: 11400000, guid: 739fb44060a316d43a6efb2b36ea9347, type: 2}
+  - {fileID: 11400000, guid: 7c1ace3859f46294490b0602122425b8, type: 2}
   startBattleAfterSpawn: 1
   addFlipEffect: 1
   addBuffRing: 1
@@ -209,9 +229,6 @@ MonoBehaviour:
   currentState: 0
   isPlayerTurn: 1
   turnCount: 1
-  floorNumber: 1
-  totalWaves: 1
-  waveIndex: 1
   autoStartBattle: 0
   enemyTurnDelay: 0.5
 --- !u!4 &1215248927
@@ -247,117 +264,14 @@ MonoBehaviour:
   squareSprite: {fileID: 21300000, guid: 311bc798b5955d0459406dfe124f9b4f, type: 3}
   particleMaterial: {fileID: 2100000, guid: c67d2478dc62bad4abbdec8f881d9c94, type: 2}
   coreMaterial: {fileID: 2100000, guid: ac7a1af0bf602b547828b4b2e4f5bfa5, type: 2}
-  speed: 10
-  minDuration: 0.25
-  maxDuration: 0.6
+    speed: 10
+    minDuration: 0.25
+    maxDuration: 0.6
   apexRatio: 0.25
   playerProjectileColor: {r: 1, g: 1, b: 1, a: 1}
   enemyProjectileColor: {r: 1, g: 0.92, b: 0.85, a: 1}
   sortingOrder: 20
   logEveryShot: 0
---- !u!114 &1215248929
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1215248923}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4b3dca716a396df4489e8cf8951073cf, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  randomizeSmokeAtStart: 1
---- !u!114 &1215248930
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1215248923}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0a4e9555dda75bc4dbd268e9f6528b20, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  potionDropChance: 0.5
-  guaranteedAfterMisses: 2
-  commonQualityChance: 0.6
-  commonPotions:
-  - {fileID: 11400000, guid: 10000000000000000000000000000004, type: 2}
-  - {fileID: 11400000, guid: 10000000000000000000000000000005, type: 2}
-  - {fileID: 11400000, guid: 10000000000000000000000000000002, type: 2}
-  - {fileID: 11400000, guid: 10000000000000000000000000000003, type: 2}
-  - {fileID: 11400000, guid: 10000000000000000000000000000006, type: 2}
-  - {fileID: 11400000, guid: 10000000000000000000000000000001, type: 2}
-  rarePotions:
-  - {fileID: 11400000, guid: 10000000000000000000000000000009, type: 2}
-  - {fileID: 11400000, guid: 1000000000000000000000000000000a, type: 2}
-  - {fileID: 11400000, guid: 10000000000000000000000000000008, type: 2}
-  - {fileID: 11400000, guid: 10000000000000000000000000000007, type: 2}
-  eliteRelicDropChance: 0.5
-  bossRelicDropChance: 1
-  exclusiveWeightMultiplier: 2
-  generalPool:
-  - {fileID: 11400000, guid: 20000000000000000000000000000007, type: 2}
-  - {fileID: 11400000, guid: 20000000000000000000000000000006, type: 2}
-  - {fileID: 11400000, guid: 2000000000000000000000000000000f, type: 2}
-  - {fileID: 11400000, guid: 20000000000000000000000000000005, type: 2}
-  - {fileID: 11400000, guid: 20000000000000000000000000000011, type: 2}
-  - {fileID: 11400000, guid: 2000000000000000000000000000000a, type: 2}
-  - {fileID: 11400000, guid: 2000000000000000000000000000000e, type: 2}
-  - {fileID: 11400000, guid: 2000000000000000000000000000000b, type: 2}
-  - {fileID: 11400000, guid: 20000000000000000000000000000009, type: 2}
-  elitePool:
-  - {fileID: 11400000, guid: 2000000000000000000000000000000d, type: 2}
-  - {fileID: 11400000, guid: 20000000000000000000000000000014, type: 2}
-  - {fileID: 11400000, guid: 2000000000000000000000000000000c, type: 2}
-  - {fileID: 11400000, guid: 20000000000000000000000000000013, type: 2}
-  - {fileID: 11400000, guid: 20000000000000000000000000000016, type: 2}
-  - {fileID: 11400000, guid: 20000000000000000000000000000002, type: 2}
-  - {fileID: 11400000, guid: 20000000000000000000000000000008, type: 2}
-  - {fileID: 11400000, guid: 20000000000000000000000000000015, type: 2}
-  - {fileID: 11400000, guid: 20000000000000000000000000000010, type: 2}
-  - {fileID: 11400000, guid: 20000000000000000000000000000019, type: 2}
-  bossPool:
-  - {fileID: 11400000, guid: 20000000000000000000000000000012, type: 2}
-  - {fileID: 11400000, guid: 20000000000000000000000000000003, type: 2}
-  - {fileID: 11400000, guid: 20000000000000000000000000000001, type: 2}
-  - {fileID: 11400000, guid: 20000000000000000000000000000004, type: 2}
-  - {fileID: 11400000, guid: 2000000000000000000000000000001c, type: 2}
-  autoGrantRelicOnDeath: 1
-  autoAddPotionToBag: 1
---- !u!114 &1215248940
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1215248923}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fb25910f01ef4971830c4c88ba71d026, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  statusBarSprite: {fileID: 21300000, guid: e5f1388f9c2e4e94997cd5d25caf8068, type: 3}
-  hpSlotSprite: {fileID: 21300000, guid: 3989f40f680c4e829b6e7ce76bca2d00, type: 3}
-  staminaSlotSprite: {fileID: 21300000, guid: b99c108680aa4b5fab018af5c5dd029f, type: 3}
-  thoughtSlotSprite: {fileID: 21300000, guid: ed8726a5999347cda199c09ab78a5691, type: 3}
-  skillSlotSprite: {fileID: 21300000, guid: 6c03a82d6e2e421bb2888d09089f2cf6, type: 3}
-  drawButtonSprite: {fileID: 21300000, guid: e0796390473548f6adabd602a1d375a3, type: 3}
-  emptyCardFaceSprite: {fileID: 21300000, guid: c72788e0cc5b43b0af417fdf0adf4ca6, type: 3}
-  attackCardFaceSprite: {fileID: 21300000, guid: b2cd1a840f6c103469568e1f3afc8f56, type: 3}
-  defenseCardFaceSprite: {fileID: 21300000, guid: 8fa36c16b0f48c04597b8b2f9d9138da, type: 3}
-  deckAttackIconSprite: {fileID: 21300000, guid: e750a9b680a010d448a9b9a1d2212240, type: 3}
-  deckDefenseIconSprite: {fileID: 21300000, guid: 4650b03c73ccc8b4080b253eebf89000, type: 3}
-  enemySkillArrowSprite: {fileID: 21300000, guid: 6219323bacc749b79a816e1327c078af, type: 3}
-  enemySkillArrowHoverSprite: {fileID: 21300000, guid: 96556268fdc7412d9e1a8c372b7a4c94, type: 3}
-  endTurnNormalSprite: {fileID: 21300000, guid: d4bed0fa68d44eefbf5ef27abc9caa89, type: 3}
-  endTurnHoverSprite: {fileID: 21300000, guid: 54ddafebd4394d83b95f61cdfe71b810, type: 3}
-  potionSlotSprite: {fileID: 21300000, guid: 2f9e03a88e48454eb30d7116b8de05c4, type: 3}
-  showEnemyPlannedSkills: 1
-  pushCard: {fileID: 11400000, guid: fcf7be3e9a3e5e04e88a86a5f7a2507f, type: 2}
-  jumpCard: {fileID: 11400000, guid: 86b7005bc62c39543978bfe3fece8aef, type: 2}
 --- !u!1 &1375286826
 GameObject:
   m_ObjectHideFlags: 0
@@ -370,7 +284,6 @@ GameObject:
   - component: {fileID: 1375286829}
   - component: {fileID: 1375286828}
   - component: {fileID: 1375286827}
-  - component: {fileID: 1375286831}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -390,7 +303,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 22ff235b66fde2d4eaa862b27eae270b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  startZoom: 1.2
   panSpeed: 1
   keyPanSpeed: 10
   panDeadzone: 0.15
@@ -468,57 +380,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1375286826}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.014376226, y: -0, z: -0, w: 0.9998967}
-  m_LocalPosition: {x: -0.06, y: 1.85, z: -10}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: -10}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: -1.647, y: 0, z: 0}
---- !u!114 &1375286831
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1375286826}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a79441f348de89743a2939f4d699eac1, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  m_RenderShadows: 1
-  m_RequiresDepthTextureOption: 2
-  m_RequiresOpaqueTextureOption: 2
-  m_CameraType: 0
-  m_Cameras: []
-  m_RendererIndex: -1
-  m_VolumeLayerMask:
-    serializedVersion: 2
-    m_Bits: 1
-  m_VolumeTrigger: {fileID: 0}
-  m_VolumeFrameworkUpdateModeOption: 2
-  m_RenderPostProcessing: 0
-  m_Antialiasing: 0
-  m_AntialiasingQuality: 2
-  m_StopNaN: 0
-  m_Dithering: 0
-  m_ClearDepth: 1
-  m_AllowXRRendering: 1
-  m_AllowHDROutput: 1
-  m_UseScreenCoordOverride: 0
-  m_ScreenSizeOverride: {x: 0, y: 0, z: 0, w: 0}
-  m_ScreenCoordScaleBias: {x: 0, y: 0, z: 0, w: 0}
-  m_RequiresDepthTexture: 0
-  m_RequiresColorTexture: 0
-  m_Version: 2
-  m_TaaSettings:
-    m_Quality: 3
-    m_FrameInfluence: 0.1
-    m_JitterScale: 1
-    m_MipBias: 0
-    m_VarianceClampScale: 0.9
-    m_ContrastAdaptiveSharpening: 0
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &1896993624
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -574,34 +442,6 @@ PrefabInstance:
     - target: {fileID: 7005490262050650891, guid: 56b2f9c81e911b344bdf837221509704, type: 3}
       propertyPath: m_Name
       value: ConceptMap
-      objectReference: {fileID: 0}
-    - target: {fileID: 7005490262050659002, guid: 56b2f9c81e911b344bdf837221509704, type: 3}
-      propertyPath: m_LocalScale.x
-      value: 2.9168358
-      objectReference: {fileID: 0}
-    - target: {fileID: 7005490262050659002, guid: 56b2f9c81e911b344bdf837221509704, type: 3}
-      propertyPath: m_LocalScale.y
-      value: 2.032774
-      objectReference: {fileID: 0}
-    - target: {fileID: 7005490262050659002, guid: 56b2f9c81e911b344bdf837221509704, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: 0.7
-      objectReference: {fileID: 0}
-    - target: {fileID: 7005490262050659002, guid: 56b2f9c81e911b344bdf837221509704, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 3.1
-      objectReference: {fileID: 0}
-    - target: {fileID: 7005490262050659002, guid: 56b2f9c81e911b344bdf837221509704, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 7005490262050659002, guid: 56b2f9c81e911b344bdf837221509704, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7005490262050659002, guid: 56b2f9c81e911b344bdf837221509704, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

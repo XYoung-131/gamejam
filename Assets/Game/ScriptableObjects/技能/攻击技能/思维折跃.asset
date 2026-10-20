@@ -17,20 +17,11 @@ MonoBehaviour:
   thoughtCost: 20
   actionCost: 9
   maxUses: 3
-  minRange: 1
+  minRange: 0
   maxRange: 2
   damage: 2
   damageType: 0
-  targetTypes: 0000000001000000
-  attackTargetRule: 9
-  attackAreaRadius: 0
-  pierceDepth: 0
-  requiresStraightLine: 0
-  ignoresLineBlock: 0
-  randomHitCount: 0
-  attackEffectRule: 0
-  specialBuff: {fileID: 0}
-  pierceSecondaryDamage: 0
+  targetTypes: 00000000
   causesDisplacement: 0
   displacementType: 0
   displacementDistance: 1
@@ -42,4 +33,4 @@ MonoBehaviour:
   rarity: 2
   tags: 01000000
   buffs: []
-  devNotes: "\u5BF9\u76EE\u6807\u5468\u56F4 2 \u683C\u5185\u53E6\u4E00\u968F\u673A\u76EE\u6807\u518D\u7ED3\u7B97 2 \u70B9\uFF0C\u91CD\u590D 1 \u6B21\uFF1B\u4F18\u5148\u654C\u4EBA\u518D\u969C\u788D\u7269\n\u8868\u5185\u8BCD\u6761\u300E\u6B21\u6570\u300F\u5728 CardTag \u4E2D\u6CA1\u6709\u5BF9\u5E94\u9879\uFF0C\u65E0\u6CD5\u5B58\u5165 tags\n\u8865\u5145\uFF1A\u4F18\u5148\u653B\u51FB\u654C\u4EBA\uFF0C\u518D\u969C\u788D\u7269\uFF0C\u4E0D\u4F1A\u653B\u51FB\u81EA\u5DF1"
+  devNotes: "\u26A0\u300C\u6B21\u6570\u300D\u8BCD\u6761\u7F3A\uFF1B\u968F\u673A\u5F39\u5C04\u5F85\u8865\uFF08\u4F18\u5148\u654C\u4EBA>\u969C\u788D\u7269\uFF0C\u4E0D\u4F1A\u6253\u81EA\u5DF1\uFF09"

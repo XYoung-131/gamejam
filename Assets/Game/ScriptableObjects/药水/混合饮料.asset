@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   potionName: "混合饮料"
   description: "回复10点耐力和10点思绪"
-  icon: {fileID: 21300000, guid: b7b1a5c8532049feb40532389622c99b, type: 3}
+  icon: {fileID: 0}
   rarity: 0
   maxUsesPerBattle: 0
   effects:

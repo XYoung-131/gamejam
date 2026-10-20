@@ -52,23 +52,14 @@ public class LootSystem : MonoBehaviour
     public List<RelicData> bossPool = new List<RelicData>();
 
     [Header("自动发放")]
-    [Tooltip("精英/BOSS 死亡时，是否自动掷骰并把掉到的遗物发给玩家" +
-             "（战斗结束奖励界面接管时，由 BattleEndPanel 运行时关掉）")]
+    [Tooltip("精英/BOSS 死亡时，是否自动掷骰并把掉到的遗物发给玩家")]
     public bool autoGrantRelicOnDeath = true;
-    [Tooltip("战斗胜利后是否自动把掉落的药水塞进玩家背包" +
-             "（战斗结束奖励界面接管时，由 BattleEndPanel 运行时关掉，改为按钮领取）")]
-    public bool autoAddPotionToBag = true;
-
-    /// <summary>本场战斗胜利时掷出的药水（自动入包关闭时，由战斗结束奖励界面读取领取）</summary>
-    public PotionData LastBattlePotionDrop { get; private set; }
 
     // 已连续多少关没有掉药水（用于保底计数）
     private int consecutivePotionMisses = 0;
-    private bool battleEndSettled;
 
     /// <summary>当前连续没掉药水的关卡数（UI 可读）</summary>
     public int ConsecutivePotionMisses => consecutivePotionMisses;
-    public void RestorePotionMisses(int misses) => consecutivePotionMisses = Mathf.Max(0, misses);
 
     // ============================================================
     //       战斗结束必定发放的遗物（"劣质混合饮料" → 饮料成瘾）
@@ -178,10 +169,7 @@ public class LootSystem : MonoBehaviour
     {
         if (state == GameState.Victory)
         {
-            if (battleEndSettled) return;
-            battleEndSettled = true;
             FlushBattleEndRelics();
-            DropBattleEndPotion();
         }
         else if (state == GameState.Defeat)
         {
@@ -189,27 +177,6 @@ public class LootSystem : MonoBehaviour
                 Debug.Log($"战斗失败，{pendingBattleEndRelics.Count} 件战斗结束奖励作废");
             pendingBattleEndRelics.Clear();
         }
-    }
-
-    /// <summary>
-    /// 战斗胜利后掷一次药水掉落（文档：战后 50% 概率掉 1 瓶，连 2 关没掉第 3 关必掉），
-    /// 掉到就直接塞进玩家背包。RollBattlePotionDrop 内部已广播 PotionDropped。
-    /// </summary>
-    private void DropBattleEndPotion()
-    {
-        LastBattlePotionDrop = RollBattlePotionDrop();
-        if (LastBattlePotionDrop == null) return;
-
-        // 战斗结束奖励界面接管时：只掷不发，界面"药水"按钮领取
-        if (!autoAddPotionToBag) return;
-
-        PlayerUnit player = FindObjectOfType<PlayerUnit>();
-        if (player == null) return;
-
-        if (player.AddPotion(LastBattlePotionDrop))
-            Debug.Log($"战后掉落：获得饮料【{LastBattlePotionDrop.potionName}】");
-        else
-            Debug.Log($"战后掉落【{LastBattlePotionDrop.potionName}】，但背包已满（上限 3 瓶），作废");
     }
 
     /// <summary>
@@ -340,42 +307,6 @@ public class LootSystem : MonoBehaviour
 
     /// <summary>精英战掉落掷骰</summary>
     public RelicData RollEliteDrop() => RollRelicDrop(RelicPool.精英, eliteRelicDropChance);
-
-    /// <summary>
-    /// 为战斗结束奖励界面抽 count 件"候选遗物"（思维碎片三选一）。
-    /// 池构成与 RollRelicDrop 一致（通用池 + 对应专属池加权），
-    /// 但不放回抽取、必出 count 件（不掷概率——概率由"是否有思维碎片"这一选项本身承担）。
-    /// </summary>
-    public List<RelicData> RollRelicCandidates(RelicPool pool, int count)
-    {
-        List<RelicData> items = new List<RelicData>();
-        List<float> weights = new List<float>();
-        List<RelicData> owned = GetOwnedRelics();
-
-        AddPool(generalPool, 1f, owned, items, weights);
-        if (pool == RelicPool.精英) AddPool(elitePool, exclusiveWeightMultiplier, owned, items, weights);
-        if (pool == RelicPool.BOSS) AddPool(bossPool, exclusiveWeightMultiplier, owned, items, weights);
-
-        List<RelicData> result = new List<RelicData>();
-        while (result.Count < count && items.Count > 0)
-        {
-            float total = 0f;
-            foreach (float w in weights) total += w;
-
-            float roll = Random.value * total;
-            int pick = items.Count - 1;
-            for (int i = 0; i < items.Count; i++)
-            {
-                roll -= weights[i];
-                if (roll <= 0f) { pick = i; break; }
-            }
-
-            result.Add(items[pick]);
-            items.RemoveAt(pick);
-            weights.RemoveAt(pick);
-        }
-        return result;
-    }
 
     /// <summary>BOSS 战掉落掷骰</summary>
     public RelicData RollBossDrop() => RollRelicDrop(RelicPool.BOSS, bossRelicDropChance);

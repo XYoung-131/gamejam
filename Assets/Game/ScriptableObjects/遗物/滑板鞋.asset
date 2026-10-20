@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   relicName: "滑板鞋"
   description: "所有位移技能的耐力消耗减少25%"
-  icon: {fileID: 21300000, guid: 0feb86cac7aa4b76906af5b525bb9bc8, type: 3}
+  icon: {fileID: 0}
   relicType: 3
   pool: 2
   effects:

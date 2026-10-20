@@ -17,7 +17,7 @@ public class LevelManager : MonoBehaviour
     [Tooltip("要加载的关卡数据（ScriptableObjects/关卡/ 下的 .asset）")]
     public LevelData level;
 
-    [Tooltip("单独打开示例场景时使用的变种序号；正式流程会从该关变种池随机选择")]
+    [Tooltip("用第几个变种：0 = 变种1，1 = 变种2")]
     public int variantIndex = 0;
 
     [Header("玩家")]
@@ -42,20 +42,7 @@ public class LevelManager : MonoBehaviour
     /// <summary>当前场上的玩家（外部只读）</summary>
     public PlayerUnit Player { get; private set; }
 
-    /// <summary>
-    /// 战斗结束奖励界面"跳过奖励"指定的下一关：
-    /// 面板写入 → 本脚本 Awake 取走并换用（场景重载后静态字段仍在）。
-    /// 为 null 时沿用场景里配好的 level（重打本关）。
-    /// </summary>
-    public static LevelData pendingNextLevel;
-    public static int? pendingVariantIndex;
-
     private readonly List<EnemyUnit> enemies = new List<EnemyUnit>();
-
-    public void RegisterSummonedEnemy(EnemyUnit enemy)
-    {
-        if (enemy != null && !enemies.Contains(enemy)) enemies.Add(enemy);
-    }
     private readonly List<Obstacle> obstacles = new List<Obstacle>();
 
     // ============================================================
@@ -64,25 +51,6 @@ public class LevelManager : MonoBehaviour
 
     private void Awake()
     {
-        // 战斗结束界面"跳过奖励"指定的下一关优先（没有则用场景配好的关卡）
-        if (pendingNextLevel != null)
-        {
-            level = pendingNextLevel;
-            pendingNextLevel = null;
-            Debug.Log($"[LevelManager] 进入下一关：{level.levelName}");
-        }
-        else if (RunFlowController.Instance != null &&
-                 RunFlowController.Instance.Progression.Phase == RunPhase.Battle)
-            level = RunFlowController.Instance.Progression.CurrentLevel;
-        if (pendingVariantIndex.HasValue)
-        {
-            variantIndex = pendingVariantIndex.Value;
-            pendingVariantIndex = null;
-        }
-        else if (RunFlowController.Instance != null &&
-                 RunFlowController.Instance.Progression.Phase == RunPhase.Battle)
-            variantIndex = RunFlowController.Instance.Progression.CurrentVariantIndex;
-
         // 布阵在 Start 里做，所以先让 GameManager 别自动开战
         GameManager manager = GameManager.Instance != null
             ? GameManager.Instance
@@ -115,36 +83,12 @@ public class LevelManager : MonoBehaviour
         foreach (LevelData.Spawn spawn in variant.spawns)
             SpawnOne(spawn);
 
-        // ②.5 铺特殊地形（灼热/剧毒/刀刃/烟雾/吸血/绒毯，由 TerrainSystem 在回合节点结算）
-        foreach (LevelData.TerrainSpawn t in variant.terrains)
-        {
-            if (t == null || t.terrain == null) continue;
-            HexCell cell = HexGrid.Instance.GetCell(t.coord);
-            if (cell == null)
-            {
-                Debug.LogWarning($"[LevelManager] 地形 {t.terrain.name} 的格子 {t.coord} 不在地图上，跳过");
-                continue;
-            }
-            cell.terrain = t.terrain;
-        }
-
-        // 打一行能直接看出"跨关继承有没有生效"的日志：
-        // 血量应是上一关打完剩下的，maxStamina / maxThought 应是累计后的上限。
         Debug.Log($"[LevelManager] {level.levelName} / {variant.variantName} 布阵完成：" +
-                  $"玩家 {Player?.GetCurrentHealth() ?? 0}/{Player?.GetMaxHealth() ?? 0} 血，" +
-                  $"耐力上限 {Player?.maxStamina ?? 0}，思绪上限 {Player?.maxThought ?? 0}，" +
-                  $"遗物 {Player?.Relics.Count ?? 0}，药水 {Player?.Potions.Count ?? 0}，" +
-                  $"敌人 {enemies.Count} 个，障碍物 {obstacles.Count} 个");
+                  $"玩家 {Player?.GetCurrentHealth() ?? 0} 血，敌人 {enemies.Count} 个，障碍物 {obstacles.Count} 个");
 
         // ③ 一切就位后才开战
         if (startBattleAfterSpawn && GameManager.Instance != null)
-        {
-            if (RunFlowController.Instance != null &&
-                RunFlowController.Instance.Progression.Phase == RunPhase.Battle)
-                GameManager.Instance.StartLevel(RunFlowController.Instance.Progression.ChapterIndex + 1);
-            else
-                GameManager.Instance.StartBattle();
-        }
+            GameManager.Instance.StartBattle();
     }
 
     // ============================================================
@@ -176,50 +120,15 @@ public class LevelManager : MonoBehaviour
         PlayerCardSystem cards = go.GetComponent<PlayerCardSystem>();
         if (cards == null)
             cards = go.AddComponent<PlayerCardSystem>();
-        StartingDeckData startingDeck = Resources.Load<StartingDeckData>("StartingDeck");
-        if (startingDeck != null)
-            startingDeck.ApplyTo(cards);
-        else
-        {
-            Debug.LogError("[LevelManager] 缺少 Resources/StartingDeck 开局牌库配置");
-            if (attackPool.Count > 0) cards.attackPool = new List<CardData>(attackPool);
-            if (defensePool.Count > 0) cards.defensePool = new List<CardData>(defensePool);
-            cards.initialCards = CardPoolRules.MergeInitialCards(cards.initialCards, cards.defensePool);
-        }
-
-        // 遗物条件触发总调度（RelicData.Trigger 的唯一驱动者，必须和 PlayerUnit 同物体）
-        if (go.GetComponent<RelicController>() == null)
-            go.AddComponent<RelicController>();
+        if (attackPool.Count > 0) cards.attackPool = new List<CardData>(attackPool);
+        if (defensePool.Count > 0) cards.defensePool = new List<CardData>(defensePool);
 
         EnsureFlipEffect(go);
         EnsureBuffRing(go);
-
-        // 上一关战斗结束奖励（技能 / 遗物 / 药水 / 上限提升）回放给新玩家
-        PlayerRunState.ApplyTo(Player);
     }
 
-#if UNITY_EDITOR
-    /// <summary>
-    /// 编辑器下按目录装载卡牌资产：场景里没拖牌库时用它兜底，
-    /// 避免"攻击牌库为空"导致抽卡按钮整条链路失效。
-    /// </summary>
-    private static List<CardData> LoadCardsFromFolder(string folder)
+    private void SpawnOne(LevelData.Spawn spawn)
     {
-        var result = new List<CardData>();
-        string[] guids = UnityEditor.AssetDatabase.FindAssets("t:CardData", new[] { folder });
-        foreach (string guid in guids)
-        {
-            string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
-            CardData card = UnityEditor.AssetDatabase.LoadAssetAtPath<CardData>(path);
-            if (card != null) result.Add(card);
-        }
-        result.Sort((a, b) => string.CompareOrdinal(a.cardName, b.cardName));
-        Debug.Log("[LevelManager] 自动装载 " + folder + " 下的 " + result.Count + " 张卡");
-        return result;
-    }
-#endif
-
-    private void SpawnOne(LevelData.Spawn spawn)    {
         if (spawn == null)
             return;
 

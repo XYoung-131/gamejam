@@ -23,10 +23,6 @@ public class EnemyUnit : Unit
     [Tooltip("每回合预告并释放的技能数量（题目举例的'上回合用了 5 个技能'就把这里设成 5）")]
     public int skillsPerTurn = 1;
 
-    [Header("移动")]
-    [Tooltip("射程够不到玩家时，这一回合最多朝玩家走几格")]
-    public int maxStepsPerTurn = 3;
-
     // 当前使用哪个技能组（1/2/3，对应 UnitData 上配置的三组技能；后续可做阶段切换）
     protected int currentSkillGroup = 1;
     protected bool hasActedThisTurn = false;
@@ -60,7 +56,7 @@ public class EnemyUnit : Unit
     public override void Initialize(UnitData unitData, HexCoord startCoord)
     {
         base.Initialize(unitData, startCoord);
-        currentSkillGroup = Random.Range(0,data.skillGroups.Count);
+        currentSkillGroup = 1;
         hasActedThisTurn = false;
     }
 
@@ -89,11 +85,14 @@ public class EnemyUnit : Unit
     /// </summary>
     public virtual List<CardData> GetActiveSkillGroup()
     {
-        currentSkillGroup = Random.Range(0,data.skillGroups.Count);
-        
-        if (data == null || data.skillGroups[currentSkillGroup].cards.Count == 0) return new List<CardData>();
+        if (data == null) return new List<CardData>();
 
-        return data.skillGroups[currentSkillGroup].cards;
+        switch (currentSkillGroup)
+        {
+            case 2: return data.skillGroup2;
+            case 3: return data.skillGroup3;
+            default: return data.skillGroup1;   // 1 或其他异常值都用第一组
+        }
     }
 
     /// <summary>
@@ -116,8 +115,8 @@ public class EnemyUnit : Unit
             return;
         }
 
-        for (int i = 0; i < group.Count; i++)
-            plannedSkills.Add(group[i]);
+        for (int i = 0; i < skillsPerTurn; i++)
+            plannedSkills.Add(group[Random.Range(0, group.Count)]);
 
         // 按"怪物行动顺序"给预告技能排序（文档：瞄准 → 带位移的攻击 → 位移 → 特技 → 纯攻击）
         ReorderByPriority();
@@ -188,30 +187,6 @@ public class EnemyUnit : Unit
 
             if (card == null) continue;
 
-            if (!card.IsAttack)
-            {
-                var defenseSelection = new List<HexCoord>();
-                if (card.defenseTargetRule != DefenseTargetRule.自身 ||
-                    (card.defenseEffectRule == DefenseEffectRule.神圣祝福 && HasNamedBuff("神圣")))
-                {
-                    List<HexCoord> legal = DefenseSkillTargeting.GetSelectableCells(card, this,
-                        defenseSelection);
-                    if (legal.Count == 0) continue;
-                    if (card.defenseTargetRule == DefenseTargetRule.多个单位)
-                    {
-                        int limit = Mathf.Min(Mathf.Max(1, card.maxDefenseTargets), legal.Count);
-                        for (int i = 0; i < limit; i++) defenseSelection.Add(legal[i]);
-                    }
-                    else defenseSelection.Add(legal[Random.Range(0, legal.Count)]);
-                }
-                if (!DefenseSkillResolver.CanResolve(card, this, defenseSelection)) continue;
-                EventManager.Trigger("EnemySkillExecuting", this, card);
-                if (!DefenseSkillResolver.Resolve(card, this, defenseSelection)) continue;
-                lastTurnUsedSkills.Add(card);
-                yield return new WaitForSeconds(perSkillDelay);
-                continue;
-            }
-
             // 确定目标：
             // - 攻击卡 / 对敌方用的防御卡（精神压制等）→ 最近的玩家
             // - 对自身用的防御卡（格挡等）→ 自己
@@ -228,25 +203,8 @@ public class EnemyUnit : Unit
 
             // 攻击/对敌技能射程校验：目标是玩家（不是自己）时检查距离，超出就跳过
             // 走 CardData 的统一判定，位移类技能会自动算上敏捷/残废
-            bool needsPrimaryTarget = card.attackTargetRule != AttackTargetRule.自身范围 &&
-                card.attackTargetRule != AttackTargetRule.全场 &&
-                card.attackTargetRule != AttackTargetRule.全场随机 &&
-                card.attackTargetRule != AttackTargetRule.固定地图图案;
-            if (target != this && needsPrimaryTarget)
+            if (target != this)
             {
-                // 够不到就先朝玩家走（最多 maxStepsPerTurn 格），走到能打为止。
-                // 不接这一步的话，只会近战的怪会永远站在原地——第 1 关神庙鼠
-                // 只有射程 1 的"啃咬"，开局距离 2，整局都不会动。
-                if (!card.IsInEffectiveRange(this, GetCoord(), target.GetCoord()))
-                {
-                    yield return ApproachTarget(target, card);
-
-                    // 走路途中可能被反伤/地形打死，或者战斗已经结束
-                    if (GetCurrentHealth() <= 0) yield break;
-                    if (GameManager.Instance != null && !GameManager.Instance.IsInBattle) yield break;
-                }
-
-                // 走完还是够不到（被柱子挡住 / 走满步数还不够）→ 本回合跳过这个技能
                 if (!card.IsInEffectiveRange(this, GetCoord(), target.GetCoord()))
                 {
                     int distance = GetCoord().Distance(target.GetCoord());
@@ -254,93 +212,13 @@ public class EnemyUnit : Unit
                               $"目标距离 {distance}，超出射程，跳过");
                     continue;
                 }
-                if (card.requiresStraightLine &&
-                    AttackAreaGeometry.StraightDirection(GetCoord(), target.GetCoord()) < 0)
-                    continue;
-                if (card.IsAttack &&
-                    card.attackTargetRule != AttackTargetRule.相邻地块定向扇形 &&
-                    !card.CanSelectAttackCell(this, target.GetCoord()))
-                    continue;
-
-                // 视线校验：和玩家侧 PlayerCardSystem.IsTargetReachable 用同一条规则。
-                // 原来敌人只查射程 + 可选中，能隔着柱子、别的单位或烟雾直接打到玩家，
-                // 而玩家用同一张远程卡却打不了，攻防不对称。
-                // 被挡住时不绕路（ApproachTarget 在射程内会立刻返回），本回合直接放弃这个技能。
-                if (!HasLineOfSight(card, target))
-                {
-                    Debug.Log($"{data.unitName} 的【{card.cardName}】视线被阻挡（单位/障碍物/烟雾），本回合跳过");
-                    continue;
-                }
             }
 
             Debug.Log($"{data.unitName} 释放【{card.cardName}】");
             EventManager.Trigger("EnemySkillExecuting", this, card);  // UI/特效监听此事件
 
-            // 范围技能先确定格子，再由同一张卡结算。轰击的空格是有效选格，
-            // 即使该格当前没人，仍会列入本次攻击范围。
-            if (card.attackTargetRule == AttackTargetRule.多个单位)
-            {
-                var selected = new List<HexCoord> { target.GetCoord() };
-                var emptyNeighbors = new List<HexCoord>();
-                if (HexGrid.Instance != null)
-                    foreach (HexCoord coord in target.GetCoord().GetAllNeighbors())
-                    {
-                        HexCell cell = HexGrid.Instance.GetCell(coord);
-                        if (cell != null && cell.occupyUnit == null && cell.obstacle == null)
-                            emptyNeighbors.Add(coord);
-                    }
-                for (int i = 0; i < 2 && emptyNeighbors.Count > 0; i++)
-                {
-                    int pick = Random.Range(0, emptyNeighbors.Count);
-                    selected.Add(emptyNeighbors[pick]);
-                    emptyNeighbors.RemoveAt(pick);
-                }
-                EventManager.Trigger("EnemyAttackCellsChosen", this, card, selected);
-                var area = new List<AttackAreaCell>();
-                foreach (HexCoord coord in selected)
-                    area.Add(new AttackAreaCell(coord, card.damage));
-                card.ResolveArea(this, area);
-            }
-            else if (card.attackTargetRule == AttackTargetRule.相邻地块定向扇形)
-            {
-                HexCoord chosen = GetCoord().GetNeighbor(0);
-                int bestDistance = int.MaxValue;
-                for (int i = 0; i < 6; i++)
-                {
-                    HexCoord neighbor = GetCoord().GetNeighbor(i);
-                    int distance = neighbor.Distance(target.GetCoord());
-                    if (distance < bestDistance)
-                    {
-                        chosen = neighbor;
-                        bestDistance = distance;
-                    }
-                }
-                EventManager.Trigger("EnemyAttackCellsChosen", this, card, new List<HexCoord> { chosen });
-                card.ResolveArea(this, AttackAreaGeometry.GetCone(GetCoord(), chosen));
-            }
-            else if (card.attackTargetRule == AttackTargetRule.固定地图图案)
-            {
-                int patternIndex = Random.Range(0, 4);
-                IReadOnlyList<HexCoord> pattern = AttackAreaGeometry.GetFixedBombardmentPattern(patternIndex);
-                var selected = new List<HexCoord>(pattern);
-                EventManager.Trigger("EnemyAttackCellsChosen", this, card, selected);
-                var area = new List<AttackAreaCell>();
-                foreach (HexCoord coord in selected)
-                    area.Add(new AttackAreaCell(coord, card.damage));
-                card.ResolveArea(this, area);
-            }
-            else if (card.attackTargetRule == AttackTargetRule.自身范围 ||
-                     card.attackTargetRule == AttackTargetRule.全场 ||
-                     card.attackTargetRule == AttackTargetRule.全场随机 ||
-                     card.attackTargetRule == AttackTargetRule.地块 ||
-                     card.attackTargetRule == AttackTargetRule.穿透单位 ||
-                     card.attackTargetRule == AttackTargetRule.连锁单位)
-            {
-                HexCoord chosen = target == null ? GetCoord() : target.GetCoord();
-                card.ResolveArea(this, card.GetAttackArea(this, chosen));
-            }
-            else
-                card.Resolve(this, target);
+            // 和玩家出牌走的是同一个结算方法（同一套伤害/buff 规则）
+            card.Resolve(this, target);
 
             // 记录"实际放出"的技能（只有走到这里的才算，中途死了没放的不算）
             lastTurnUsedSkills.Add(card);
@@ -350,56 +228,6 @@ public class EnemyUnit : Unit
 
         // 本回合预告已全部执行完，清空预告队列
         plannedSkills.Clear();
-    }
-
-    // ============================================================
-    //                       移动靠近（行动中）
-    // ============================================================
-
-    /// <summary>
-    /// 敌人版视线判定，规则与玩家侧的 PlayerCardSystem.IsTargetReachable 完全一致：
-    ///   · 只有带「远程」标签、且没有勾"无视遮挡"的技能才受限制；
-    ///   · 施法者与目标之间有其他活着的单位或挡视线的障碍物 → 看不见；
-    ///   · 目标站在烟雾格 → 锁不住。
-    /// 近战技能不受影响（相邻本来就没有中间格）。
-    /// </summary>
-    protected virtual bool HasLineOfSight(CardData card, Unit target)
-    {
-        if (card == null || target == null || HexGrid.Instance == null) return true;
-        if (!card.tags.Contains(CardTag.远程) || card.ignoresLineBlock) return true;
-
-        if (HexGrid.Instance.IsLineBlocked(GetCoord(), target.GetCoord())) return false;
-        if (HexGrid.Instance.IsCellSmoky(target.GetCoord())) return false;
-        return true;
-    }
-
-    /// <summary>
-    /// 朝目标走，直到这个技能的射程够得着为止（最多 maxStepsPerTurn 格）。
-    ///
-    /// 这是"敌人也会走过来打你"的关键：ExecutePlannedSkills 原来只放技能不移动，
-    /// 只会近战的怪在距离 > 1 时整局站着不动。寻路复用 HexPathfinding.FindNextStep
-    /// （它已经把障碍物、不可行走格、占位单位都算进去了），每走一格用 MoveTo，
-    /// 这样格子占用、"移动时" buff、UnitMoved 事件都和正常移动一致。
-    /// </summary>
-    protected virtual IEnumerator ApproachTarget(Unit target, CardData card)
-    {
-        if (target == null || target.IsDead) yield break;
-        if (HexGrid.Instance == null) yield break;
-
-        for (int step = 0; step < maxStepsPerTurn; step++)
-        {
-            // 已经在射程里就不用再走了
-            if (card.IsInEffectiveRange(this, GetCoord(), target.GetCoord())) yield break;
-
-            HexCoord next = HexPathfinding.FindNextStep(GetCoord(), target.GetCoord());
-            if (next == GetCoord()) yield break;   // 没有可走的下一步（被围住 / 已相邻）
-
-            HexCell nextCell = HexGrid.Instance.GetCell(next);
-            if (nextCell == null || !nextCell.CanEnter(this)) yield break;
-
-            MoveTo(next);
-            yield return new WaitForSeconds(stepDelay);
-        }
     }
 
     // ============================================================
@@ -519,7 +347,7 @@ public class EnemyUnit : Unit
 
         int damage = GetAttack();
         OnAttack();
-        target.TakeDamage(damage, DamageType.物理, this);
+        target.TakeDamage(damage);
 
         hasActedThisTurn = true;
         EventManager.Trigger("EnemyAttacked", this, target);

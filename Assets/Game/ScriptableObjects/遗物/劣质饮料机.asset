@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   relicName: "劣质饮料机"
   description: "每场战斗结束必定额外掉落1瓶劣质混合饮料"
-  icon: {fileID: 21300000, guid: 89fc7ab51c984d2ba4c20dc86454a446, type: 3}
+  icon: {fileID: 0}
   relicType: 2
   pool: 1
   effects:

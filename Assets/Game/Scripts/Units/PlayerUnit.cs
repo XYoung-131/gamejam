@@ -10,7 +10,7 @@ public class PlayerUnit : Unit
     [Header("玩家特有")]
     [Tooltip("思绪上限（文档：耐力和思绪上限都是 40）")]
     public int maxThought = 40;
-    [Tooltip("耐力上限（用于移动、普通攻击和使用技能）")]
+    [Tooltip("耐力上限（耐力 = 行动资源，移动和出牌共用）")]
     public int maxStamina = 40;
     [Tooltip("战斗开始时的思绪（文档：战斗开始时有 20 点）")]
     public int startThought = 20;
@@ -25,31 +25,6 @@ public class PlayerUnit : Unit
     protected int currentThought;
     protected int currentStamina;
     protected bool hasActedThisTurn = false;
-
-    // 本回合已经行动了几次（出牌 / 推 / 跳 / 移动 各算 1 次）。
-    // 存在的意义：「黑鹅项圈」写了"每回合最多只能行动 5 次"，需要有人数。
-    // 使用药水、抽卡、灌注都不算行动，所以扣耐力的付费口才是计数点。
-    protected int actionsThisTurn;
-
-    // 遗物冷却：遗物 → 还剩几回合可用（「残缺护符」的 2 回合冷却）。
-    // RelicData 是资产，存不了运行时状态，所以要记在玩家身上。
-    protected readonly Dictionary<RelicData, int> relicCooldowns = new Dictionary<RelicData, int>();
-
-    /// <summary>本回合已行动次数</summary>
-    public int ActionsThisTurn => actionsThisTurn;
-
-    /// <summary>
-    /// 每回合行动次数上限（遗物「黑鹅项圈」= 5）；0 或负 = 不限。
-    /// 查的是遗物常驻效果，不限触发时机。
-    /// </summary>
-    public int MaxActionsPerTurn
-    {
-        get
-        {
-            float value = RelicData.GetTotalValue(Relics, RelicEffectType.行动次数上限);
-            return value > 0f ? Mathf.RoundToInt(value) : 0;
-        }
-    }
 
     /// <summary>
     /// 当前思绪
@@ -77,8 +52,6 @@ public class PlayerUnit : Unit
         currentThought = startThought;
         currentStamina = startStamina;
         hasActedThisTurn = false;
-        actionsThisTurn = 0;
-        relicCooldowns.Clear();
 
         // 新的战斗，清空"每瓶饮料喝了几次"的计数
         // （否则上一场的第 3 瓶会带到这一场，一喝就触发副作用）
@@ -97,8 +70,6 @@ public class PlayerUnit : Unit
         // 资源恢复统一放在"回合结束"（文档：每回合结束恢复 15 点）
         base.OnTurnStart();
         hasActedThisTurn = false;
-        actionsThisTurn = 0;
-        TickRelicCooldowns();
     }
 
     public override void OnTurnEnd()
@@ -125,77 +96,6 @@ public class PlayerUnit : Unit
     }
 
     // ============================================================
-    //               遗物运行时：行动次数 / 冷却 / 护盾加成
-    // ============================================================
-
-    /// <summary>
-    /// 还有没有"行动额度"（「黑鹅项圈」：每回合最多行动 5 次）。
-    /// 超额时广播 PlayerActionLimitReached，让 HUD 弹提示。
-    /// </summary>
-    protected bool CheckActionBudget()
-    {
-        int max = MaxActionsPerTurn;
-        if (max <= 0 || actionsThisTurn < max) return true;
-
-        Debug.Log($"本回合行动次数已达上限（{max} 次）");
-        SkillFailure.Set($"本回合行动次数已达上限（{max} 次），本回合无法再出牌/推/跳");
-        EventManager.Trigger("PlayerActionLimitReached", this);
-        return false;
-    }
-
-    /// <summary>遗物冷却每回合开始减 1</summary>
-    protected void TickRelicCooldowns()
-    {
-        if (relicCooldowns.Count == 0) return;
-
-        List<RelicData> keys = new List<RelicData>(relicCooldowns.Keys);
-        foreach (RelicData key in keys)
-        {
-            if (key == null) continue;
-            if (relicCooldowns[key] > 0) relicCooldowns[key]--;
-        }
-    }
-
-    /// <summary>某件遗物还要冷却几回合（没记录 = 0 = 可用）</summary>
-    public int GetRelicCooldown(RelicData relic)
-    {
-        if (relic == null) return 0;
-        return relicCooldowns.TryGetValue(relic, out int turns) ? turns : 0;
-    }
-
-    /// <summary>
-    /// 获得护盾时结算「残缺护符」：下次获得的护盾翻倍，然后进入冷却。
-    /// 说明：所有护盾来源都会经过 AddShield，所以药水/遗物给的护盾也会被翻倍；
-    /// 策划文档写的是"从卡牌中获取的护盾"，实际差异只在少数边缘情况。
-    /// </summary>
-    public override void AddShield(int amount)
-    {
-        base.AddShield(ApplyRelicShieldBonus(amount));
-    }
-
-    protected int ApplyRelicShieldBonus(int amount)
-    {
-        if (amount <= 0) return amount;
-
-        foreach (RelicData relic in relics)
-        {
-            if (relic == null || GetRelicCooldown(relic) > 0) continue;
-
-            foreach (RelicEffect effect in relic.effects)
-            {
-                if (effect == null || effect.effectType != RelicEffectType.护盾获取倍率) continue;
-
-                int boosted = Mathf.RoundToInt(amount * effect.value);
-                relicCooldowns[relic] = Mathf.Max(1, effect.cooldownTurns);
-                Debug.Log($"残缺护符：护盾 {amount} → {boosted}，" +
-                          $"进入 {effect.cooldownTurns} 回合冷却");
-                return boosted;
-            }
-        }
-        return amount;
-    }
-
-    // ============================================================
     //                  思绪 / 耐力消耗（卡牌用）
     // ============================================================
 
@@ -218,29 +118,23 @@ public class PlayerUnit : Unit
 
     /// <summary>
     /// 尝试消耗耐力，不足返回 false
-    ///
-    /// 这里同时是"行动次数"的计数点：出牌 / 推 / 跳 都要付耐力，
-    /// 而使用药水、抽卡、灌注不走这里——正好对上「黑鹅项圈」的
-    /// "每回合最多行动 5 次（出牌、移动、推才算）"。
     /// </summary>
     public bool TrySpendStamina(int amount)
     {
         if (amount < 0) return false;
-        if (!CheckActionBudget()) return false;
         if (currentStamina < amount)
         {
-            SkillFailure.Set($"耐力不足：这个技能需要 {amount} 点，你当前只有 {currentStamina} 点");
+            Debug.Log($"耐力不足：需要 {amount}，当前 {currentStamina}");
             return false;
         }
 
         currentStamina -= amount;
-        actionsThisTurn++;
         EventManager.Trigger("PlayerResourceChanged", this);
         return true;
     }
 
     /// <summary>
-    /// 同时消耗思绪 + 耐力，任一不足则都不扣（保留供组合费用使用）
+    /// 同时消耗思绪 + 耐力（出牌用），任一不足则都不扣
     /// </summary>
     public bool TrySpendResource(int thoughtAmount, int staminaAmount)
     {
@@ -270,21 +164,6 @@ public class PlayerUnit : Unit
         if (amount <= 0) return;
 
         currentStamina = Mathf.Min(currentStamina + amount, maxStamina);
-        EventManager.Trigger("PlayerResourceChanged", this);
-    }
-
-    /// <summary>
-    /// 退还一次行动：耐力退回，**行动次数也一起退回**。
-    ///
-    /// 用于"扣费之后结算失败"的兜底（防御技能 Resolve 返回 false）。
-    /// TrySpendStamina 在扣耐力的同时会给 actionsThisTurn +1，
-    /// 以前只调 RestoreStamina，导致带「黑鹅项圈」（每回合 5 次）时
-    /// 一次失败的释放白吃掉一次行动额度。
-    /// </summary>
-    public void RefundAction(int stamina)
-    {
-        RestoreStamina(stamina);
-        if (actionsThisTurn > 0) actionsThisTurn--;
         EventManager.Trigger("PlayerResourceChanged", this);
     }
 
@@ -319,25 +198,6 @@ public class PlayerUnit : Unit
         EventManager.Trigger("PlayerResourceChanged", this);
     }
 
-    /// <summary>
-    /// 把当前耐力 / 思绪夹到上限之内。
-    ///
-    /// 使用场景：上限被下调之后。maxStamina / maxThought 是 public 字段，
-    /// 事件（自助售卖机 -3/-5/-7、抉择 -5）和跨关快照都会直接改它，
-    /// 没人夹当前值就会出现"20/8"这种槽，而且本场真的还能按 20 点花
-    /// （TrySpendStamina / TryMoveTo 只比较 currentStamina，不看上限）。
-    /// </summary>
-    public void ClampResourcesToMax()
-    {
-        int stamina = Mathf.Clamp(currentStamina, 0, Mathf.Max(0, maxStamina));
-        int thought = Mathf.Clamp(currentThought, 0, Mathf.Max(0, maxThought));
-        if (stamina == currentStamina && thought == currentThought) return;
-
-        currentStamina = stamina;
-        currentThought = thought;
-        EventManager.Trigger("PlayerResourceChanged", this);
-    }
-
     // ============================================================
     //                     移动（玩家操作）
     // ============================================================
@@ -354,9 +214,6 @@ public class PlayerUnit : Unit
 
         if (GameManager.Instance != null && !GameManager.Instance.isPlayerTurn)
             return false;
-
-        // 行动次数上限（「黑鹅项圈」）：移动也算一次行动
-        if (!CheckActionBudget()) return false;
 
         if (currentStamina <= 0)
         {
@@ -397,15 +254,9 @@ public class PlayerUnit : Unit
         // 开始移动（先简化为瞬移，以后加动画）
         MoveAlongPath(path);
         hasActedThisTurn = true;
-        actionsThisTurn++;
 
         return true;
     }
-
-    /// <summary>
-    /// 当前可移动距离上限（UI 瞄准模式用）：耐力 + 敏捷/残废修正
-    /// </summary>
-    public int GetMoveRangeForUI() => currentStamina + GetMoveBonus();
 
     /// <summary>
     /// 沿路径移动（简化版：瞬移，以后加协程动画）
@@ -445,13 +296,9 @@ public class PlayerUnit : Unit
     {
         if (IsDead || target == null) return false;   // 已死亡：不能攻击
         if (target.IsDead) return false;              // 目标已死：不再打尸体
-        if (target.DefenseState.UntargetableThisTurn) return false;
 
         if (GameManager.Instance != null && !GameManager.Instance.isPlayerTurn)
             return false;
-
-        // 行动次数上限（「黑鹅项圈」）：普攻也算一次行动
-        if (!CheckActionBudget()) return false;
 
         if (currentStamina <= 0)
         {
@@ -475,13 +322,12 @@ public class PlayerUnit : Unit
 
         // 扣耐力
         currentStamina--;
-        actionsThisTurn++;
         EventManager.Trigger("PlayerResourceChanged", this);
 
         // 造成伤害
         int damage = GetAttack();
         OnAttack();
-        target.TakeDamage(damage, DamageType.物理, this);
+        target.TakeDamage(damage);
 
         hasActedThisTurn = true;
         EventManager.Trigger("PlayerAttacked", this, target);
@@ -494,11 +340,12 @@ public class PlayerUnit : Unit
     // ============================================================
 
     /// <summary>
-    /// 选中这个单位（不再自动高亮移动范围——高亮只在选择技能/攻击/位移时显示）
+    /// 选中这个单位
     /// </summary>
     public void Select()
     {
         isSelected = true;
+        HighlightMoveRange();
         EventManager.Trigger("UnitSelected", this);
     }
 
@@ -641,45 +488,8 @@ public class PlayerUnit : Unit
 
         relics.Add(relic);
         relic.Apply(this);
-        ApplyRelicPassiveAttributes(relic);
         EventManager.Trigger("RelicChanged", this);
         return true;
-    }
-
-    /// <summary>Restore ownership for a new battle without repeating acquisition effects.</summary>
-    public void RestoreOwnedRelic(RelicData relic)
-    {
-        if (relic == null || HasRelic(relic)) return;
-        relics.Add(relic);
-        foreach (BuffData buff in relic.permanentBuffs)
-            if (buff != null) ApplyPermanentBuff(buff);
-        ApplyRelicPassiveAttributes(relic);   // 新一场要重新加上限，否则药水腰带一换关就失效
-        EventManager.Trigger("RelicChanged", this);
-    }
-
-    /// <summary>
-    /// 获得遗物时结算"常驻属性类"里需要直接改基础字段的效果。
-    /// 目前只有「药水腰带」：药水携带上限 +2。
-    ///
-    /// 为什么不在每帧查询而在这里改：maxPotions 是 Inspector 里的基础值，
-    /// 每场战斗都是新的玩家对象，所以"获得时加一次"就够，也不会叠加。
-    /// </summary>
-    protected void ApplyRelicPassiveAttributes(RelicData relic)
-    {
-        if (relic == null) return;
-
-        foreach (RelicEffect effect in relic.effects)
-        {
-            if (effect == null) continue;
-
-            switch (effect.effectType)
-            {
-                case RelicEffectType.药水携带上限加成:
-                    maxPotions += Mathf.RoundToInt(effect.value);
-                    Debug.Log($"【{relic.relicName}】药水携带上限 → {maxPotions}");
-                    break;
-            }
-        }
     }
 
     /// <summary>

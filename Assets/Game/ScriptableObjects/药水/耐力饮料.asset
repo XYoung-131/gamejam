@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   potionName: "耐力饮料"
   description: "回复20点耐力"
-  icon: {fileID: 21300000, guid: 9fce6b21293e471b938c08b63a9becf5, type: 3}
+  icon: {fileID: 0}
   rarity: 0
   maxUsesPerBattle: 0
   effects:

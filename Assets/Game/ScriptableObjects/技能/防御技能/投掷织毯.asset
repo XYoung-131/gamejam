@@ -20,20 +20,12 @@ MonoBehaviour:
   minRange: 0
   maxRange: 3
   damage: 0
-  damageType: 0
-  targetTypes: 00000000
-  causesDisplacement: 0
-  displacementType: 0
-  displacementDistance: 1
-  displaceSelf: 0
+  targetTypes: 
   defenseEffectType: 1
   defenseValue: 0
   defenseTargetTypes: 01000000
-  defenseTargetRule: 2
-  defenseEffectRule: 16
-  generatedTerrain: {fileID: 11400000, guid: 4b3bd7e55218a74485d8a6e2cbd1b72f, type: 2}
   library: 1
   rarity: 4
   tags: 04000000
   buffs: []
-  devNotes: "\u628A\u76EE\u6807\u683C\u53CA\u76F8\u90BB\u683C\u5730\u5F62\u8F6C\u6362\u4E3A\u514B\u52D2\u59AE\u7ED2\u6BEF\u2014\u2014\u5730\u5F62\u5199\u5165\u672A\u5B9E\u73B0\n\u8865\u5145\uFF1A\u654C\u65B9\u7279\u6709\u6280\u80FD\u73A9\u5BB6\u4E0D\u80FD\u4F7F\u7528\uFF0C\u4E5F\u65E0\u6CD5\u83B7\u53D6"
+  devNotes: "\u654C\u65B9\u7279\u6709\u6280\u80FD\u73A9\u5BB6\u4E0D\u80FD\u4F7F\u7528\uFF0C\u4E5F\u65E0\u6CD5\u83B7\u53D6"

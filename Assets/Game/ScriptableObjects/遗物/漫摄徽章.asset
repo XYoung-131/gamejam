@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   relicName: "\u6F2B\u6444\u5FBD\u7AE0"
   description: "\u62BD\u724C\u6D88\u8017\u7684\u601D\u7EEA\u51CF3"
-  icon: {fileID: 21300000, guid: b401c418ce59433ea184b9048e49afcf, type: 3}
+  icon: {fileID: 0}
   relicType: 3
   pool: 2
   effects:

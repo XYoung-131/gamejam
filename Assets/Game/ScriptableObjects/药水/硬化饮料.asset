@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   potionName: "硬化饮料"
   description: "获得6点护盾"
-  icon: {fileID: 21300000, guid: 0866791c2a054d5c93bdeb411fb4f09b, type: 3}
+  icon: {fileID: 0}
   rarity: 0
   maxUsesPerBattle: 0
   effects:

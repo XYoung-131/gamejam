@@ -20,15 +20,6 @@ public class BuffInstance
     /// 靠层数计命的负面 buff 同理（层数 = 存活回合数）。
     /// </summary>
     public bool justApplied;
-    public List<TemporaryBuffSlice> temporarySlices = new List<TemporaryBuffSlice>();
-}
-
-[System.Serializable]
-public class TemporaryBuffSlice
-{
-    public int stacks;
-    public int turns;
-    public bool justApplied = true;
 }
 
 /// <summary>
@@ -63,14 +54,12 @@ public enum DisplacementType
 /// </summary>
 public abstract class Unit : MonoBehaviour
 {
-    public DefenseCombatState DefenseState { get; } = new DefenseCombatState();
     [Header("配置数据")]
     [Tooltip("引用 ScriptableObjects/Units/ 下的单位数据资产")]
     public UnitData data;
 
     [Header("运行时状态")]
     [SerializeField] protected int currentHealth;    // 当前血量
-    [SerializeField] protected int runtimeMaxHealth;
     [SerializeField] protected int shield;          // 护盾（回合结束清零）
     [SerializeField] protected HexCoord currentCoord; // 当前所在六边形坐标
 
@@ -98,12 +87,6 @@ public abstract class Unit : MonoBehaviour
     // 当前身上的所有 buff
     [SerializeField] protected List<BuffInstance> activeBuffs = new List<BuffInstance>();
 
-    // 技能的回合/关卡计数属于单位运行时状态，不能写进共享的 CardData 资产。
-    private readonly Dictionary<CardData, int> skillUsesThisTurn = new Dictionary<CardData, int>();
-    private readonly Dictionary<CardData, int> skillUsesThisLevel = new Dictionary<CardData, int>();
-    private readonly Dictionary<CardData, int> skillHealThisLevel = new Dictionary<CardData, int>();
-    private readonly List<BuffData> nextTurnSkillBuffs = new List<BuffData>();
-
     [Header("Buff 结算设置")]
     [Tooltip("本回合刚获得的 buff，是否跳过本回合结束的第一次衰减。\n关掉 = 沿用旧行为（当回合就衰减）；打开 = 从下一回合开始衰减")]
     public bool skipDecayOnAppliedTurn = false;
@@ -120,15 +103,9 @@ public abstract class Unit : MonoBehaviour
     {
         data = unitData;
         currentHealth = unitData.maxHealth;
-        runtimeMaxHealth = unitData.maxHealth;
         shield = 0;
         currentCoord = startCoord;
         activeBuffs.Clear();
-        skillUsesThisTurn.Clear();
-        DefenseState.BeginTurn();
-        skillUsesThisLevel.Clear();
-        skillHealThisLevel.Clear();
-        nextTurnSkillBuffs.Clear();
         isDead = false;        // 复用单位时重置死亡标记
         pendingDeath = false;
         isDisplacing = false;
@@ -179,63 +156,19 @@ public abstract class Unit : MonoBehaviour
     /// </summary>
     public virtual void TakeDamage(int amount, DamageType type, Unit source)
     {
-        // 旧签名保留：包一层 DamageContext 后交给带上下文的重载统一结算，
-        // 老的调用点（位移碰撞、持续伤害、地形伤害）不需要改。
-        DamageContext ctx = new DamageContext(amount, type);
-        ctx.attacker = source;
-        TakeDamage(ctx);
-    }
-
-    /// <summary>
-    /// 受到伤害（带完整上下文）——所有伤害结算的统一入口。
-    /// 相比旧重载，它额外携带"是不是近战 / 远程 / 爆炸"，让按来源判定的遗物
-    /// （柔顺布料免疫爆炸、防弹背心远程减伤）能正确生效。
-    ///
-    /// 处理顺序（对应文档"伤害类型"）：
-    /// 1. 免疫伤害（buff 层） → 直接不受伤；
-    /// 2. 广播"受到攻击前"，给遗物一次先手拦截机会（反射神经自动闪避）；
-    /// 3. 遗物免疫来源 / 遗物固定减免（只对玩家持有的遗物生效）；
-    /// 4. 固定减免 + 倍率增减（buff 层，易伤 / 减伤），小数向上取整；
-    /// 5. 扣护盾：真实伤害无视护甲(护盾)，物理/Buff 伤害会被护盾格挡；
-    /// 6. 扣血。
-    /// </summary>
-    public virtual void TakeDamage(DamageContext ctx)
-    {
-        if (ctx == null || ctx.amount <= 0) return;
+        if (amount <= 0) return;
         if (isDead) return;   // 已死亡的单位不再结算任何伤害
 
         // 免疫伤害 → 直接返回（放在这里是为了连"受到伤害时"事件一起不触发）
         if (HasEffect(BuffEffectType.免疫伤害))
             return;
 
-        // 受到攻击前：遗物可以在这里拦截（监听方把 ctx.amount 改成 0 即可取消这次伤害）
-        EventManager.Trigger("UnitAboutToTakeDamage", this, ctx);
-        if (ctx.amount <= 0) return;
-
-        // 遗物减伤 / 遗物免疫来源（只有玩家单位持有遗物）
-        if (this is PlayerUnit relicOwner)
-        {
-            RelicDamageSource source = ResolveRelicDamageSource(ctx);
-
-            // 免疫某类伤害来源（柔顺布料：免疫爆炸）
-            if (RelicData.HasEffect(relicOwner.Relics, RelicEffectType.免疫伤害来源, source))
-                return;
-
-            // 固定减免（强韧布料：受到伤害减 1）
-            float relicReduce = RelicData.GetTotalValue(
-                relicOwner.Relics, RelicEffectType.受到伤害减免, source);
-            ctx.amount = Mathf.Max(0, ctx.amount - Mathf.RoundToInt(relicReduce));
-            if (ctx.amount <= 0) return;
-        }
-
         // 固定减免 + 倍率增减（易伤 / 减伤），统一走共享算法
-        int amount = CalcIncomingDamage(ctx.amount);
+        amount = CalcIncomingDamage(amount);
         if (amount <= 0) return;
 
-        DefenseState.OnAttacked(this, ctx);
-
         // 扣护盾（真实伤害无视护甲）
-        if (ctx.type != DamageType.真实 && shield > 0)
+        if (type != DamageType.真实 && shield > 0)
         {
             int absorbed = Mathf.Min(shield, amount);
             shield -= absorbed;
@@ -253,21 +186,7 @@ public abstract class Unit : MonoBehaviour
             TriggerBuffs(BuffTrigger.受到伤害时);
 
         EventManager.Trigger("UnitDamaged", this);
-        EventManager.Trigger("UnitDamagedBy", this, ctx.attacker);   // 带来源，遗物/反伤监听这个
-    }
-
-    /// <summary>
-    /// 把伤害上下文映射成遗物能识别的"伤害来源"。
-    /// 没带来源信息（旧的 int 重载、环境伤害）统一按"全部"处理，
-    /// 这样只有填"全部"的遗物会生效，不会误判成近战 / 远程。
-    /// </summary>
-    public static RelicDamageSource ResolveRelicDamageSource(DamageContext ctx)
-    {
-        if (ctx == null) return RelicDamageSource.全部;
-        if (ctx.isExplosion) return RelicDamageSource.爆炸;
-        if (ctx.isMelee) return RelicDamageSource.近战;
-        if (ctx.isRanged) return RelicDamageSource.远程;
-        return RelicDamageSource.全部;
+        EventManager.Trigger("UnitDamagedBy", this, source);   // 带来源，遗物/反伤监听这个
     }
 
     /// <summary>
@@ -376,7 +295,7 @@ public abstract class Unit : MonoBehaviour
         }
 
         int before = currentHealth;
-        currentHealth = Mathf.Min(currentHealth + amount, GetMaxHealth());
+        currentHealth = Mathf.Min(currentHealth + amount, data.maxHealth);
 
         // 满血时治疗不该刷新事件（否则 UI 会一直闪"回复"特效）
         if (currentHealth != before)
@@ -478,21 +397,6 @@ public abstract class Unit : MonoBehaviour
 
         // 层数可能变了（中毒 1→3 层），UI 靠这个刷新 buff 图标上的数字
         EventManager.Trigger("UnitBuffStacksChanged", this, buffData);
-    }
-
-    /// <summary>保持已施加的层数，只按指定回合数移除临时无力/残废。</summary>
-    public void ApplyFixedStackBuff(BuffData buffData, int stacks, int turns)
-    {
-        if (buffData == null || turns <= 0 || stacks <= 0) return;
-        BuffInstance before = activeBuffs.Find(x => x != null && x.data == buffData);
-        int previousStacks = before != null ? before.currentStacks : 0;
-        ApplyBuff(buffData, stacks);
-        BuffInstance instance = activeBuffs.Find(x => x != null && x.data == buffData);
-        if (instance == null) return;
-        int addedStacks = instance.currentStacks - previousStacks;
-        if (addedStacks > 0)
-            instance.temporarySlices.Add(new TemporaryBuffSlice
-                { stacks = addedStacks, turns = turns });
     }
 
     /// <summary>
@@ -745,12 +649,6 @@ public abstract class Unit : MonoBehaviour
     {
         if (isDead) return;   // 已死亡的单位不参与回合结算（TurnManager 已过滤，这里再兜一道）
 
-        skillUsesThisTurn.Clear();
-        DefenseState.BeginTurn();
-        foreach (BuffData pending in nextTurnSkillBuffs)
-            if (pending != null && !HasBuff(pending)) ApplyBuff(pending);
-        nextTurnSkillBuffs.Clear();
-
         // 0. 护盾在下个回合开始时消失（文档规则）
         ClearShield();
 
@@ -797,32 +695,6 @@ public abstract class Unit : MonoBehaviour
             if (buff == null || buff.data == null)
             {
                 activeBuffs.RemoveAt(i);
-                continue;
-            }
-
-            if (buff.temporarySlices != null && buff.temporarySlices.Count > 0)
-            {
-                int temporaryStacks = 0;
-                foreach (TemporaryBuffSlice slice in buff.temporarySlices)
-                    temporaryStacks += slice.stacks;
-                int ordinaryStacks = Mathf.Max(0, buff.currentStacks - temporaryStacks);
-                if (ordinaryStacks > 0)
-                {
-                    if (buff.justApplied && skipDecayOnAppliedTurn) buff.justApplied = false;
-                    else ordinaryStacks = buff.data.CalcStacksAfterTurnEnd(ordinaryStacks);
-                }
-                for (int j = buff.temporarySlices.Count - 1; j >= 0; j--)
-                {
-                    TemporaryBuffSlice slice = buff.temporarySlices[j];
-                    if (slice.justApplied) slice.justApplied = false;
-                    else if (--slice.turns <= 0) buff.temporarySlices.RemoveAt(j);
-                }
-                temporaryStacks = 0;
-                foreach (TemporaryBuffSlice slice in buff.temporarySlices)
-                    temporaryStacks += slice.stacks;
-                buff.currentStacks = ordinaryStacks + temporaryStacks;
-                if (buff.currentStacks <= 0)
-                    RemoveBuffInstanceAt(i, "UnitBuffExpired");
                 continue;
             }
 
@@ -1019,7 +891,6 @@ public abstract class Unit : MonoBehaviour
                 newCell.occupyUnit = this;
 
             transform.position = HexGrid.Instance.HexToWorld(target);
-            EventManager.Trigger("UnitMoved", this);
         }
     }
 
@@ -1124,29 +995,6 @@ public abstract class Unit : MonoBehaviour
         EventManager.Trigger("UnitTeleported", this);
     }
 
-    public bool TrySwapWith(Unit other)
-    {
-        if (other == null || other == this || isDead || other.IsDead || HexGrid.Instance == null)
-            return false;
-        HexCell ownCell = HexGrid.Instance.GetCell(currentCoord);
-        HexCell otherCell = HexGrid.Instance.GetCell(other.currentCoord);
-        if (ownCell == null || otherCell == null || ownCell.occupyUnit != this ||
-            otherCell.occupyUnit != other || !ownCell.isWalkable || !otherCell.isWalkable ||
-            ownCell.IsBlockedByObstacle() || otherCell.IsBlockedByObstacle()) return false;
-        HexCoord oldCoord = currentCoord;
-        currentCoord = other.currentCoord;
-        other.currentCoord = oldCoord;
-        ownCell.occupyUnit = other;
-        otherCell.occupyUnit = this;
-        transform.position = HexGrid.Instance.HexToWorld(currentCoord);
-        other.transform.position = HexGrid.Instance.HexToWorld(other.currentCoord);
-        OnMove();
-        other.OnMove();
-        EventManager.Trigger("UnitMoved", this);
-        EventManager.Trigger("UnitMoved", other);
-        return true;
-    }
-
     /// <summary>
     /// 处理位移碰撞，返回"是否停止位移"：
     /// - 普通碰撞：自己和被撞方都掉血 → 停止；
@@ -1249,26 +1097,20 @@ public abstract class Unit : MonoBehaviour
 
     public HexCoord GetCoord() => currentCoord;
     public int GetCurrentHealth() => currentHealth;
-    public int GetMaxHealth() => runtimeMaxHealth > 0 ? runtimeMaxHealth : (data != null ? data.maxHealth : 0);
-    public void SetRunHealth(int current, int maximum)
-    {
-        runtimeMaxHealth = Mathf.Max(1, maximum);
-        currentHealth = Mathf.Clamp(current, 1, runtimeMaxHealth);
-        EventManager.Trigger("UnitHealthChanged", this);
-    }
+    public int GetMaxHealth() => data != null ? data.maxHealth : 0;
     public int GetShield() => shield;
 
     /// <summary>血量百分比（0~1），UI 血条直接用</summary>
     public float GetHealthPercent()
     {
-        if (GetMaxHealth() <= 0) return 0f;
-        return Mathf.Clamp01((float)currentHealth / GetMaxHealth());
+        if (data == null || data.maxHealth <= 0) return 0f;
+        return Mathf.Clamp01((float)currentHealth / data.maxHealth);
     }
 
     /// <summary>是否满血</summary>
     public bool IsFullHealth()
     {
-        return GetMaxHealth() > 0 && currentHealth >= GetMaxHealth();
+        return data != null && currentHealth >= data.maxHealth;
     }
 
     /// <summary>当前是否有护盾</summary>
@@ -1280,55 +1122,6 @@ public abstract class Unit : MonoBehaviour
     /// <summary>是否正在被位移（外部系统如击退/拉近时判断）</summary>
     public bool IsDisplacing => isDisplacing;
     public List<BuffInstance> GetActiveBuffs() => activeBuffs;
-
-    public bool HasNamedBuff(string buffName)
-    {
-        foreach (BuffInstance buff in activeBuffs)
-            if (buff != null && buff.data != null && buff.data.buffName == buffName) return true;
-        return false;
-    }
-
-    public int GetSkillUsesThisTurn(CardData card) =>
-        card != null && skillUsesThisTurn.TryGetValue(card, out int count) ? count : 0;
-
-    public int GetSkillUsesThisLevel(CardData card) =>
-        card != null && skillUsesThisLevel.TryGetValue(card, out int count) ? count : 0;
-
-    public void RecordSkillUse(CardData card)
-    {
-        if (card == null) return;
-        skillUsesThisTurn[card] = GetSkillUsesThisTurn(card) + 1;
-        skillUsesThisLevel[card] = GetSkillUsesThisLevel(card) + 1;
-    }
-
-    public void ResetSkillLevelState()
-    {
-        skillUsesThisTurn.Clear();
-        DefenseState.BeginTurn();
-        skillUsesThisLevel.Clear();
-        skillHealThisLevel.Clear();
-        nextTurnSkillBuffs.Clear();
-    }
-
-    public int GetSkillHealThisLevel(CardData card) =>
-        card != null && skillHealThisLevel.TryGetValue(card, out int count) ? count : 0;
-
-    public void RecordSkillHeal(CardData card, int amount)
-    {
-        if (card == null || amount <= 0) return;
-        skillHealThisLevel[card] = GetSkillHealThisLevel(card) + amount;
-    }
-
-    public void QueueSkillBuffNextTurn(BuffData buff)
-    {
-        if (buff != null && !nextTurnSkillBuffs.Contains(buff)) nextTurnSkillBuffs.Add(buff);
-    }
-
-    public int GetBuffStacks(BuffData buff)
-    {
-        BuffInstance active = activeBuffs.Find(x => x != null && x.data == buff);
-        return active != null ? active.currentStacks : 0;
-    }
 
     /// <summary>
     /// 获取攻击力（基础攻击力 + 所有攻击伤害加成 buff）。

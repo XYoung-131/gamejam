@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   potionName: "打嗝饮料"
   description: "将所有相邻目标推远1格"
-  icon: {fileID: 21300000, guid: b5943751bee14773951622c8a4e6144c, type: 3}
+  icon: {fileID: 0}
   rarity: 0
   maxUsesPerBattle: 0
   effects:

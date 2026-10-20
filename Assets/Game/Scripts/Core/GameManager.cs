@@ -13,13 +13,13 @@ public enum GameState
 
 /// <summary>
 /// 游戏管理器——全局单例，管理游戏状态、回合、胜负
-///
+/// 
 /// 当前可用功能（匹配现有代码结构）：
 /// - 战斗状态切换（战斗/暂停/胜利/失败）
 /// - 回合管理（玩家回合 ↔ 敌人回合）
 /// - 胜负判定（玩家全死=失败，敌人全死=胜利）
 /// - 暂停/继续（Esc 键切换）
-///
+/// 
 /// 挂在场景里的空 GameObject 上
 /// </summary>
 public class GameManager : MonoBehaviour
@@ -32,14 +32,6 @@ public class GameManager : MonoBehaviour
     [Header("回合")]
     public bool isPlayerTurn = true;
     public int turnCount = 1;
-
-    [Header("关卡 / 波次（供遗物触发：精力充沛 / 肌肉强化 / 次元抹杀 / 劣质饮料机）")]
-    [Tooltip("当前楼层（第 1 章 = 1 层）；次元抹杀伤害 = 2 × 楼层")]
-    public int floorNumber = 1;
-    [Tooltip("本关总波数（策划填写）")]
-    public int totalWaves = 1;
-    [Tooltip("当前波次序号（从 1 开始）")]
-    public int waveIndex = 1;
 
     [Header("测试设置")]
     [Tooltip("是否在启动时自动开始战斗（测试用）")]
@@ -81,7 +73,7 @@ public class GameManager : MonoBehaviour
     {
         if (autoStartBattle)
         {
-            StartLevel();
+            StartBattle();
         }
     }
 
@@ -111,59 +103,6 @@ public class GameManager : MonoBehaviour
         // 触发玩家回合开始
         EventManager.Trigger("PlayerTurnStarted", turnCount);
         Debug.Log($"战斗开始！第 {turnCount} 回合，玩家回合");
-    }
-
-    // ============================================================
-    //                    关卡 / 波次（最小机制）
-    //
-    //  说明：目前没有完整的关卡地图生成流程，这里只提供"关卡/波次"的
-    //  最小骨架——刷新楼层与波次号并广播事件，让依赖它们的遗物
-    //  （精力充沛 / 肌肉强化 / 次元抹杀 / 劣质饮料机）能正常触发。
-    //  以后接入真正的关卡流程时，改成在这些节点上调用即可。
-    // ============================================================
-
-    /// <summary>
-    /// 开始一个关卡（楼层）：刷新楼层号 → 广播 LevelStarted → 从第 1 波开始。
-    /// floor 传 -1（或不传）表示沿用 Inspector 里填的 floorNumber。
-    /// </summary>
-    public void StartLevel(int floor = -1)
-    {
-        if (floor > 0) floorNumber = floor;
-
-        waveIndex = 1;
-        EventManager.Trigger("LevelStarted", floorNumber);
-        Debug.Log($"===== 第 {floorNumber} 层开始 =====");
-
-        StartWave(1);
-    }
-
-    /// <summary>
-    /// 开始一波怪物：广播 WaveStarted（带上"是否最后一波"）→ 进入战斗。
-    /// index 传 -1（或不传）表示沿用当前 waveIndex。
-    /// </summary>
-    public void StartWave(int index = -1)
-    {
-        if (index > 0) waveIndex = index;
-
-        bool isLastWave = waveIndex >= totalWaves;
-        EventManager.Trigger("WaveStarted", waveIndex, isLastWave);
-        Debug.Log($"第 {floorNumber} 层 第 {waveIndex}/{totalWaves} 波开始");
-
-        StartBattle();
-    }
-
-    /// <summary>
-    /// 进入下一波（本关还有波次时）。一波的敌人被清空后由流程调用。
-    /// </summary>
-    public void NextWave()
-    {
-        if (waveIndex >= totalWaves)
-        {
-            Debug.Log("已是最后一波，本关结束");
-            return;
-        }
-
-        StartWave(waveIndex + 1);
     }
 
     /// <summary>

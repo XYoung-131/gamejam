@@ -7,11 +7,6 @@ using UnityEngine;
 [RequireComponent(typeof(Camera))]
 public class CameraController : MonoBehaviour
 {
-    [Header("开局视野")]
-    [Tooltip("开局把地图整体放大的倍数：1 = 保持场景里摆的视野；1.2 = 地图大 20%。相机拉近实现，" +
-             "背景/格子/棋子/障碍等比放大，滚轮仍可自由缩放")]
-    public float startZoom = 1.2f;
-
     [Header("移动")]
     [Tooltip("拖拽移动速度")]
     public float panSpeed = 1f;
@@ -38,7 +33,6 @@ public class CameraController : MonoBehaviour
 
     // 组件引用
     private Camera cam;
-    private float baseOrthoSize = -1f;   // Awake 记录的场景初始正交尺寸（startZoom 的基准）
 
     // 拖拽状态
     private bool isDragging = false;
@@ -54,15 +48,10 @@ public class CameraController : MonoBehaviour
     private void Awake()
     {
         cam = GetComponent<Camera>();
-        baseOrthoSize = cam.orthographicSize;   // 场景里摆的视野当作基准
     }
 
     private void Start()
     {
-        // 开局按倍数拉近：除以 startZoom = 地图等比放大 startZoom 倍
-        if (cam.orthographic && startZoom > 0f && baseOrthoSize > 0f)
-            cam.orthographicSize = Mathf.Clamp(baseOrthoSize / startZoom, minZoom, maxZoom);
-
         AutoSetBounds();
     }
 

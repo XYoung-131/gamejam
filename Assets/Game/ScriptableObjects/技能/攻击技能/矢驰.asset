@@ -13,28 +13,14 @@ MonoBehaviour:
   m_Name: "\u77E2\u9A70"
   m_EditorClassIdentifier: 
   cardName: "\u77E2\u9A70"
-  description: "\u90091\u4E2A2\u683C\u5185\u76EE\u6807\uFF0C\u9020\u62101\u70B9\u771F\u5B9E\u4F24\u5BB3"
+  description: "\u90091\u4E2A2\u683C\u5185\u76EE\u6807\uFF0C\u9020\u62101\u70B9\u7269\u7406\u4F24\u5BB3\uFF0C\u6B64\u4F24\u5BB3\u4E0D\u4F1A\u88AB\u62A4\u76FE\u62B5\u6321"
   thoughtCost: 15
-  actionCost: 6
+  actionCost: 7
   maxUses: 3
-  minRange: 1
+  minRange: 0
   maxRange: 2
   damage: 1
-  damageType: 1
   targetTypes: 00000000
-  attackTargetRule: 0
-  attackAreaRadius: 0
-  pierceDepth: 0
-  requiresStraightLine: 0
-  ignoresLineBlock: 0
-  randomHitCount: 0
-  attackEffectRule: 0
-  specialBuff: {fileID: 0}
-  pierceSecondaryDamage: 0
-  causesDisplacement: 0
-  displacementType: 0
-  displacementDistance: 1
-  displaceSelf: 0
   defenseEffectType: 1
   defenseValue: 0
   defenseTargetTypes: 01000000
@@ -42,4 +28,4 @@ MonoBehaviour:
   rarity: 0
   tags: 01000000
   buffs: []
-  devNotes: ""
+  devNotes: 

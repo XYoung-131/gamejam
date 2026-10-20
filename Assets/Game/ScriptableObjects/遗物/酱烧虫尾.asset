@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   relicName: "酱烧虫尾"
   description: "免疫中毒效果；所有未中毒的敌人每回合开始都有50%的概率被施加1层中毒"
-  icon: {fileID: 21300000, guid: 91d2c0b0bf2e4a7ab0c568ecda61ea53, type: 3}
+  icon: {fileID: 0}
   relicType: 4
   pool: 0
   effects:

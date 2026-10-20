@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   relicName: "解压垃圾"
   description: "击破障碍物会回复10点思绪"
-  icon: {fileID: 21300000, guid: 6d9a379f62db476996a2b585ce1f8bcd, type: 3}
+  icon: {fileID: 0}
   relicType: 1
   pool: 0
   effects:

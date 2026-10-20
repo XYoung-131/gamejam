@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   relicName: "防弹背心"
   description: "受到的远程伤害减1"
-  icon: {fileID: 21300000, guid: bacc0bb35e644c6fa8b7e8603fa35d23, type: 3}
+  icon: {fileID: 0}
   relicType: 2
   pool: 1
   effects:

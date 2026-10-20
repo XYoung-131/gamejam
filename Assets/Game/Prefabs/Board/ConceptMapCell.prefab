@@ -29,7 +29,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 0.59, y: 0.54, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -122,20 +122,20 @@ PolygonCollider2D:
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0.5, y: 0.5}
-    oldSize: {x: 1.3555556, y: 0.8666667}
-    newSize: {x: 1.3555556, y: 0.8666667}
+    oldSize: {x: 2.1333334, y: 2.1333334}
+    newSize: {x: 2.1333334, y: 2.1333334}
     adaptiveTilingThreshold: 0.5
     drawMode: 0
     adaptiveTiling: 0
   m_AutoTiling: 0
   m_Points:
     m_Paths:
-    - - {x: 0.6507, y: 0}
-      - {x: 0.3253, y: 0.416}
-      - {x: -0.3253, y: 0.416}
-      - {x: -0.6507, y: 0}
-      - {x: -0.3253, y: -0.416}
-      - {x: 0.3253, y: -0.416}
+    - - {x: 0.93, y: 0}
+      - {x: 0.465, y: 0.805}
+      - {x: -0.465, y: 0.805}
+      - {x: -0.93, y: 0}
+      - {x: -0.465, y: -0.805}
+      - {x: 0.465, y: -0.805}
   m_UseDelaunayMesh: 0
 --- !u!114 &1008955434455179066
 MonoBehaviour:
@@ -159,5 +159,3 @@ MonoBehaviour:
   spriteRenderer: {fileID: 9177866170548464044}
   defaultColor: {r: 1, g: 1, b: 1, a: 0}
   highlightColor: {r: 0.35, g: 0.93, b: 1, a: 0.45}
-  moveHighlightSprite: {fileID: 21300000, guid: c66c959cc08b48d5a940c461aee3d774, type: 3}
-  attackHighlightSprite: {fileID: 21300000, guid: c91e37ee0fd84c2cbe24cd909dcb39bd, type: 3}

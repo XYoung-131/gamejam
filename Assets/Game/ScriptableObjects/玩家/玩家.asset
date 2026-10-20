@@ -20,5 +20,5 @@ MonoBehaviour:
   skillGroup1: []
   skillGroup2: []
   skillGroup3: []
-  icon: {fileID: 21300000, guid: 480e7abaf2004461822c65468964a1d6, type: 3}
+  icon: {fileID: 21300000, guid: 2ba3a89a055a33642b8c01edf22ebc25, type: 3}
   prefab: {fileID: 5028579498195337772, guid: 3a264010b2251a1418970b438346eaa1, type: 3}
