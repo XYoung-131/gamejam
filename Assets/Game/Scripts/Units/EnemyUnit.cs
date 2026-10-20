@@ -13,6 +13,9 @@ using System.Collections.Generic;
 /// </summary>
 public class EnemyUnit : Unit
 {
+    private const string PebbleBugName = "飞砾虫";
+    private const string LindwormName = "林德沃姆";
+
     [Header("AI 设置")]
     [Tooltip("AI 思考间隔（秒）")]
     public float thinkDelay = 0.8f;
@@ -177,6 +180,16 @@ public class EnemyUnit : Unit
         // 清空上回合的记录，开始记录本回合实际释放的技能
         lastTurnUsedSkills.Clear();
         hasActedThisTurn = true;
+
+        // 飞砾虫的特殊行动：只要场上仍有存活的林德沃姆，本回合完全不释放技能，
+        // 改为向远离最近林德沃姆的合法相邻格移动 1 格。
+        // 该判断只改变飞砾虫自身行动，不把林德沃姆加入通用索敌系统。
+        if (IsPebbleBug() && TryFindNearestLivingLindworm(out EnemyUnit lindworm))
+        {
+            plannedSkills.Clear();
+            yield return RetreatOneCellFrom(lindworm);
+            yield break;
+        }
 
         foreach (var card in plannedSkills)
         {
@@ -350,6 +363,66 @@ public class EnemyUnit : Unit
 
         // 本回合预告已全部执行完，清空预告队列
         plannedSkills.Clear();
+    }
+
+    private bool IsPebbleBug()
+    {
+        return data != null && data.unitName == PebbleBugName;
+    }
+
+    private bool TryFindNearestLivingLindworm(out EnemyUnit nearest)
+    {
+        nearest = null;
+        int nearestDistance = int.MaxValue;
+        foreach (EnemyUnit enemy in FindObjectsOfType<EnemyUnit>())
+        {
+            if (enemy == null || enemy == this || enemy.IsDead || enemy.GetCurrentHealth() <= 0)
+                continue;
+            if (enemy.data == null || enemy.data.unitName != LindwormName)
+                continue;
+
+            int distance = currentCoord.Distance(enemy.GetCoord());
+            if (distance >= nearestDistance) continue;
+            nearestDistance = distance;
+            nearest = enemy;
+        }
+        return nearest != null;
+    }
+
+    private IEnumerator RetreatOneCellFrom(EnemyUnit lindworm)
+    {
+        if (lindworm == null || HexGrid.Instance == null || IsDead) yield break;
+
+        int currentDistance = currentCoord.Distance(lindworm.GetCoord());
+        int bestDistance = currentDistance;
+        var candidates = new List<HexCoord>();
+        for (int direction = 0; direction < 6; direction++)
+        {
+            HexCoord candidate = currentCoord.GetNeighbor(direction);
+            HexCell cell = HexGrid.Instance.GetCell(candidate);
+            if (cell == null || !cell.CanEnter(this)) continue;
+
+            int distance = candidate.Distance(lindworm.GetCoord());
+            if (distance < bestDistance) continue;
+            if (distance > bestDistance)
+            {
+                bestDistance = distance;
+                candidates.Clear();
+            }
+            if (distance > currentDistance)
+                candidates.Add(candidate);
+        }
+
+        if (candidates.Count == 0)
+        {
+            Debug.Log($"{data.unitName} 周围没有能远离 {LindwormName} 的空格，本回合不攻击也不移动");
+            yield break;
+        }
+
+        HexCoord destination = candidates[Random.Range(0, candidates.Count)];
+        MoveTo(destination);
+        Debug.Log($"{data.unitName} 因 {LindwormName} 存在，放弃攻击并远离到 {destination}");
+        yield return new WaitForSeconds(stepDelay);
     }
 
     // ============================================================
