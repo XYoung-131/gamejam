@@ -497,16 +497,6 @@ public class PlayerUnit : Unit
         return true;
     }
 
-    /// <summary>Restore ownership for a new battle without repeating acquisition effects.</summary>
-    public void RestoreOwnedRelic(RelicData relic)
-    {
-        if (relic == null || HasRelic(relic)) return;
-        relics.Add(relic);
-        foreach (BuffData buff in relic.permanentBuffs)
-            if (buff != null) ApplyPermanentBuff(buff);
-        EventManager.Trigger("RelicChanged", this);
-    }
-
     /// <summary>
     /// 是否已经持有这件遗物（掉落池去重、UI 显示已拥有用）。
     /// </summary>

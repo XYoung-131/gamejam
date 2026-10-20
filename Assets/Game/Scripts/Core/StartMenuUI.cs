@@ -139,12 +139,7 @@ public class StartMenuUI : MonoBehaviour
     /// <summary>点击"开始游戏"：打开开场事件「实验开始」；事件里选"迎接第一场战斗"再进战斗场景</summary>
     private void OnStartGameClicked()
     {
-        if (RunFlowController.Instance == null)
-        {
-            Debug.LogError("[StartMenu] RunFlowController is missing.");
-            return;
-        }
-        RunFlowController.Instance.StartNewGame();
+        EventPanel_实验开始.Show();
     }
 
     private static void Stretch(RectTransform rt)
