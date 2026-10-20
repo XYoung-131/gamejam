@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   potionName: "青柠饮料"
   description: "恢复所有技能的全部使用次数"
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: 21ce74bed083433b93d099ef52c95399, type: 3}
   rarity: 1
   maxUsesPerBattle: 0
   effects:

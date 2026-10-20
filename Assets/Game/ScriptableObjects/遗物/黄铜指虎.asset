@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   relicName: "黄铜指虎"
   description: "对相邻格目标造成的伤害加1"
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: 9c252e81f0474d75ba50077e6b11b0b7, type: 3}
   relicType: 2
   pool: 1
   effects:

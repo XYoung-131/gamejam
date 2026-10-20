@@ -15,8 +15,14 @@ MonoBehaviour:
   unitName: "\u8840\u86ED"
   maxHealth: 3
   grade: 0
-  passiveAbility: "\u56DE\u590D\u8840\u91CF\u53EF\u4EE5\u8D85\u8FC7\u6700\u5927\u8840\u4E0A\u9650 / \u6BCF\u96942\u56DE\u5408\u56DE\u590D2\u70B9\u8840\u91CF\u5E76\u5728\u6280\u80FD\u7EC4\u672B\u5C3E\u52A0\u51651\u4E2A \u808C\u8089\u7A81\u53D8"
-  aiLogic: "\u76F8\u90BB2\u683C\u6CA1\u6709\u73A9\u5BB6\u65F6\uFF0C\u4F7F\u7528 \u5FEB\u8D70 \u671D\u73A9\u5BB6\u79FB\u52A8\uFF0C\u6B63\u597D\u76F8\u90BB2\u683C\u6709\u73A9\u5BB6\u65F6\uFF0C\u4F7F\u7528 \u5C0F\u6B65\u8D70 \u671D\u73A9\u5BB6\u79FB\u52A8\uFF0C\u8D70\u5230\u4E0E\u73A9\u5BB6\u76F8\u90BB\u65F6\u4F7F\u7528 \u566C\u54AC"
+  attack: 1
+  passiveAbility: "\u56DE\u590D\u8840\u91CF\u53EF\u4EE5\u8D85\u8FC7\u6700\u5927\u8840\u4E0A\u9650
+    / \u6BCF\u96942\u56DE\u5408\u56DE\u590D2\u70B9\u8840\u91CF\u5E76\u5728\u6280\u80FD\u7EC4\u672B\u5C3E\u52A0\u51651\u4E2A
+    \u808C\u8089\u7A81\u53D8"
+  aiLogic: "\u76F8\u90BB2\u683C\u6CA1\u6709\u73A9\u5BB6\u65F6\uFF0C\u4F7F\u7528 \u5FEB\u8D70
+    \u671D\u73A9\u5BB6\u79FB\u52A8\uFF0C\u6B63\u597D\u76F8\u90BB2\u683C\u6709\u73A9\u5BB6\u65F6\uFF0C\u4F7F\u7528
+    \u5C0F\u6B65\u8D70 \u671D\u73A9\u5BB6\u79FB\u52A8\uFF0C\u8D70\u5230\u4E0E\u73A9\u5BB6\u76F8\u90BB\u65F6\u4F7F\u7528
+    \u566C\u54AC"
   skillGroup1:
   - {fileID: 11400000, guid: 98c2e8508556a0c48a4444728ee03836, type: 2}
   - {fileID: 11400000, guid: 334a47d1b402b5441bc95050ac2f646d, type: 2}
@@ -25,3 +31,17 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 334a47d1b402b5441bc95050ac2f646d, type: 2}
   skillGroup3:
   - {fileID: 11400000, guid: 334a47d1b402b5441bc95050ac2f646d, type: 2}
+  skillGroups:
+  - groupName: "\u6280\u80FD\u7EC41"
+    cards:
+    - {fileID: 11400000, guid: 98c2e8508556a0c48a4444728ee03836, type: 2}
+    - {fileID: 11400000, guid: 334a47d1b402b5441bc95050ac2f646d, type: 2}
+  - groupName: "\u6280\u80FD\u7EC42"
+    cards:
+    - {fileID: 11400000, guid: 667772554bc77c641a819ca182044246, type: 2}
+    - {fileID: 11400000, guid: 334a47d1b402b5441bc95050ac2f646d, type: 2}
+  - groupName: "\u6280\u80FD\u7EC43"
+    cards:
+    - {fileID: 11400000, guid: 334a47d1b402b5441bc95050ac2f646d, type: 2}
+  icon: {fileID: 21300000, guid: 25660176db7648b9b2051b83bee75543, type: 3}
+  prefab: {fileID: 5125114976211495250, guid: b10af10f9f1c4d0ea22edb6095cbeb54, type: 3}

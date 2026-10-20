@@ -17,15 +17,22 @@ MonoBehaviour:
   thoughtCost: 20
   actionCost: 5
   maxUses: 3
-  minRange: 0
-  maxRange: 1
+  minRange: 1
+  maxRange: 2
   damage: 0
-  targetTypes: 
+  damageType: 0
+  targetTypes: 00000000
+  causesDisplacement: 1
+  displacementType: 2
+  displacementDistance: 2
+  displaceSelf: 1
   defenseEffectType: 1
   defenseValue: 0
+  defenseTargetRule: 2
+  defenseEffectRule: 13
   defenseTargetTypes: 01000000
   library: 1
   rarity: 0
   tags: 02000000
   buffs: []
-  devNotes: "\u53EF\u4EE5\u79FB\u52A81\u683C\u62162\u683C"
+  devNotes: "\u671D\u76F8\u90BB\u683C\u79FB\u52A8\uFF0C\u6700\u591A 2 \u683C\uFF081~2 \u683C\u5747\u53EF\uFF09\n\u8865\u5145\uFF1A\u53EF\u4EE5\u79FB\u52A81\u683C\u62162\u683C"

@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   relicName: "精力充沛"
   description: "关卡开始时回复全部耐力和思绪"
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: 72eed828e15d4cde8138e5d8aed6c807, type: 3}
   relicType: 2
   pool: 1
   effects:

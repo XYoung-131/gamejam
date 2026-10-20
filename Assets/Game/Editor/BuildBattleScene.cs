@@ -274,6 +274,7 @@ public static class BuildBattleScene
         {
             var card = AssetDatabase.LoadAssetAtPath<CardData>(AssetDatabase.GUIDToAssetPath(guid));
             if (card == null) continue;
+            if (card.rarity == Rarity.敌方特有) continue;
             if (card.library == CardPool.攻击) attack.Add(card);
             else defense.Add(card);
         }

@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   relicName: "小皮鞋"
   description: "免疫沉重效果和所有负面地形效果"
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: efa19ebf3cc748539717ce7be52aa90c, type: 3}
   relicType: 2
   pool: 1
   effects:

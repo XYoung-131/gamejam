@@ -1,0 +1,51 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ad0923868307d8f458a5c91533f26612, type: 3}
+  m_Name: "Level_2_\u5E0C\u5C14\u8299\u7CBE\u82F1"
+  m_EditorClassIdentifier: 
+  levelName: "\u7B2C\u4E8C\u5C42\u5E0C\u5C14\u8299\u7CBE\u82F1"
+  variants:
+  - variantName: "\u53D8\u79CD1"
+    playerStart:
+      q: 0
+      r: -1
+    spawns:
+    - unit: {fileID: 11400000, guid: c46831efe5dbc42b69cd2e5e781ee45e, type: 2}
+      obstacle: {fileID: 0}
+      terrain: {fileID: 0}
+      coord:
+        q: 0
+        r: 2
+    - unit: {fileID: 11400000, guid: b35a805f5571b1cf3e43eb56a322524f, type: 2}
+      obstacle: {fileID: 0}
+      terrain: {fileID: 0}
+      coord:
+        q: 2
+        r: 1
+    - unit: {fileID: 11400000, guid: 336e1b04cdcf1173b0cf670046b6e15d, type: 2}
+      obstacle: {fileID: 0}
+      terrain: {fileID: 0}
+      coord:
+        q: -2
+        r: 3
+    - unit: {fileID: 11400000, guid: b35a805f5571b1cf3e43eb56a322524f, type: 2}
+      obstacle: {fileID: 0}
+      terrain: {fileID: 0}
+      coord:
+        q: -3
+        r: 1
+    - unit: {fileID: 11400000, guid: b35a805f5571b1cf3e43eb56a322524f, type: 2}
+      obstacle: {fileID: 0}
+      terrain: {fileID: 0}
+      coord:
+        q: 4
+        r: -3

@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   potionName: "橘子饮料"
   description: "恢复1点血量，移除自身所有负面状态"
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: 79a6ebfd502448e2b258bfc82bb910ea, type: 3}
   rarity: 1
   maxUsesPerBattle: 0
   effects:

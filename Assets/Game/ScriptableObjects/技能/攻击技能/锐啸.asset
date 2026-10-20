@@ -13,19 +13,34 @@ MonoBehaviour:
   m_Name: "\u9510\u5578"
   m_EditorClassIdentifier: 
   cardName: "\u9510\u5578"
-  description: "\u9009\u4E2D1\u4E2A3\u683C\u5185\u76EE\u6807\uFF0C\u9020\u62101\u70B9\u4F24\u5BB3\uFF0C\u4F7F\u88AB\u6253\u4E2D\u7684\u4EBA\u653B\u51FB\u4F24\u5BB3-1"
-  thoughtCost: 15
+  description: "\u9009\u4E2D1\u4E2A3\u683C\u5185\u76EE\u6807\uFF0C\u9020\u62102\u70B9\u7269\u7406\u4F24\u5BB3\uFF0C\u65BD\u52A01\u5C42\u65E0\u529B"
+  thoughtCost: 20
   actionCost: 8
   maxUses: 3
-  minRange: 0
+  minRange: 1
   maxRange: 3
-  damage: 1
+  damage: 2
+  damageType: 0
   targetTypes: 00000000
+  attackTargetRule: 0
+  attackAreaRadius: 0
+  pierceDepth: 0
+  requiresStraightLine: 0
+  ignoresLineBlock: 0
+  randomHitCount: 0
+  attackEffectRule: 0
+  specialBuff: {fileID: 0}
+  pierceSecondaryDamage: 0
+  causesDisplacement: 0
+  displacementType: 0
+  displacementDistance: 1
+  displaceSelf: 0
   defenseEffectType: 1
   defenseValue: 0
   defenseTargetTypes: 01000000
   library: 0
   rarity: 2
   tags: 01000000
-  buffs: []
-  devNotes: 
+  buffs:
+  - {fileID: 11400000, guid: 9734a5bd57087b442ade7d762ed77a45, type: 2}
+  devNotes: ""
