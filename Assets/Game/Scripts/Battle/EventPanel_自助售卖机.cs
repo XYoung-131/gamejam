@@ -49,7 +49,22 @@ public static class EventPanel_自助售卖机
     public static void Show()
     {
         已拍次数 = 0;
+        预登记遗物名();
         Rebuild();
+    }
+
+    /// <summary>
+    /// 三件遗物的资产可能还没建：先把名字登记进"物品名高亮表"，
+    /// 这样选项文案里的 药水腰带 / 草席卷 / 黑鹅项圈 才会变黄 + 加 [] + 下划线。
+    /// （必须在 EventPanel.Show 之前登记——面板一旦构建，选项文本就按当时的名字表排好了。）
+    /// </summary>
+    private static void 预登记遗物名()
+    {
+        foreach (string name in 遗物名)
+        {
+            if (EventItemLibrary.FindRelic(name) != null) continue;   // 有真资产，高亮表里本来就有
+            EventPanel.RegisterItemName(name, 取占位遗物(name).description);
+        }
     }
 
     /// <summary>按当前拍了几次重新出界面（档位选择 + 文案）</summary>
@@ -120,16 +135,21 @@ public static class EventPanel_自助售卖机
         RelicData relic = EventItemLibrary.FindRelic(name);
         if (relic != null) return relic;
 
-        if (!占位遗物.TryGetValue(name, out relic) || relic == null)
-        {
-            relic = EventItemLibrary.CreatePlaceholderRelic(name, null);
-            占位遗物[name] = relic;
-            Debug.LogWarning($"[自助售卖机] 工程里没有遗物资产【{name}】，本次用占位遗物顶上。" +
-                             "把真资产建到 ScriptableObjects/遗物/ 下并保持同名即可自动接管。");
-        }
-
+        RelicData placeholder = 取占位遗物(name);
         // 选项文案里的物品名高亮走的是资产表，占位遗物不在表里，手动登记一个说明
-        EventPanel.RegisterItemName(name, relic.description);
+        EventPanel.RegisterItemName(name, placeholder.description);
+        return placeholder;
+    }
+
+    /// <summary>占位遗物缓存：同一件不重复建，避免 dedupe 失效后玩家拿到两件</summary>
+    private static RelicData 取占位遗物(string name)
+    {
+        if (占位遗物.TryGetValue(name, out RelicData relic) && relic != null) return relic;
+
+        relic = EventItemLibrary.CreatePlaceholderRelic(name, null);
+        占位遗物[name] = relic;
+        Debug.LogWarning($"[自助售卖机] 工程里没有遗物资产【{name}】，本次用占位遗物顶上。" +
+                         "把真资产建到 ScriptableObjects/遗物/ 下并保持同名即可自动接管。");
         return relic;
     }
 
