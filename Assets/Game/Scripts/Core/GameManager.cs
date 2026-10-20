@@ -18,7 +18,7 @@ public enum GameState
 /// - 战斗状态切换（战斗/暂停/胜利/失败）
 /// - 回合管理（玩家回合 ↔ 敌人回合）
 /// - 胜负判定（玩家全死=失败，敌人全死=胜利）
-/// - 暂停/继续（Esc 键切换）
+/// - 暂停/继续（对外仍可用 Pause / Resume / TogglePause；游戏内 Esc 由 EscMenuUI 接管）
 ///
 /// 挂在场景里的空 GameObject 上
 /// </summary>
@@ -85,15 +85,8 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    private void Update()
-    {
-        // 按 Esc 切换暂停
-        if (Input.GetKeyDown(KeyCode.Escape))
-        {
-            if (currentState == GameState.Battle || currentState == GameState.Paused)
-                TogglePause();
-        }
-    }
+    // 注：原来这里用 Esc 切换暂停，现在 Esc 由游戏内 ESC 菜单（EscMenuUI）接管，
+    // 暂停改由菜单调用 Pause() / Resume()。
 
     // ============================================================
     //                     状态切换
@@ -215,7 +208,7 @@ public class GameManager : MonoBehaviour
     // ============================================================
 
     /// <summary>
-    /// 切换暂停（Esc 键调用）
+    /// 切换暂停（游戏内由 EscMenuUI 的「设置 / 返回主界面」流程调用）
     /// </summary>
     public void TogglePause()
     {

@@ -407,6 +407,11 @@ public class BattleHUD : MonoBehaviour
         staminaText = MakeText(staminaSlot.transform, "20/20", 30, TextAnchor.MiddleCenter,
             new Color(0.15f, 0.15f, 0.18f));
         Stretch(staminaText.rectTransform);
+        // 条里只有数字认不出是什么资源，左侧补一个"耐力"小字（数字仍居中，互不叠）
+        MakeText(staminaSlot.transform, "耐力", 28, TextAnchor.MiddleLeft,
+            new Color(0.15f, 0.15f, 0.18f),
+            new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(26f, 0f),
+            new Vector2(0f, 0.5f), new Vector2(160f, 40f));
 
         Image thoughtSlot = MakeImage(canvas.transform, "StatusBar_Thought", thoughtSlotSprite,
             thoughtSlotSprite == null ? new Color(0.65f, 0.8f, 0.97f, 0.9f) : Color.white,
@@ -414,6 +419,11 @@ public class BattleHUD : MonoBehaviour
         thoughtText = MakeText(thoughtSlot.transform, "20/20", 30, TextAnchor.MiddleCenter,
             new Color(0.15f, 0.15f, 0.18f));
         Stretch(thoughtText.rectTransform);
+        // 同上：蓝条左侧补"思绪"
+        MakeText(thoughtSlot.transform, "思绪", 28, TextAnchor.MiddleLeft,
+            new Color(0.15f, 0.15f, 0.18f),
+            new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(26f, 0f),
+            new Vector2(0f, 0.5f), new Vector2(160f, 40f));
 
         // ---- 左上角：血量槽红圆，压在深蓝长条之上，数字写圆心 ----
         Image hpSlot = MakeImage(canvas.transform, "StatusBar_HP", hpSlotSprite,
@@ -421,6 +431,10 @@ public class BattleHUD : MonoBehaviour
             new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(24f, -24f), new Vector2(132f, 132f));
         hpText = MakeText(hpSlot.transform, "12/12", 30, TextAnchor.MiddleCenter, Color.white);
         Stretch(hpText.rectTransform);
+        // 红圆里再补一个"血量"小字，压在数字上方：圆 + 数字不写清楚认不出是血量
+        MakeText(hpSlot.transform, "血量", 20, TextAnchor.MiddleCenter, new Color(1f, 1f, 1f, 0.85f),
+            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -8f),
+            new Vector2(0.5f, 1f), new Vector2(132f, 26f));
 
         // ---- 血量槽右侧：遗物图标一列排开（距红圆右缘 10px，每个间隔 5px） ----
         BuildRelicRow();
@@ -2463,38 +2477,43 @@ public class BattleHUD : MonoBehaviour
 
     private void Update()
     {
+        // ESC 菜单打开时整体让位：暂停只是停时间、Update 照跑，
+        // 不让位的话菜单期间里的鼠标点击会穿透到战斗操作
+        if (EscMenuUI.IsOpen) return;
+
         GuardTooltips();     // 先兜底关掉该关的悬停浮层，再处理本帧输入
         RefreshHud();
         RefreshBuffBar();
         RefreshRelicIconsIfChanged();
         RefreshEnemyPlannedLabels();
 
-        // 灌注确认 / 提示弹窗打开时：Esc / 右键关闭（模态，其它输入不处理）
+        // 灌注确认 / 提示弹窗打开时：右键关闭（模态，其它输入不处理）
+        // —— Esc 让给游戏内 ESC 菜单了，这里只留右键
         if (confirmPanel != null && confirmPanel.activeSelf)
         {
-            if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Escape))
+            if (Input.GetMouseButtonDown(1))
                 CloseInfuseConfirm();
             return;
         }
         if (messagePanel != null && messagePanel.activeSelf)
         {
-            if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Escape))
+            if (Input.GetMouseButtonDown(1))
                 CloseMessagePanel();
             return;
         }
 
-        // 牌堆选择层打开时：Esc / 右键 关闭（此时 mode 仍是"无"）
+        // 牌堆选择层打开时：右键、或点面板外的空白（非卡牌界面）取消（此时 mode 仍是"无"）
         if (mode == SelectMode.无 && deckPanel != null && deckPanel.activeSelf)
         {
-            if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Escape))
-                CloseDeckPanel();
+            if (Input.GetMouseButtonDown(1)) { CloseDeckPanel(); return; }
+            if (Input.GetMouseButtonDown(0) && !IsPointerOnSelectableUnder(deckPanel)) { CloseDeckPanel(); return; }
             return;
         }
 
         if (mode == SelectMode.无) return;
 
-        // 右键 / Esc 取消瞄准
-        if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Escape))
+        // 右键取消瞄准（Esc 让给游戏内 ESC 菜单了）
+        if (Input.GetMouseButtonDown(1))
         {
             ExitMode();
             return;
@@ -2536,6 +2555,29 @@ public class BattleHUD : MonoBehaviour
         return false;
     }
 
+    /// <summary>
+    /// 指针是否落在 root 这一组 UI 自己的按钮上。
+    /// 用于"点这组 UI 以外的空白处即取消"：RaycastAll 会把被遮罩盖住的
+    /// 底层按钮也返回来，所以这里限定必须是 root 的子物体，避免误判。
+    /// </summary>
+    private static bool IsPointerOnSelectableUnder(GameObject root)
+    {
+        if (root == null || EventSystem.current == null) return false;
+
+        PointerEventData ped = new PointerEventData(EventSystem.current) { position = Input.mousePosition };
+        List<RaycastResult> results = new List<RaycastResult>();
+        EventSystem.current.RaycastAll(ped, results);
+
+        for (int i = 0; i < results.Count; i++)
+        {
+            GameObject go = results[i].gameObject;
+            if (go == null) continue;
+            Selectable s = go.GetComponentInParent<Selectable>();
+            if (s != null && s.transform.IsChildOf(root.transform)) return true;
+        }
+        return false;
+    }
+
     private void HandleAimClick()
     {
         if (IsPointerOnInteractiveUI())
@@ -2558,9 +2600,8 @@ public class BattleHUD : MonoBehaviour
         }
         if (cell == null)
         {
-            Camera cam = Camera.main;
-            Vector3 world = cam != null ? cam.ScreenToWorldPoint(Input.mousePosition) : Vector3.zero;
-            ShowStatus($"未命中格子（世界坐标 {world.x:F2},{world.y:F2}）");
+            // 点击非卡牌界面（既不在按钮上、也没命中任何格子）：取消瞄准
+            ExitMode();
             return;
         }
 

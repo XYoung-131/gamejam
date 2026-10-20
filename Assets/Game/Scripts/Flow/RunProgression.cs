@@ -134,4 +134,50 @@ public sealed class RunProgression
         Phase = RunPhase.Defeat;
         return true;
     }
+
+    // ============================================================
+    //                      存档：读 / 恢复
+    // ============================================================
+
+    /// <summary>当前精英关的二选一结果（存档用，返回副本）</summary>
+    public int[] GetEliteChoices()
+    {
+        return eliteChoices == null ? new int[0] : (int[])eliteChoices.Clone();
+    }
+
+    /// <summary>还没抽到的事件名列表（存档用）</summary>
+    public string[] GetRemainingEvents()
+    {
+        return remainingEvents.ToArray();
+    }
+
+    /// <summary>当前战斗已掷出的变体下标（-1 = 还没掷；存档用，不走 CurrentVariantIndex 的相位限制）</summary>
+    public int SavedVariantIndex { get { return currentVariantIndex; } }
+
+    /// <summary>
+    /// 从存档恢复进度。数据对不上（路线被改过 / 下标越界 / 相位非法）就返回 false，
+    /// 调用方读档失败，主界面保持原样。
+    /// </summary>
+    public bool Restore(RunRouteData route, RunPhase phase, int chapterIndex, int battleIndex,
+        string eventId, int[] savedEliteChoices, string[] savedRemainingEvents, int variantIndex)
+    {
+        if (route == null || !route.IsComplete) return false;
+        if (phase != RunPhase.Event && phase != RunPhase.Battle && phase != RunPhase.Rest) return false;
+        if (chapterIndex < 0 || chapterIndex >= route.chapters.Count) return false;
+        if (battleIndex < 0 || battleIndex > 7) return false;
+        if (savedEliteChoices == null || savedEliteChoices.Length != route.chapters.Count) return false;
+        foreach (int choice in savedEliteChoices)
+            if (choice != 0 && choice != 1) return false;
+
+        Route = route;
+        eliteChoices = (int[])savedEliteChoices.Clone();
+        ChapterIndex = chapterIndex;
+        BattleIndex = battleIndex;
+        EventId = eventId;
+        remainingEvents.Clear();
+        if (savedRemainingEvents != null) remainingEvents.AddRange(savedRemainingEvents);
+        currentVariantIndex = variantIndex;
+        Phase = phase;
+        return true;
+    }
 }
