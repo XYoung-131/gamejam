@@ -48,6 +48,10 @@ public class BattleHUD : MonoBehaviour
     private Text thoughtText;        // 思绪槽上的数字
     private Text endTurnLabel;       // 下一回合 / 取消
     private Button endTurnButton;
+    private Button drawButton;       // 思绪爆发按钮：下一回合正下方的抽牌按键
+    private float drawButtonCenterX; // 该按钮水平中线（相对屏幕中心，画布参考系 1920 宽）
+    private float drawButtonTopY;    // 该按钮上边沿的 y（相对屏幕中心，画布参考系 1080 高）
+                                     // 上面两个值在 BuildUI 里算好，供悬停浮层定位到按钮正上方
     private GameObject deckPanel;    // 牌堆选择层（攻击/防御两个大按钮）
     private GameObject cardPanel;    // 3 张待选卡弹窗
     private Text deckTitleText;      // "选择要抽取的技能牌堆（消耗 N 点思绪）"
@@ -544,14 +548,26 @@ public class BattleHUD : MonoBehaviour
         // 高亮（鼠标悬停）与按下都换成淡蓝色按键_2
         ApplyHoverSpriteSwap(endTurnButton, endTurnHoverSprite);
 
-        // ---- 插卡按钮：下一回合正下方（水平对齐其中线），点击后先选牌堆 ----
+        // ---- 思绪爆发按钮：下一回合正下方（水平对齐其中线），点击后先选牌堆 ----
         // 素材裁剪后 862×705，显示高 62 → 宽 ≈76
         float drawW = 62f * 862f / 705f;
         // 下一回合中线 = -(btnRightGap + endTurnW/2)；本按钮右缘 = 中线 + drawW/2
-        MakeImageButton(canvas.transform, "DrawButton", drawButtonSprite,
+        float drawRightGap = btnRightGap + endTurnW / 2f - drawW / 2f;
+        const float drawY = 12f;    // 按钮下边沿到屏幕底边的距离
+        drawButton = MakeImageButton(canvas.transform, "DrawButton", drawButtonSprite,
             new Vector2(1f, 0f),
-            new Vector2(-(btnRightGap + endTurnW / 2f - drawW / 2f), 12f), new Vector2(drawW, 62f),
+            new Vector2(-drawRightGap, drawY), new Vector2(drawW, 62f),
             OnDrawButtonClicked, 0);
+
+        // 记下按钮位置：锚点/pivot 都是 (1,0)，所以
+        //   中线 x = 960 - 按钮右缘到屏幕右边的距离 - 半个按钮宽
+        //   上边沿 y = -540(屏幕底) + 按钮下边沿间距 + 按钮高
+        // 悬停浮层按这两个值摆到按钮正上方（参考分辨率 1920×1080）
+        drawButtonCenterX = 960f - drawRightGap - drawW / 2f;
+        drawButtonTopY = -540f + drawY + 62f;
+
+        // 鼠标停在思绪爆发按钮上：显示它的名称和功能说明
+        AddHoverTrigger(drawButton.gameObject, ShowThoughtBurstTooltip, HideSkillTooltip);
 
         // ---- 弹窗（先建好，默认隐藏） ----
         BuildDeckPanel();
@@ -1119,6 +1135,42 @@ public class BattleHUD : MonoBehaviour
         skillTooltipRt.anchoredPosition = new Vector2(cx, 28f + baseCardH + 8f);
         skillTooltip.SetActive(true);
         PlaceBuffTooltipBesideSkill();
+    }
+
+    /// <summary>
+    /// 鼠标停在「思绪爆发」按钮（下一回合正下方的抽牌按键）上：浮层摆在按钮正上方，
+    /// 显示它的名称和功能。说明里的消耗数值取抽牌系统的策划配置（drawThoughtCost），
+    /// 不在代码里写死具体数字。
+    /// </summary>
+    private void ShowThoughtBurstTooltip()
+    {
+        if (skillTooltip == null) return;
+
+        if (cardSystem == null) cardSystem = FindCardSystem();
+        // 配置读不到时退回与 RefreshDeckCostTexts 相同的默认值（真正的数值由策划在 Inspector 填）
+        int cost = cardSystem != null ? cardSystem.drawThoughtCost : 5;
+
+        skillTooltipTitle.text = "【思绪爆发】";
+        skillTooltipBody.text = "抽牌需要消耗 " + cost + " 点思绪：\n" +
+                                "点击后先选攻击 / 防御牌堆，再从弹出的待选卡里挑 1 张装入技能槽。";
+
+        // 与技能介绍浮层同一套写法：先定宽，再按正文换行后的实际高度收紧
+        const float w = 430f;
+        skillTooltipRt.sizeDelta = new Vector2(w, 150f);
+        float bodyH = Mathf.Max(24f, skillTooltipBody.preferredHeight);
+        float total = 12f + 30f + 6f + bodyH + 12f;
+        skillTooltipRt.sizeDelta = new Vector2(w, total);
+        skillTooltipBody.rectTransform.sizeDelta = new Vector2(-28f, bodyH + 2f);
+
+        // 定位：按钮中线 → 相对屏幕中心的 x，夹在屏幕内；浮层底边贴按钮上沿 8px
+        float cx = Mathf.Clamp(drawButtonCenterX, -960f + w / 2f + 12f, 960f - w / 2f - 12f);
+        skillTooltipRt.anchorMin = new Vector2(0.5f, 0f);
+        skillTooltipRt.anchorMax = new Vector2(0.5f, 0f);
+        skillTooltipRt.pivot = new Vector2(0.5f, 0f);
+        skillTooltipRt.anchoredPosition = new Vector2(cx, 540f + drawButtonTopY + 8f);
+
+        if (buffTooltip != null) buffTooltip.SetActive(false);   // 无 buff 内容，别留下上次的残留
+        skillTooltip.SetActive(true);
     }
 
     /// <summary>填充技能介绍：标题 = 卡名 + 思绪/耐力消耗，正文 = CardData.description；

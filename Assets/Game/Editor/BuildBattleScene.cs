@@ -26,9 +26,10 @@ public static class BuildBattleScene
     private const string UnitFolder = Root + "/ScriptableObjects/单位";
     private const string ObstacleFolder = Root + "/ScriptableObjects/障碍物";
     private const string SkillFolder = Root + "/ScriptableObjects/技能";
-    // 玩家数据单独放一层：单位/ 目录是给敌人用的，生成器会把它下面的每个 UnitData 都当成敌人建预制体
-    private const string PlayerFolder = Root + "/ScriptableObjects/玩家";
-    private const string PlayerDataPath = PlayerFolder + "/玩家.asset";
+    // 玩家数据必须放在 Resources 下：游戏运行时（主界面点「唤醒」开的第一场事件）也要能
+    // 按名字读到它，用来显示开局血量。单位/ 目录是给敌人用的，生成器会把那下面的每个
+    // UnitData 都当成敌人建预制体，所以玩家不能放进去。
+    private const string PlayerDataPath = Root + "/Resources/玩家.asset";
     private const string PlayerPrefabPath = Root + "/Prefabs/Units/Player_Template.prefab";
     private const string MapPrefabPath = Root + "/Prefabs/Board/ConceptMap.prefab";
 
