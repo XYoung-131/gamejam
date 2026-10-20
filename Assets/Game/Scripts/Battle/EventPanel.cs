@@ -69,6 +69,13 @@ public class EventPanel : MonoBehaviour
     // 运行时引用
     private Text nameText;              // 名称按钮上的黑字
     private Text hpText;                // 左上角血量槽圆心的"当前/上限"数字（与战斗 HUD 同一口径）
+
+    // ---- 玩家单位配置（Resources 按名加载） ----
+    // 开局事件是在 Start 场景里弹的：场上没有玩家对象、本局也还没有快照，
+    // 这时只能用玩家配置里的生命上限当"开局满血"，而不是写死一个假数字。
+    private const string PlayerDataResourceName = "玩家";
+    private static UnitData cachedPlayerData;
+    private static bool playerDataLoaded;
     private readonly System.Collections.Generic.List<RectTransform> optionSlots
         = new System.Collections.Generic.List<RectTransform>();
 
@@ -262,7 +269,8 @@ public class EventPanel : MonoBehaviour
             new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(24f, -24f), new Vector2(132f, 132f));
         hpSlot.rectTransform.pivot = new Vector2(0f, 1f);
         hpSlot.raycastTarget = false;
-        hpText = MakeChildText(hpSlot.rectTransform, "12/12", 30, Color.white);
+        // 数字初始留空：本局还没对应数据时不摆一个假数字，等 Update() 取到真实血量再写上
+        hpText = MakeChildText(hpSlot.rectTransform, "", 30, Color.white);
 
         // 圆里补一个"血量"小字压在数字上方 —— 与战斗 HUD 红圆完全同款
         // （字号 20 / 白 85% / 距圆顶 8px / 132×26 居中）
@@ -471,7 +479,7 @@ public class EventPanel : MonoBehaviour
         if (hpText == null) return;
 
         int current, max;
-        if (!TryGetRunHealth(out current, out max)) return;   // 取不到就保持原样，不显示 0/0
+        if (!TryGetRunHealth(out current, out max)) return;   // 真的没数据可显示就留空，不摆 0/0
 
         string want = current + "/" + max;
         if (hpText.text != want) hpText.text = want;
@@ -481,7 +489,8 @@ public class EventPanel : MonoBehaviour
     /// 本局血量（当前 / 上限），取值顺序与战斗 HUD 对齐：
     ///  · 场上有玩家 → 玩家实时血量（战斗场景里开的事件，与战斗界面一模一样）
     ///  · 场上没有玩家（从主界面点「唤醒」开的第一场事件）→ 本局快照 PlayerRunState
-    ///  · 都取不到（还没打过第一场，快照为空）→ 返回 false，界面留着占位文本
+    ///  · 本局还没打过一场（快照为空）→ 玩家配置的生命上限，即"开局满血"（如 10/10）
+    ///  · 连配置都读不到 → 返回 false，界面留空
     /// </summary>
     private static bool TryGetRunHealth(out int current, out int max)
     {
@@ -500,9 +509,35 @@ public class EventPanel : MonoBehaviour
             return true;
         }
 
+        // 开局事件（「实验开始」在 Start 场景里弹，此时既没有玩家也没有快照）：
+        // 本局从这里开始，所以按玩家配置的生命上限视作满血开局。
+        UnitData playerConfig = GetPlayerConfig();
+        if (playerConfig != null)
+        {
+            max = Mathf.Max(1, playerConfig.maxHealth);
+            current = max;
+            return true;
+        }
+
         current = 0;
         max = 0;
         return false;
+    }
+
+    /// <summary>
+    /// 读玩家单位配置（Resources/玩家），只加载一次后复用。
+    /// 取不到返回 null，调用方按"没有血量可显示"处理。
+    /// 具体数值（生命上限）由策划在 Inspector 里改，代码不存固定值。
+    /// </summary>
+    private static UnitData GetPlayerConfig()
+    {
+        if (playerDataLoaded) return cachedPlayerData;
+        playerDataLoaded = true;
+        cachedPlayerData = Resources.Load<UnitData>(PlayerDataResourceName);
+        if (cachedPlayerData == null)
+            Debug.LogWarning("[EventPanel] Resources/" + PlayerDataResourceName +
+                " 缺失，开局事件取不到玩家生命上限，血量数字会留空");
+        return cachedPlayerData;
     }
 
     // ══════════════════════════════════════════════════════════
