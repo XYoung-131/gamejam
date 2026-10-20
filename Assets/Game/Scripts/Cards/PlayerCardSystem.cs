@@ -538,8 +538,7 @@ public class PlayerCardSystem : MonoBehaviour
 
         if (card.IsAttack && card.attackTargetRule != AttackTargetRule.单位)
         {
-            Debug.Log($"【{card.cardName}】需要按范围选格使用");
-            return false;
+            return Fail($"【{card.cardName}】是范围技能，需要点击地图选格释放");
         }
 
         // 确定最终目标（攻击卡/对敌防御卡→敌人；自身防御卡→自己）
@@ -561,10 +560,13 @@ public class PlayerCardSystem : MonoBehaviour
         EventManager.Trigger("CardUsed", card, player, finalTarget);
 
         // 出牌成功后扣减使用次数（maxUses<=0 的无限卡不扣）
+        // 愤怒之拳：策划原文是"若自身血量低于一半，伤害+2，**且**攻击后 25% 概率不消耗次数" ——
+        // 25% 是挂在"低血量"这个前提下的，血量健康时不该白送次数。
+        bool lowHealth = player.GetCurrentHealth() * 2 < player.GetMaxHealth();
         bool keepUse = (card.attackEffectRule == AttackEffectRule.击杀返还使用次数 &&
                         outcome.KilledTarget) ||
                        (card.attackEffectRule == AttackEffectRule.低血量增伤概率保留次数 &&
-                        AttackEffectMath.RollSucceeds(Random.value, 0.25f));
+                        lowHealth && AttackEffectMath.RollSucceeds(Random.value, 0.25f));
         if (!keepUse) DecrementSlotUse(slotIndex);
         return true;
     }
@@ -582,19 +584,15 @@ public class PlayerCardSystem : MonoBehaviour
             return false;
 
         if (card.attackTargetRule != AttackTargetRule.单位)
-            return false;
+            return Fail($"【{card.cardName}】是范围技能，不能只对单个障碍物使用");
 
         if (obstacle == null)
-        {
-            Debug.Log("目标障碍物不存在");
-            return false;
-        }
+            return Fail("目标障碍物不存在（可能已经被摧毁）");
 
         // 只有攻击卡且允许打障碍物才行（防御/增益卡不能对障碍物用）
         if (!card.IsAttack || !card.CanTargetObstacle)
         {
-            Debug.Log($"【{card.cardName}】不能以障碍物为目标");
-            return false;
+            return Fail($"【{card.cardName}】不能以障碍物为目标");
         }
 
         // 射程校验（单位和障碍物都用六边形坐标算距离）
@@ -627,20 +625,23 @@ public class PlayerCardSystem : MonoBehaviour
         if (!ValidateSlot(slotIndex, out CardData card) || HexGrid.Instance == null || selectedCells == null)
             return false;
         if (card.attackTargetRule == AttackTargetRule.单位)
-            return false;
-        if (!card.IsAttack || !card.CanTargetUnit) return false;
+            return Fail($"【{card.cardName}】是单体技能，请直接点击目标单位释放");
+        if (!card.IsAttack || !card.CanTargetUnit)
+            return Fail($"【{card.cardName}】不是可对敌方范围释放的攻击技能");
 
         var area = new List<AttackAreaCell>();
         Unit firstTarget = null;
         if (card.attackTargetRule == AttackTargetRule.多个单位)
         {
             int maxTargets = Mathf.Max(1, card.maxSelectedTargets);
-            if (selectedCells.Count < 1 || selectedCells.Count > maxTargets) return false;
+            if (selectedCells.Count < 1 || selectedCells.Count > maxTargets)
+                return Fail($"【{card.cardName}】需要选择 1~{maxTargets} 个目标");
             var unique = new HashSet<HexCoord>();
             foreach (HexCoord coord in selectedCells)
             {
-                if (!unique.Add(coord)) return false;
-                if (!card.CanSelectAttackCell(player, coord)) return false;
+                if (!unique.Add(coord)) return Fail("同一个目标不能重复选择");
+                if (!card.CanSelectAttackCell(player, coord))
+                    return Fail($"这一格无法被【{card.cardName}】选中");
                 HexCell cell = HexGrid.Instance.GetCell(coord);
                 Unit target = cell.occupyUnit;
                 if (!ValidateCardTargeting(card, target)) return false;
@@ -650,20 +651,26 @@ public class PlayerCardSystem : MonoBehaviour
         }
         else if (card.attackTargetRule == AttackTargetRule.相邻地块定向扇形)
         {
-            if (selectedCells.Count != 1) return false;
+            if (selectedCells.Count != 1) return Fail($"【{card.cardName}】需要选择 1 个方向格");
             HexCoord chosen = selectedCells[0];
             if (HexGrid.Instance.GetCell(chosen) == null || player.GetCoord().Distance(chosen) != 1)
-                return false;
+                return Fail($"【{card.cardName}】只能选择自己相邻的一格作为扇形方向");
             area.AddRange(card.GetAttackArea(player, chosen));
         }
         else if (card.attackTargetRule == AttackTargetRule.地块 ||
                  card.attackTargetRule == AttackTargetRule.穿透单位 ||
                  card.attackTargetRule == AttackTargetRule.连锁单位)
         {
-            if (selectedCells.Count != 1 || !card.CanSelectAttackCell(player, selectedCells[0])) return false;
+            if (selectedCells.Count != 1 || !card.CanSelectAttackCell(player, selectedCells[0]))
+                return Fail($"这一格无法被【{card.cardName}】选中");
             HexCoord chosen = selectedCells[0];
-            if (card.tags.Contains(CardTag.远程) && !card.ignoresLineBlock &&
-                (HexGrid.Instance.IsLineBlocked(player.GetCoord(), chosen) || HexGrid.Instance.IsCellSmoky(chosen))) return false;
+            if (card.tags.Contains(CardTag.远程) && !card.ignoresLineBlock)
+            {
+                if (HexGrid.Instance.IsLineBlocked(player.GetCoord(), chosen))
+                    return Fail($"【{card.cardName}】是远程技能，你和目标之间有单位或障碍物阻挡");
+                if (HexGrid.Instance.IsCellSmoky(chosen))
+                    return Fail($"目标格处于烟雾中，【{card.cardName}】无法锁定它");
+            }
             HexCell cell = HexGrid.Instance.GetCell(chosen);
             firstTarget = cell != null ? cell.occupyUnit : null;
             area.AddRange(card.GetAttackArea(player, chosen));
@@ -673,12 +680,22 @@ public class PlayerCardSystem : MonoBehaviour
                  card.attackTargetRule == AttackTargetRule.全场随机 ||
                  card.attackTargetRule == AttackTargetRule.固定地图图案)
         {
-            if (selectedCells.Count != 0) return false;
+            if (selectedCells.Count != 0)
+                return Fail($"【{card.cardName}】不用选格，直接释放即可");
             area.AddRange(card.GetAttackArea(player, player.GetCoord(), Random.Range(0, 4)));
+
+            // 范围里一个目标都没有 → 不扣耐力、不扣次数，直接告诉玩家为什么放空。
+            // 地块/穿透/固定图案不放这条判定：它们打的是"格子"本身，空放也是有效的。
+            // （全场 / 全场随机 的 GetAttackArea 本身只返回有单位的格子，所以这个判定对它们同样成立）
+            if ((card.attackTargetRule == AttackTargetRule.自身范围 ||
+                 card.attackTargetRule == AttackTargetRule.全场 ||
+                 card.attackTargetRule == AttackTargetRule.全场随机) &&
+                !AreaHasAnyTarget(card, area))
+                return Fail($"【{card.cardName}】范围内没有任何目标，白白消耗耐力，已取消");
         }
         else
         {
-            return false;
+            return Fail($"【{card.cardName}】的选格规则无法识别，暂时不支持释放");
         }
 
         if (!player.TrySpendStamina(card.GetPlayActionCost(player))) return false;
@@ -692,15 +709,22 @@ public class PlayerCardSystem : MonoBehaviour
 
     public virtual bool TryUseDefenseCardOnCells(int slotIndex, IReadOnlyList<HexCoord> selected)
     {
-        if (!ValidateSlot(slotIndex, out CardData card) || card.IsAttack ||
-            !DefenseSkillResolver.CanResolve(card, player, selected)) return false;
+        if (!ValidateSlot(slotIndex, out CardData card)) return false;
+        if (card.IsAttack)
+            return Fail($"【{card.cardName}】是攻击技能，请点击敌方单位释放");
+        if (!DefenseSkillResolver.CanResolve(card, player, selected))
+            return Fail(DefenseSkillResolver.LastFailureReason ??
+                        $"【{card.cardName}】的目标不合法");
         int staminaCost = player.DefenseState.GetStaminaCost(card, player);
         if (!player.TrySpendStamina(staminaCost)) return false;
         EventManager.Trigger("PlayerCardAboutToResolve", card, player);
         if (!DefenseSkillResolver.Resolve(card, player, selected))
         {
-            player.RestoreStamina(staminaCost);
-            return false;
+            // 结算失败：耐力退回，**行动次数也一起退回**。
+            // 原来只退耐力，而 TrySpendStamina 已经给 actionsThisTurn +1，
+            // 带「黑鹅项圈」（每回合 5 次）时一次失败会白吃一次行动额度。
+            player.RefundAction(staminaCost);
+            return Fail($"【{card.cardName}】结算失败，已退还耐力");
         }
         Unit target = selected.Count > 0 && HexGrid.Instance != null
             ? HexGrid.Instance.GetCell(selected[0])?.occupyUnit : player;
@@ -725,18 +749,15 @@ public class PlayerCardSystem : MonoBehaviour
         if (card == null || !card.IsAttack) return false;
         if (!CanActNow())
         {
-            Debug.Log("不是玩家行动阶段，不能使用技能");
-            return false;
+            return Fail("现在不是你的行动阶段，无法使用技能");
         }
         if (player.HasEffect(BuffEffectType.禁止行动))
         {
-            Debug.Log("被禁止行动，无法使用技能");
-            return false;
+            return Fail("你被禁止行动（眩晕等），本回合无法使用技能");
         }
         if (card.attackTargetRule != AttackTargetRule.单位)
         {
-            Debug.Log($"【{card.cardName}】不是单体技能，无法走基础技能入口");
-            return false;
+            return Fail($"【{card.cardName}】不是单体技能，不能这样释放");
         }
 
         Unit finalTarget = ResolveTarget(card, target);
@@ -766,15 +787,15 @@ public class PlayerCardSystem : MonoBehaviour
         if (card == null || card.IsAttack || HexGrid.Instance == null || selected == null) return false;
         if (!CanActNow())
         {
-            Debug.Log("不是玩家行动阶段，不能使用技能");
-            return false;
+            return Fail("现在不是你的行动阶段，无法使用技能");
         }
         if (player.HasEffect(BuffEffectType.禁止行动))
         {
-            Debug.Log("被禁止行动，无法使用技能");
-            return false;
+            return Fail("你被禁止行动（眩晕等），本回合无法使用技能");
         }
-        if (!DefenseSkillResolver.CanResolve(card, player, selected)) return false;
+        if (!DefenseSkillResolver.CanResolve(card, player, selected))
+            return Fail(DefenseSkillResolver.LastFailureReason ??
+                        $"【{card.cardName}】的落点不合法");
 
         int staminaCost = player.DefenseState.GetStaminaCost(card, player);
         if (!player.TrySpendStamina(staminaCost)) return false;
@@ -782,8 +803,9 @@ public class PlayerCardSystem : MonoBehaviour
         EventManager.Trigger("PlayerCardAboutToResolve", card, player);
         if (!DefenseSkillResolver.Resolve(card, player, selected))
         {
-            player.RestoreStamina(staminaCost);   // 结算失败要退费
-            return false;
+            // 结算失败：耐力和行动次数一起退回（详见 TryUseDefenseCardOnCells 里的说明）
+            player.RefundAction(staminaCost);
+            return Fail($"【{card.cardName}】结算失败，已退还耐力");
         }
         Unit target = selected.Count > 0 ? HexGrid.Instance.GetCell(selected[0])?.occupyUnit : player;
         EventManager.Trigger("CardUsed", card, player, target);
@@ -829,14 +851,12 @@ public class PlayerCardSystem : MonoBehaviour
             // ---------- 攻击卡 ----------
             if (finalTarget == null)
             {
-                Debug.Log("没有可攻击的目标");
-                return false;
+                return Fail("没有可攻击的目标");
             }
 
             if (!card.CanTargetUnit)
             {
-                Debug.Log($"【{card.cardName}】不能以敌方单位为目标");
-                return false;
+                return Fail($"【{card.cardName}】不能以敌方单位为目标");
             }
 
             return true;
@@ -848,8 +868,7 @@ public class PlayerCardSystem : MonoBehaviour
             // 目标是自己：必须勾了"自身"
             if (!card.CanDefenseSelf)
             {
-                Debug.Log($"【{card.cardName}】不能对自身使用");
-                return false;
+                return Fail($"【{card.cardName}】不能对自身使用");
             }
 
             return true;
@@ -860,15 +879,13 @@ public class PlayerCardSystem : MonoBehaviour
             // 目标是敌人：必须勾了"敌方单位"（精神压制、绊倒等）
             if (!card.CanDefenseEnemy)
             {
-                Debug.Log($"【{card.cardName}】不能以敌方单位为目标");
-                return false;
+                return Fail($"【{card.cardName}】不能以敌方单位为目标");
             }
 
             return true;
         }
 
-        Debug.Log($"【{card.cardName}】没有可用的目标类型");
-        return false;
+        return Fail($"【{card.cardName}】没有勾选任何可用的目标类型");
     }
 
     /// <summary>
@@ -885,16 +902,15 @@ public class PlayerCardSystem : MonoBehaviour
         if (!IsInRange(card, player.GetCoord(), finalTarget.GetCoord()))
             return false;
         if (card.IsAttack && !card.CanSelectAttackCell(player, finalTarget.GetCoord()))
-            return false;
+            return Fail($"【{card.cardName}】无法选中 {finalTarget.data.unitName}（目标类型不符）");
         if (card.IsAttack && card.requiresStraightLine &&
             AttackAreaGeometry.StraightDirection(player.GetCoord(), finalTarget.GetCoord()) < 0)
-            return false;
+            return Fail($"【{card.cardName}】要求目标在同一条直线上");
 
         // "亲密"（攻击目标限制）：名单里的单位不能被选为攻击目标
         if (player.IsAttackTargetForbidden(finalTarget))
         {
-            Debug.Log($"【{card.cardName}】无法将 {finalTarget.data.unitName} 选为攻击目标");
-            return false;
+            return Fail($"【{card.cardName}】无法将 {finalTarget.data.unitName} 选为攻击目标（亲密）");
         }
 
         // 视线：远程技能要求中间没有单位/障碍物，且目标不在烟雾里
@@ -958,28 +974,24 @@ public class PlayerCardSystem : MonoBehaviour
     {
         if (index < 0 || index >= freeCards.Count)
         {
-            Debug.Log("免费技能序号无效");
-            return false;
+            return Fail("免费技能序号无效");
         }
 
         FreeCardCharge charge = freeCards[index];
         if (charge.IsEmpty)
         {
-            Debug.Log("这条免费技能已用完");
-            return false;
+            return Fail("这条免费技能已经用完了");
         }
 
         if (!CanActNow())
         {
-            Debug.Log("不是玩家行动阶段，不能使用技能");
-            return false;
+            return Fail("现在不是你的行动阶段，无法使用技能");
         }
 
         // 被"禁止行动"（眩晕）时同样放不出来
         if (player.HasEffect(BuffEffectType.禁止行动))
         {
-            Debug.Log("被禁止行动，无法出牌");
-            return false;
+            return Fail("你被禁止行动（眩晕等），本回合无法出牌");
         }
 
         CardData card = charge.card;
@@ -989,6 +1001,16 @@ public class PlayerCardSystem : MonoBehaviour
                 ? new[] { target.GetCoord() } : new HexCoord[0];
             return UseFreeDefenseCardOnCells(index, choice);
         }
+
+        // 免费技能也必须守"选格规则"：范围 / 地块 / 全场 / 穿透 / 连锁 这些卡
+        // 走下面这条单体入口只会结算到一个目标（甚至一个都不结算），
+        // 和槽位技能同一张卡的表现完全不一样。这类卡目前没有免费发放的场景，
+        // 先直接拒绝；以后真要发，得补一条"免费技能按格选目标"的入口。
+        if (card.attackTargetRule != AttackTargetRule.单位)
+        {
+            return Fail($"免费技能【{card.cardName}】是范围/选格技能，免费的技能额度不支持这类技能");
+        }
+
         Unit finalTarget = ResolveTarget(card, target);
 
         if (!ValidateCardTarget(card, finalTarget)) return false;
@@ -1010,11 +1032,18 @@ public class PlayerCardSystem : MonoBehaviour
 
     public virtual bool UseFreeDefenseCardOnCells(int index, IReadOnlyList<HexCoord> selected)
     {
-        if (index < 0 || index >= freeCards.Count || freeCards[index].IsEmpty ||
-            !CanActNow() || player.HasEffect(BuffEffectType.禁止行动)) return false;
+        if (index < 0 || index >= freeCards.Count || freeCards[index].IsEmpty)
+            return Fail("这条免费技能不存在，或次数已经用完");
+        if (!CanActNow()) return Fail("现在不是你的行动阶段，无法使用技能");
+        if (player.HasEffect(BuffEffectType.禁止行动))
+            return Fail("你被禁止行动（眩晕等），本回合无法使用技能");
+
         FreeCardCharge charge = freeCards[index];
-        if (charge.card == null || charge.card.IsAttack ||
-            !DefenseSkillResolver.Resolve(charge.card, player, selected)) return false;
+        if (charge.card == null || charge.card.IsAttack)
+            return Fail("这条免费技能不是可以选落点的防御/位移技能");
+        if (!DefenseSkillResolver.Resolve(charge.card, player, selected))
+            return Fail(DefenseSkillResolver.LastFailureReason ??
+                        $"【{charge.card.cardName}】的落点不合法");
         Unit target = selected.Count > 0 && HexGrid.Instance != null
             ? HexGrid.Instance.GetCell(selected[0])?.occupyUnit : player;
         EventManager.Trigger("CardUsed", charge.card, player, target);
@@ -1022,6 +1051,17 @@ public class PlayerCardSystem : MonoBehaviour
         if (charge.IsEmpty) freeCards.RemoveAt(index);
         EventManager.Trigger("FreeCardChanged", this);
         return true;
+    }
+
+    /// <summary>
+    /// 记录失败原因（HUD 弹窗用）并返回 false。
+    /// 出牌链路上的所有校验点都走这里，代替原来"只打 Debug.Log"的裸 return false，
+    /// 否则 UI 拿不到具体原因，只能弹一句含糊的"释放失败"。
+    /// </summary>
+    protected static bool Fail(string reason)
+    {
+        SkillFailure.Set(reason);
+        return false;
     }
 
     /// <summary>
@@ -1034,21 +1074,18 @@ public class PlayerCardSystem : MonoBehaviour
 
         if (!CanActNow())
         {
-            Debug.Log("不是玩家行动阶段，不能出牌");
-            return false;
+            return Fail("现在不是你的行动阶段，无法出牌");
         }
 
         if (slotIndex < 0 || slotIndex >= slots.Count)
         {
-            Debug.Log("槽位序号无效");
-            return false;
+            return Fail("槽位序号无效");
         }
 
         CardSlot slot = slots[slotIndex];
         if (slot.IsEmpty)
         {
-            Debug.Log("该槽位没有技能");
-            return false;
+            return Fail("这个槽位里没有技能");
         }
 
         card = slot.card;
@@ -1056,15 +1093,13 @@ public class PlayerCardSystem : MonoBehaviour
         // 中了"禁止行动"类 buff（眩晕等）不能出牌
         if (player.HasEffect(BuffEffectType.禁止行动))
         {
-            Debug.Log("被禁止行动，无法出牌");
-            return false;
+            return Fail("你被禁止行动（眩晕等），本回合无法出牌");
         }
 
         // 使用次数校验：maxUses > 0 时必须有剩余次数
         if (!slot.CanUse)
         {
-            Debug.Log($"【{card.cardName}】使用次数已用完");
-            return false;
+            return Fail($"【{card.cardName}】的使用次数已用完");
         }
 
         return true;
@@ -1081,8 +1116,7 @@ public class PlayerCardSystem : MonoBehaviour
         int maxRange = card.GetEffectiveMaxRange(player);
         if (distance < card.minRange || distance > maxRange)
         {
-            Debug.Log($"目标距离 {distance} 格，【{card.cardName}】射程为 {card.minRange}~{maxRange} 格");
-            return false;
+            return Fail($"目标距离 {distance} 格，超出【{card.cardName}】的射程 {card.minRange}~{maxRange} 格");
         }
 
         return true;
@@ -1101,17 +1135,38 @@ public class PlayerCardSystem : MonoBehaviour
 
         if (HexGrid.Instance.IsLineBlocked(from, to))
         {
-            Debug.Log($"【{card.cardName}】是远程技能，中间有其他单位/障碍物阻挡");
-            return false;
+            return Fail($"【{card.cardName}】是远程技能，你和目标之间有单位或障碍物阻挡，看不见目标");
         }
 
         if (HexGrid.Instance.IsCellSmoky(to))
         {
-            Debug.Log($"【{card.cardName}】目标处于烟雾中，无法被远程技能选中");
-            return false;
+            return Fail($"目标站在烟雾里，【{card.cardName}】无法锁定它");
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// 这个范围里还有没有"能被打到的东西"（施法者以外的活着的单位，或可摧毁的障碍物）。
+    /// 给「自身范围 / 全场」这类不需要选格的范围技能做空放拦截用：
+    /// 周围一个目标都没有时不该扣耐力、不该扣使用次数。
+    /// </summary>
+    protected virtual bool AreaHasAnyTarget(CardData card, IReadOnlyList<AttackAreaCell> area)
+    {
+        if (area == null || HexGrid.Instance == null) return false;
+        foreach (AttackAreaCell entry in area)
+        {
+            HexCell cell = HexGrid.Instance.GetCell(entry.Coord);
+            if (cell == null) continue;
+
+            // 自己不算"目标"：自身范围技能的中心格永远是施法者自己，
+            // 不排掉的话这个判定永远通过，等于没做拦截。
+            if (cell.occupyUnit != null && cell.occupyUnit != player &&
+                !cell.occupyUnit.IsDead) return true;
+            // 障碍物只有在这张卡能打障碍物时才算"目标"
+            if (card != null && card.CanTargetObstacle && cell.obstacle != null) return true;
+        }
+        return false;
     }
 
     /// <summary>

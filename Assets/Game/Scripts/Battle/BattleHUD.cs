@@ -110,6 +110,11 @@ public class BattleHUD : MonoBehaviour
     private readonly List<Image> relicIcons = new List<Image>();
     private const float relicIconSize = 64f;
     private const float relicIconGap = 5f;
+    // 遗物图标的水平中心 y（= 饮料槽中心，长条 105 高的一半），悬停浮层也按它定位
+    private const float relicRowY = -52.5f;
+    private GameObject relicTooltip;             // 鼠标停在遗物图标上：遗物名 + 效果说明
+    private RectTransform relicTooltipRt;
+    private Text relicTooltipText;
 
     // 技能介绍浮层：底部三个技能槽 / 左侧怪物技能卡 悬停时显示（内容取 CardData.description）
     private GameObject skillTooltip;
@@ -121,6 +126,17 @@ public class BattleHUD : MonoBehaviour
     private GameObject buffTooltip;
     private RectTransform buffTooltipRt;
     private Text buffTooltipText;
+
+    // 玩家 buff 栏：左侧敌人技能栏与耐力槽之间的空白区域，常驻显示主角身上所有 buff。
+    // 无图标素材 → 按极性染色的色块 + buff 名；悬停弹出 buff 说明（复用 buffTooltip）。
+    private GameObject buffBar;
+    private readonly List<RectTransform> buffIcons = new List<RectTransform>();
+    private string buffBarSignature = "";        // 上次刷新的 buff 摘要，变了才重建
+    private const float buffIconSize = 44f;
+    private const float buffIconGap = 4f;
+    private const float buffBarX = 200f;         // 左侧敌人技能栏右缘(约182)与耐力槽左缘(约351)之间
+    private const float buffBarY = -110f;        // 深蓝长条下沿
+    private const float buffBarW = 150f;         // 一行最多放 3 个图标，超出换行
 
     // 当前正在被悬停的来源按钮（技能卡 / 饮料槽 / 待选卡）。
     // UGUI 只在指针真正"移出"时才发 PointerExit，来源物体被隐藏或销毁时不会补发，
@@ -409,6 +425,9 @@ public class BattleHUD : MonoBehaviour
         // ---- 血量槽右侧：遗物图标一列排开（距红圆右缘 10px，每个间隔 5px） ----
         BuildRelicRow();
 
+        // ---- 左侧空白区：主角身上的 buff 常驻显示栏 ----
+        BuildBuffBar();
+
         // ---- 左下角：攻击 / 位移 按钮 + 三张技能插槽 + 右下角插卡按钮 ----
         // （选技能时整组隐藏，只留状态条和"取消"）
         // 注意：必须显式带 RectTransform——纯 Transform 的物体 GetComponent<RectTransform>() 为 null
@@ -548,8 +567,9 @@ public class BattleHUD : MonoBehaviour
         rt.anchorMin = new Vector2(0f, 1f);
         rt.anchorMax = new Vector2(0f, 1f);
         rt.pivot = new Vector2(0f, 0.5f);
-        // 血量槽：左上角 (24,24)、132×132 → 右缘 156，再右移 10px；y 取红圆圆心 -90
-        rt.anchoredPosition = new Vector2(24f + 132f + 10f, -90f);
+        // 血量槽：左上角 (24,24)、132×132 → 右缘 156，再右移 10px；
+        // y 取"饮料槽中心" -52.5（不是红圆圆心 -90）：遗物图标的水平中心要和空饮料槽对齐
+        rt.anchoredPosition = new Vector2(24f + 132f + 10f, relicRowY);
         rt.sizeDelta = new Vector2(620f, relicIconSize);
     }
 
@@ -565,11 +585,22 @@ public class BattleHUD : MonoBehaviour
         // 不够就补图标节点（够用时只重新排位置）
         while (relicIcons.Count < count)
         {
-            Image icon = MakeImage(relicRow.transform, "RelicIcon_" + relicIcons.Count, null, Color.white,
+            int captured = relicIcons.Count;
+            // anchor/pivot 都取 (0,0.5)：anchoredPosition.x 就是"图标左缘距遗物栏左边"的距离，
+            // y=0 让图标垂直居中于遗物栏；栏本身的 y 已经是饮料槽中心，所以两者水平中心对齐。
+            Image icon = MakeImage(relicRow.transform, "RelicIcon_" + captured, null, Color.white,
                 new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), Vector2.zero,
                 new Vector2(relicIconSize, relicIconSize));
             icon.preserveAspect = true;   // 遗物立绘保持原始比例
+            // MakeImage 默认把装饰图的 raycastTarget 关掉（防挡格子点击），
+            // 但遗物图标要收 PointerEnter/Exit 才能弹说明，这里单独打开。
+            icon.raycastTarget = true;
             relicIcons.Add(icon);
+
+            // 悬停回调只在建图标时挂一次（刷新只改图和位置）：
+            // 每次都挂会往同一个 EventTrigger 里堆重复 entry，刷新几次就弹几个浮层。
+            AddHoverTrigger(icon.gameObject,
+                () => ShowRelicTooltip(captured), HideRelicTooltip);
         }
 
         for (int i = 0; i < relicIcons.Count; i++)
@@ -580,12 +611,38 @@ public class BattleHUD : MonoBehaviour
             if (!used) continue;
 
             RelicData relic = relics[i];
+            if (relic.icon == null)
+                Debug.LogWarning($"[BattleHUD] 遗物【{relic.relicName}】的 icon 没有配置（或引用丢失），长条上只能用色块占位");
             relicIcons[i].sprite = relic.icon;
             // 没有配图标的遗物先用浅色方块占位，至少能看出"有这一件"
             relicIcons[i].color = relic.icon != null ? Color.white : new Color(0.78f, 0.84f, 0.95f, 0.9f);
             relicIcons[i].rectTransform.anchoredPosition =
                 new Vector2(i * (relicIconSize + relicIconGap), 0f);
         }
+    }
+
+    // 遗物栏的每帧刷新签名：实例 ID + 图标 ID 变了才重建，
+    // 兜底一切"漏掉 RelicChanged 事件"的时序（结算面板发遗物 / 跨场景快照恢复等）。
+    private string relicIconSignature = "";
+
+    private void RefreshRelicIconsIfChanged()
+    {
+        if (relicRow == null) return;
+
+        PlayerUnit player = FindObjectOfType<PlayerUnit>();
+        IReadOnlyList<RelicData> relics = player != null ? player.Relics : null;
+        System.Text.StringBuilder sb = new System.Text.StringBuilder();
+        if (relics != null)
+            foreach (RelicData r in relics)
+            {
+                if (r == null) { sb.Append("null;"); continue; }
+                sb.Append(r.GetInstanceID()).Append('|')
+                  .Append(r.icon != null ? r.icon.GetInstanceID() : 0).Append(';');
+            }
+        string sig = sb.ToString();
+        if (sig == relicIconSignature) return;
+        relicIconSignature = sig;
+        RefreshRelicIcons();
     }
 
     /// <summary>药水槽：有药水就换成立绘，没药水（或刚喝完）换回空瓶素材</summary>
@@ -680,6 +737,16 @@ public class BattleHUD : MonoBehaviour
         pt.offsetMax = new Vector2(-14f, -10f);
         potionTooltipText.horizontalOverflow = HorizontalWrapMode.Wrap;
 
+        // 遗物图标悬停浮层（生命槽右侧那排）——深蓝长条里没有多余空间，
+        // 所以挂在长条下沿之外，和药水浮层一样往下弹。
+        relicTooltip = MakeTooltipRoot("RelicTooltip", 360f, out relicTooltipRt);
+        relicTooltipText = MakeText(relicTooltip.transform, "", 18, TextAnchor.UpperLeft, Color.white);
+        RectTransform rtt = relicTooltipText.rectTransform;
+        Stretch(rtt);
+        rtt.offsetMin = new Vector2(14f, 10f);
+        rtt.offsetMax = new Vector2(-14f, -10f);
+        relicTooltipText.horizontalOverflow = HorizontalWrapMode.Wrap;
+
         skillTooltip = MakeTooltipRoot("SkillTooltip", 430f, out skillTooltipRt);
         skillTooltipTitle = MakeText(skillTooltip.transform, "", 22, TextAnchor.MiddleLeft,
             new Color(1f, 0.94f, 0.72f),
@@ -739,12 +806,240 @@ public class BattleHUD : MonoBehaviour
         potionTooltipRt.pivot = new Vector2(0.5f, 1f);
         potionTooltipRt.anchoredPosition = new Vector2(x, -(75f + potionSlotH / 2f + 8f));
         potionTooltip.SetActive(true);
+
+        // 带 buff 效果的药水：第二个弹窗解释 buff（贴在药水浮层正下方）
+        ShowPotionBuffTooltip(potion);
+    }
+
+    /// <summary>药水说明里附带的 buff 解释文本（施加Buff 效果 + 次数惩罚 buff；无则返回 null）</summary>
+    private static string BuildPotionBuffTooltipText(PotionData potion)
+    {
+        if (potion == null) return null;
+
+        List<string> parts = new List<string>();
+        if (potion.effects != null)
+        {
+            foreach (PotionEffect e in potion.effects)
+            {
+                if (e == null || e.effectType != PotionEffectType.施加Buff || e.buff == null) continue;
+                string line = string.IsNullOrEmpty(e.buff.description)
+                    ? "【" + e.buff.buffName + "】"
+                    : "【" + e.buff.buffName + "】\n" + e.buff.description;
+                if (e.buffStacks > 1) line += "\n层数：" + e.buffStacks;
+                parts.Add(line);
+            }
+        }
+        if (potion.HasPenalty && potion.penaltyBuff != null)
+        {
+            string line = "副作用：【" + potion.penaltyBuff.buffName + "】";
+            if (!string.IsNullOrEmpty(potion.penaltyBuff.description))
+                line += "\n" + potion.penaltyBuff.description;
+            parts.Add(line);
+        }
+        return parts.Count > 0 ? string.Join("\n\n", parts) : null;
+    }
+
+    /// <summary>悬停药水槽时：buff 说明浮层贴在药水浮层正下方（没有 buff 则隐藏）</summary>
+    private void ShowPotionBuffTooltip(PotionData potion)
+    {
+        if (buffTooltip == null) return;
+
+        string text = BuildPotionBuffTooltipText(potion);
+        if (string.IsNullOrEmpty(text)) { buffTooltip.SetActive(false); return; }
+
+        buffTooltipText.text = text;
+        const float bw = 360f;
+        buffTooltipRt.sizeDelta = new Vector2(bw, 60f);
+        buffTooltipRt.sizeDelta = new Vector2(bw, Mathf.Max(60f, buffTooltipText.preferredHeight + 20f));
+
+        buffTooltipRt.anchorMin = potionTooltipRt.anchorMin;
+        buffTooltipRt.anchorMax = potionTooltipRt.anchorMax;
+        buffTooltipRt.pivot = new Vector2(0.5f, 0f);   // 顶边贴住药水浮层底边
+        buffTooltipRt.anchoredPosition = new Vector2(
+            potionTooltipRt.anchoredPosition.x,
+            potionTooltipRt.anchoredPosition.y - potionTooltipRt.sizeDelta.y - 6f);
+        buffTooltip.SetActive(true);
     }
 
     private void HidePotionTooltip()
     {
         if (potionTooltip != null) potionTooltip.SetActive(false);
+        if (buffTooltip != null) buffTooltip.SetActive(false);   // 药水附带的 buff 弹窗一起关
     }
+
+    /// <summary>鼠标停在遗物图标上：显示遗物名 + 效果（内容取 RelicData.description）</summary>
+    private void ShowRelicTooltip(int index)
+    {
+        if (relicTooltip == null) return;
+
+        PlayerUnit player = FindObjectOfType<PlayerUnit>();
+        if (player == null || index < 0 || index >= player.Relics.Count) { HideRelicTooltip(); return; }
+
+        RelicData relic = player.Relics[index];
+        if (relic == null) { HideRelicTooltip(); return; }
+
+        relicTooltipText.text = "【" + relic.relicName + "】\n" +
+                                (string.IsNullOrEmpty(relic.description) ? "效果待策划补充" : relic.description);
+
+        const float w = 360f;
+        relicTooltipRt.sizeDelta = new Vector2(w, 120f);   // 先定宽，再按换行后的高度收紧
+        relicTooltipRt.sizeDelta = new Vector2(w, relicTooltipText.preferredHeight + 20f);
+
+        // 挂在图标正下方：图标中心 x = 栏左缘(166) + i×(64+5) + 32，栏 y = 饮料槽中心
+        float cx = 24f + 132f + 10f + index * (relicIconSize + relicIconGap) + relicIconSize / 2f;
+        relicTooltipRt.anchorMin = new Vector2(0f, 1f);
+        relicTooltipRt.anchorMax = new Vector2(0f, 1f);
+        relicTooltipRt.pivot = new Vector2(0.5f, 1f);
+        relicTooltipRt.anchoredPosition = new Vector2(cx, relicRowY - relicIconSize / 2f - 8f);
+        relicTooltip.SetActive(true);
+    }
+
+    private void HideRelicTooltip()
+    {
+        if (relicTooltip != null) relicTooltip.SetActive(false);
+    }
+
+    // ============================================================
+    //   玩家 buff 栏（左侧空白区：敌人技能栏与耐力槽之间）
+    // ============================================================
+
+    /// <summary>建 buff 栏容器（图标由 RefreshBuffBar 按需补建）</summary>
+    private void BuildBuffBar()
+    {
+        buffBar = new GameObject("PlayerBuffBar", typeof(RectTransform));
+        buffBar.transform.SetParent(canvas.transform, false);
+        RectTransform rt = buffBar.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0f, 1f);
+        rt.anchorMax = new Vector2(0f, 1f);
+        rt.pivot = new Vector2(0f, 1f);
+        rt.anchoredPosition = new Vector2(buffBarX, buffBarY);
+        rt.sizeDelta = new Vector2(buffBarW, 200f);
+    }
+
+    /// <summary>主角 buff 列表（无效实例过滤掉）</summary>
+    private static List<BuffInstance> CollectPlayerBuffs()
+    {
+        PlayerUnit player = FindObjectOfType<PlayerUnit>();
+        List<BuffInstance> src = player != null ? player.GetActiveBuffs() : null;
+        List<BuffInstance> result = new List<BuffInstance>();
+        if (src == null) return result;
+        foreach (BuffInstance b in src)
+            if (b != null && b.data != null && !string.IsNullOrEmpty(b.data.buffName))
+                result.Add(b);
+        return result;
+    }
+
+    /// <summary>
+    /// 每帧刷新 buff 栏：签名（名字+层数+剩余回合）没变就跳过，变了才重建图标。
+    /// buff 的增减 / 叠层 / 衰减都体现在签名里，不用逐个事件监听。
+    /// </summary>
+    private void RefreshBuffBar()
+    {
+        if (buffBar == null) return;
+
+        List<BuffInstance> buffs = CollectPlayerBuffs();
+        System.Text.StringBuilder sig = new System.Text.StringBuilder();
+        foreach (BuffInstance b in buffs)
+            sig.Append(b.data.buffName).Append('|').Append(b.currentStacks)
+               .Append('|').Append(b.remainingDuration).Append(';');
+
+        string sigStr = sig.ToString();
+        if (sigStr == buffBarSignature) return;
+        buffBarSignature = sigStr;
+
+        // 重建：先清掉旧图标（数量 / 顺序都可能变，重建比逐个对齐省心）
+        foreach (RectTransform icon in buffIcons)
+            if (icon != null) Destroy(icon.gameObject);
+        buffIcons.Clear();
+
+        buffBar.SetActive(buffs.Count > 0);
+
+        int perRow = Mathf.Max(1, Mathf.FloorToInt((buffBarW + buffIconGap) / (buffIconSize + buffIconGap)));
+        for (int i = 0; i < buffs.Count; i++)
+        {
+            int row = i / perRow;
+            int col = i % perRow;
+            RectTransform icon = CreateBuffIcon(buffs[i],
+                new Vector2(col * (buffIconSize + buffIconGap), -row * (buffIconSize + buffIconGap)));
+            buffIcons.Add(icon);
+        }
+    }
+
+    /// <summary>一个 buff 图标：极性染色块 + 名字（自适应缩字）+ 层数角标，悬停弹说明</summary>
+    private RectTransform CreateBuffIcon(BuffInstance buff, Vector2 pos)
+    {
+        BuffData data = buff.data;
+
+        Image icon = MakeImage(buffBar.transform, "Buff_" + data.buffName, null,
+            data.IsDebuff ? new Color(0.72f, 0.24f, 0.24f, 0.95f)   // 负面：暗红
+                          : new Color(0.22f, 0.55f, 0.38f, 0.95f),  // 正面：墨绿
+            new Vector2(0f, 1f), new Vector2(0f, 1f), pos,
+            new Vector2(buffIconSize, buffIconSize));
+        icon.raycastTarget = true;   // 要收悬停
+
+        // 名字：块内居中，字号自适应（长名缩字，不溢出）
+        Text nameT = MakeText(icon.transform, data.buffName, 15, TextAnchor.MiddleCenter, Color.white,
+            new Vector2(0f, 0f), new Vector2(1f, 1f), Vector2.zero, new Vector2(0.5f, 0.5f), Vector2.zero);
+        nameT.resizeTextForBestFit = true;
+        nameT.resizeTextMaxSize = 15;
+        nameT.resizeTextMinSize = 8;
+
+        // 层数角标（>1 时才显示）
+        if (buff.currentStacks > 1)
+        {
+            Text stackT = MakeText(icon.transform, "×" + buff.currentStacks, 13,
+                TextAnchor.LowerRight, new Color(1f, 0.92f, 0.6f),
+                new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(2f, 1f), new Vector2(0f, 0f),
+                new Vector2(-4f, 16f));
+            stackT.rectTransform.pivot = Vector2.zero;
+        }
+
+        // 悬停：弹出 buff 说明（复用 buffTooltip，贴在图标正下方）
+        int captured = buffIcons.Count;
+        AddHoverTrigger(icon.gameObject,
+            () => ShowBuffIconTooltip(captured), HideSkillTooltip);
+
+        return icon.rectTransform;
+    }
+
+    /// <summary>悬停 buff 图标：名称 + 层数 / 剩余回合 + 描述，浮层贴图标下方</summary>
+    private void ShowBuffIconTooltip(int index)
+    {
+        List<BuffInstance> buffs = CollectPlayerBuffs();
+        if (buffTooltip == null || index < 0 || index >= buffs.Count || buffBar == null) return;
+
+        BuffInstance buff = buffs[index];
+        BuffData data = buff.data;
+
+        string life;
+        if (buff.remainingDuration < 0) life = "永久";
+        else life = "剩余 " + buff.remainingDuration + " 回合";
+        string title = "【" + data.buffName + "】" +
+                       (buff.currentStacks > 1 ? " ×" + buff.currentStacks : "") +
+                       "（" + life + "）";
+        buffTooltipText.text = string.IsNullOrEmpty(data.description)
+            ? title
+            : title + "\n" + data.description;
+
+        const float bw = 360f;
+        buffTooltipRt.sizeDelta = new Vector2(bw, 60f);
+        buffTooltipRt.sizeDelta = new Vector2(bw, Mathf.Max(60f, buffTooltipText.preferredHeight + 20f));
+
+        // buff 栏容器锚在画布左上 (buffBarX, buffBarY)，容器原点在画布局部系里是：
+        //   x = -960 + buffBarX, y = 540 + buffBarY；图标 pos 是相对容器左上角的偏移
+        RectTransform iconRt = buffIcons[index];
+        Vector2 p = iconRt.anchoredPosition;
+        float canvasX = -960f + buffBarX + p.x;
+        float canvasY = 540f + buffBarY + p.y - buffIconSize - 6f;   // 图标底缘再往下 6px
+
+        buffTooltipRt.anchorMin = new Vector2(0.5f, 0.5f);
+        buffTooltipRt.anchorMax = new Vector2(0.5f, 0.5f);
+        buffTooltipRt.pivot = new Vector2(0f, 1f);
+        // 靠屏幕左缘时往右收进屏幕
+        buffTooltipRt.anchoredPosition = new Vector2(Mathf.Max(canvasX, -960f + 10f), canvasY);
+        buffTooltip.SetActive(true);
+    }
+
 
     /// <summary>鼠标停在底部技能插槽卡面：浮层显示在卡面上方</summary>
     private void ShowSlotSkillTooltip(int slotIndex)
@@ -908,6 +1203,7 @@ public class BattleHUD : MonoBehaviour
         tooltipHoverOwner = null;
         HideSkillTooltip();
         HidePotionTooltip();
+        HideRelicTooltip();
     }
 
     /// <summary>
@@ -925,7 +1221,8 @@ public class BattleHUD : MonoBehaviour
     {
         bool visible = (skillTooltip != null && skillTooltip.activeSelf)
                        || (buffTooltip != null && buffTooltip.activeSelf)
-                       || (potionTooltip != null && potionTooltip.activeSelf);
+                       || (potionTooltip != null && potionTooltip.activeSelf)
+                       || (relicTooltip != null && relicTooltip.activeSelf);
         if (!visible) return;
 
         GameObject owner = tooltipHoverOwner;
@@ -1521,6 +1818,25 @@ public class BattleHUD : MonoBehaviour
         if (messagePanel != null) messagePanel.SetActive(false);
     }
 
+    /// <summary>
+    /// 执行一次技能动作，失败时弹窗说明**原因**。
+    ///
+    /// 原因由 PlayerCardSystem（阶段/槽位/次数/射程/视线/亲密）、
+    /// PlayerUnit（耐力/行动次数）、DefenseSkillResolver（防御选格）写进 SkillFailure，
+    /// 这里取一次即清空；万一某条分支没写原因，退回 fallback 那句通用提示。
+    /// </summary>
+    private bool RunCardAction(System.Func<bool> action, string fallback)
+    {
+        if (action == null) return false;
+
+        SkillFailure.Clear();
+        if (action()) return true;
+
+        string reason = SkillFailure.Consume();
+        ShowMessage(string.IsNullOrEmpty(reason) ? fallback : reason);
+        return false;
+    }
+
     /// <summary>插卡按钮：清掉画面上的弹窗，先弹牌堆选择（两个大型按钮）</summary>
     private void OnDrawButtonClicked(int _)
     {
@@ -1715,6 +2031,21 @@ public class BattleHUD : MonoBehaviour
         PlaceBuffTooltipBesideSkill();
     }
 
+    /// <summary>
+    /// 这张牌"实际"要付多少耐力 —— 预检必须和 PlayerCardSystem 的扣费口径一致：
+    ///   · 攻击 / 基础技能：CardData.GetPlayActionCost（"连续拳"这类按本回合已用次数打折）；
+    ///   · 防御技能：DefenseCombatState.GetStaminaCost（"自动屏障"首用 -3）。
+    /// 原来预检一律写 GetFinalActionCost，碰上上面两种折扣就会误报"耐力不足"，
+    /// 明明付得起却连瞄准都进不去。
+    /// </summary>
+    private static int StaminaCostOf(CardData card, PlayerUnit player)
+    {
+        if (card == null) return 0;
+        if (player == null) return card.GetFinalActionCost(null);
+        return card.IsAttack ? card.GetPlayActionCost(player)
+                             : player.DefenseState.GetStaminaCost(card, player);
+    }
+
     private PlayerCardSystem FindCardSystem()
     {
         if (cardSystem == null)
@@ -1742,7 +2073,7 @@ public class BattleHUD : MonoBehaviour
         // 推 / 跳 也要先看耐力：不足直接弹窗，不进入瞄准
         CardData basicCard = target == SelectMode.推 ? pushCard :
                              (target == SelectMode.跳 ? jumpCard : null);
-        if (basicCard != null && player.CurrentStamina < basicCard.GetFinalActionCost(player))
+        if (basicCard != null && player.CurrentStamina < StaminaCostOf(basicCard, player))
         {
             ShowMessage("耐力不足，无法释放技能");
             return;
@@ -1871,18 +2202,25 @@ public class BattleHUD : MonoBehaviour
         if (player == null || card == null) { ExitMode(); return; }
 
         // 耐力不足：直接弹窗，不进入瞄准（否则要等选完格子才在 Console 里失败）
-        if (player.CurrentStamina < card.GetFinalActionCost(player))
+        if (player.CurrentStamina < StaminaCostOf(card, player))
         {
             ExitMode();
             ShowMessage("耐力不足，无法释放技能");
             return;
         }
 
-        // 防御卡且只能对自己用：点插槽直接释放，无需瞄准
-        if (!card.IsAttack && card.defenseTargetRule == DefenseTargetRule.自身)
+        // 防御卡且"对自己用、且空选择就算合法"：点插槽直接释放，无需瞄准。
+        // 这里不能只判断 defenseTargetRule == 自身 —— 还有例外：
+        //   · 神圣祝福：自身带「神圣」时必须选一只小天使（IsValidSelection 要求恰好 1 个目标），
+        //     直接拿空选择去放会 100% 失败，表现为"点了没反应"；
+        //   · 错乱传送之类的自身卡，落点为空时同样要判一次。
+        // 所以用结算器自己的 CanResolve(空选择) 当判据：它说行才走快捷释放。
+        if (!card.IsAttack && card.defenseTargetRule == DefenseTargetRule.自身 &&
+            DefenseSkillResolver.CanResolve(card, player, new HexCoord[0]))
         {
-            bool ok = cardSystem.UseSlotCard(slotIndex, player);
-            ShowStatus(ok ? "对自身使用【" + card.cardName + "】" : "释放失败（耐力不足或次数耗尽）");
+            bool ok = RunCardAction(() => cardSystem.UseSlotCard(slotIndex, player),
+                $"【{card.cardName}】释放失败");
+            if (ok) ShowStatus("对自身使用【" + card.cardName + "】");
             mode = SelectMode.无;
             aimSlot = -1;
             return;
@@ -1963,11 +2301,17 @@ public class BattleHUD : MonoBehaviour
         if (cardSystem == null || aimSlot < 0 || aimSlot >= cardSystem.Slots.Count) { ExitMode(); return; }
         CardSlot slot = cardSystem.Slots[aimSlot];
         CardData card = slot.card;
-        if (card == null || !slot.CanUse) { ExitMode(); return; }
+        if (card == null) { ExitMode(); return; }
+        if (!slot.CanUse)
+        {
+            ExitMode();
+            ShowMessage($"【{card.cardName}】的使用次数已经用完");
+            return;
+        }
 
         // 兜底：瞄准期间耐力被扣（buff 等）导致不足时，弹窗而不是只打 Console
         PlayerUnit caster = FindObjectOfType<PlayerUnit>();
-        if (caster != null && caster.CurrentStamina < card.GetFinalActionCost(caster))
+        if (caster != null && caster.CurrentStamina < StaminaCostOf(card, caster))
         {
             ExitMode();
             ShowMessage("耐力不足，无法释放技能");
@@ -1977,9 +2321,13 @@ public class BattleHUD : MonoBehaviour
         // ---------- 防御/增益卡：点击合法目标格（自身型已在进槽时直接释放） ----------
         if (!card.IsAttack)
         {
-            bool ok = cardSystem.TryUseDefenseCardOnCells(aimSlot, new[] { cell.coord });
-            ShowStatus(ok ? "【" + card.cardName + "】已释放" : "目标不符或耐力不足");
-            if (ok) ExitMode();
+            bool ok = RunCardAction(() => cardSystem.TryUseDefenseCardOnCells(aimSlot, new[] { cell.coord }),
+                $"【{card.cardName}】释放失败");
+            if (ok)
+            {
+                ShowStatus("【" + card.cardName + "】已释放");
+                ExitMode();
+            }
             return;
         }
 
@@ -1991,11 +2339,17 @@ public class BattleHUD : MonoBehaviour
             {
                 Unit target = cell.occupyUnit;
                 if (target is EnemyUnit && !target.IsDead)
-                    done = cardSystem.UseSlotCard(aimSlot, target);
+                    done = RunCardAction(() => cardSystem.UseSlotCard(aimSlot, target),
+                        $"【{card.cardName}】释放失败");
                 else if (cell.obstacle != null && card.CanTargetObstacle)
-                    done = cardSystem.UseSlotCardOnObstacle(aimSlot, cell.obstacle);
-                else { ShowStatus("请点击高亮的敌方单位"); return; }
-                ShowStatus(done ? "【" + card.cardName + "】已释放" : "释放失败（射程/视线/耐力）");
+                    done = RunCardAction(() => cardSystem.UseSlotCardOnObstacle(aimSlot, cell.obstacle),
+                        $"【{card.cardName}】无法攻击这个障碍物");
+                else
+                {
+                    ShowMessage("请点击高亮的敌方单位");
+                    return;
+                }
+                if (done) ShowStatus("【" + card.cardName + "】已释放");
                 break;
             }
             case AttackTargetRule.多个单位:
@@ -2003,15 +2357,22 @@ public class BattleHUD : MonoBehaviour
                 Unit target = cell.occupyUnit;
                 if (!(target is EnemyUnit) || target.IsDead ||
                     !card.CanSelectAttackCell(FindObjectOfType<PlayerUnit>(), cell.coord))
-                { ShowStatus("请点击高亮的敌方单位"); return; }
+                {
+                    ShowMessage("请点击高亮的敌方单位");
+                    return;
+                }
 
                 int maxTargets = Mathf.Max(1, card.maxSelectedTargets);
                 if (pendingAimCells.Contains(cell.coord) || pendingAimCells.Count >= maxTargets)
                 {
                     // 再点已选目标或选满 → 确认释放
-                    done = cardSystem.UseSlotCardOnCells(aimSlot, pendingAimCells);
-                    ShowStatus(done ? "【" + card.cardName + "】已释放" : "释放失败（射程/视线/耐力）");
-                    if (done) pendingAimCells.Clear();
+                    done = RunCardAction(() => cardSystem.UseSlotCardOnCells(aimSlot, pendingAimCells),
+                        $"【{card.cardName}】释放失败");
+                    if (done)
+                    {
+                        pendingAimCells.Clear();
+                        ShowStatus("【" + card.cardName + "】已释放");
+                    }
                 }
                 else
                 {
@@ -2028,14 +2389,16 @@ public class BattleHUD : MonoBehaviour
             case AttackTargetRule.穿透单位:
             case AttackTargetRule.连锁单位:
             {
-                done = cardSystem.UseSlotCardOnCells(aimSlot, new[] { cell.coord });
-                ShowStatus(done ? "【" + card.cardName + "】已释放" : "该格不是有效目标，或耐力不足");
+                done = RunCardAction(() => cardSystem.UseSlotCardOnCells(aimSlot, new[] { cell.coord }),
+                    $"【{card.cardName}】无法对这一格释放");
+                if (done) ShowStatus("【" + card.cardName + "】已释放");
                 break;
             }
             default:   // 自身范围 / 全场 / 全场随机 / 固定地图图案
             {
-                done = cardSystem.UseSlotCardOnCells(aimSlot, new HexCoord[0]);
-                ShowStatus(done ? "【" + card.cardName + "】已释放" : "释放失败（耐力不足或行动受限）");
+                done = RunCardAction(() => cardSystem.UseSlotCardOnCells(aimSlot, new HexCoord[0]),
+                    $"【{card.cardName}】释放失败");
+                if (done) ShowStatus("【" + card.cardName + "】已释放");
                 break;
             }
         }
@@ -2102,6 +2465,8 @@ public class BattleHUD : MonoBehaviour
     {
         GuardTooltips();     // 先兜底关掉该关的悬停浮层，再处理本帧输入
         RefreshHud();
+        RefreshBuffBar();
+        RefreshRelicIconsIfChanged();
         RefreshEnemyPlannedLabels();
 
         // 灌注确认 / 提示弹窗打开时：Esc / 右键关闭（模态，其它输入不处理）
@@ -2214,7 +2579,7 @@ public class BattleHUD : MonoBehaviour
             Unit target = cell.occupyUnit;
             if (!(target is EnemyUnit) || target.IsDead)
             {
-                ShowStatus($"格({cell.coord.q},{cell.coord.r})没有敌人");
+                ShowMessage("推 只能对敌方单位使用：这一格没有敌人");
                 return;
             }
             PlayerCardSystem cards = FindCardSystem();
@@ -2224,25 +2589,24 @@ public class BattleHUD : MonoBehaviour
                 return;
             }
             // 耐力不足：弹窗（推的消耗）
-            if (player.CurrentStamina < pushCard.GetFinalActionCost(player))
+            if (player.CurrentStamina < StaminaCostOf(pushCard, player))
             {
                 ExitMode();
                 ShowMessage("耐力不足，无法释放技能");
                 return;
             }
-            if (cards.UseBasicAttack(pushCard, target))
+            if (RunCardAction(() => cards.UseBasicAttack(pushCard, target), "推 释放失败"))
             {
                 ShowStatus($"推：对 {target.data.unitName} 造成 {pushCard.damage} 伤害并击退");
                 ExitMode();
             }
-            else ShowStatus("推 释放失败（耐力不足 / 目标不合法，详见 Console）");
         }
         else if (mode == SelectMode.跳)
         {
             // 只允许点绿圈内的格子（CanStopOn = 可通行 + 无单位 + 无阻挡障碍）
             if (!cell.CanStopOn(player))
             {
-                ShowStatus($"格({cell.coord.q},{cell.coord.r})不可落脚");
+                ShowMessage("跳 的落点必须是高亮的空格（不能有单位或阻挡物）");
                 return;
             }
             PlayerCardSystem cards = FindCardSystem();
@@ -2252,18 +2616,17 @@ public class BattleHUD : MonoBehaviour
                 return;
             }
             // 耐力不足：弹窗（跳的消耗）
-            if (player.CurrentStamina < jumpCard.GetFinalActionCost(player))
+            if (player.CurrentStamina < StaminaCostOf(jumpCard, player))
             {
                 ExitMode();
                 ShowMessage("耐力不足，无法释放技能");
                 return;
             }
-            if (cards.UseBasicDefense(jumpCard, new[] { cell.coord }))
+            if (RunCardAction(() => cards.UseBasicDefense(jumpCard, new[] { cell.coord }), "跳 释放失败"))
             {
                 ShowStatus($"跳：移动到({cell.coord.q},{cell.coord.r})");
                 ExitMode();
             }
-            else ShowStatus("跳 释放失败（耐力不足 / 落点不合法，详见 Console）");
         }
         else if (mode == SelectMode.技能)
         {
@@ -2400,8 +2763,11 @@ public class BattleHUD : MonoBehaviour
                     hoveredLabel.ShownText = text;
                     hoveredLabel.Content.text = text;
                     float w = Mathf.Clamp(hoveredLabel.Content.preferredWidth + 18f * hoverInfoScale,
-                                          54f * hoverInfoScale, 260f * hoverInfoScale);
-                    hoveredLabel.Root.sizeDelta = new Vector2(w, 26f * hoverInfoScale);
+                                          54f * hoverInfoScale, 320f * hoverInfoScale);
+                    // 带 buff 行会折成两行：高度按实际换行结果撑开
+                    float h = Mathf.Max(26f * hoverInfoScale,
+                                        hoveredLabel.Content.preferredHeight + 10f);
+                    hoveredLabel.Root.sizeDelta = new Vector2(w, h);
                 }
 
                 Vector3 headWorld = hovered.transform.position + HeadOffsetFrom(bounds, hovered.transform.position);
@@ -2479,7 +2845,10 @@ public class BattleHUD : MonoBehaviour
         return best;
     }
 
-    /// <summary>"劈砍 · 撕咬"：本回合预告的技能名，多个用间隔点串起来</summary>
+    /// <summary>
+    /// 头顶悬停标签内容：第一行 = 本回合预告的技能名（间隔点串起），
+    /// 第二行 = 身上的 buff（名称×层数），有 buff 才有第二行。
+    /// </summary>
     private static string BuildPlannedSkillText(EnemyUnit enemy)
     {
         if (enemy == null || enemy.IsDead) return "";
@@ -2490,6 +2859,21 @@ public class BattleHUD : MonoBehaviour
             if (text.Length > 0) text += " · ";
             text += card.cardName;
         }
+
+        string buffs = "";
+        List<BuffInstance> instances = enemy.GetActiveBuffs();
+        if (instances != null)
+        {
+            foreach (BuffInstance b in instances)
+            {
+                if (b == null || b.data == null || string.IsNullOrEmpty(b.data.buffName)) continue;
+                if (buffs.Length > 0) buffs += " · ";
+                buffs += b.data.buffName;
+                if (b.currentStacks > 1) buffs += "×" + b.currentStacks;
+            }
+        }
+        if (buffs.Length > 0)
+            text = string.IsNullOrEmpty(text) ? "状态：" + buffs : text + "\n状态：" + buffs;
         return text;
     }
 

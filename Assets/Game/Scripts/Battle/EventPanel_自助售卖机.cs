@@ -55,7 +55,7 @@ public static class EventPanel_自助售卖机
 
     /// <summary>
     /// 三件遗物的资产可能还没建：先把名字登记进"物品名高亮表"，
-    /// 这样选项文案里的 药水腰带 / 草席卷 / 黑鹅项圈 才会变黄 + 加 [] + 下划线。
+    /// 这样选项文案里的 药水腰带 / 草席卷 / 黑鹅项圈 才会变黄 + 加 []。
     /// （必须在 EventPanel.Show 之前登记——面板一旦构建，选项文本就按当时的名字表排好了。）
     /// </summary>
     private static void 预登记遗物名()
@@ -102,17 +102,27 @@ public static class EventPanel_自助售卖机
         string name = 遗物名[已拍次数];
         PlayerUnit player = Object.FindObjectOfType<PlayerUnit>();
 
-        // ① 扣最大耐力上限（少 3/5/7 点）
-        PlayerRunState.ApplyMaxStaminaDelta(player, -cost);
+        if (已持有(name))
+        {
+            // 这件遗物已经拿到过了（战斗结算的思维碎片是从通用池抽的，能抽到这几件）。
+            // 以前这里照样扣最大耐力上限，玩家等于白掉 3/5/7 点上限还什么都没拿到。
+            // 现在只跳过这一档：不扣上限，继续往下一档走。
+            Debug.LogWarning($"[自助售卖机] 已经持有【{name}】，这一档不再扣最大耐力上限（{cost} 点）");
+        }
+        else
+        {
+            // ① 扣最大耐力上限（少 3/5/7 点）
+            PlayerRunState.ApplyMaxStaminaDelta(player, -cost);
 
-        // ② 给对应遗物
-        RelicData relic = 取遗物(name);
-        if (relic != null) PlayerRunState.GrantRelic(player, relic);
+            // ② 给对应遗物
+            RelicData relic = 取遗物(name);
+            if (relic != null) PlayerRunState.GrantRelic(player, relic);
 
-        // ③ 长条上的遗物栏立刻刷新，让玩家看见新拿到的那件
-        EventPanel.RefreshRelics();
+            // ③ 长条上的遗物栏立刻刷新，让玩家看见新拿到的那件
+            EventPanel.RefreshRelics();
 
-        Debug.Log($"[自助售卖机] 第 {已拍次数 + 1} 次拍：最大耐力上限 -{cost}，获得【{name}】");
+            Debug.Log($"[自助售卖机] 第 {已拍次数 + 1} 次拍：最大耐力上限 -{cost}，获得【{name}】");
+        }
 
         已拍次数++;
 
@@ -127,6 +137,17 @@ public static class EventPanel_自助售卖机
         // 还有下一档：只关界面、不推进流程，按新文案重开同一个事件
         EventPanel.CloseWithoutCompleting();
         Rebuild();
+    }
+
+    /// <summary>这件遗物是否已经在玩家身上（无场上玩家时查本局快照）</summary>
+    private static bool 已持有(string name)
+    {
+        RelicData relic = EventItemLibrary.FindRelic(name);
+        if (relic == null) return false;
+
+        PlayerUnit player = Object.FindObjectOfType<PlayerUnit>();
+        if (player != null) return player.HasRelic(relic);
+        return PlayerRunState.Relics.Contains(relic);
     }
 
     /// <summary>取对应遗物资产；资产没建就建一件一次性占位，并登记它的悬停说明</summary>

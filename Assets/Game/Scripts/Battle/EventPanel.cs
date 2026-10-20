@@ -45,6 +45,9 @@ public class EventPanel : MonoBehaviour
     private const float slotMinW = 540f;     // 选项槽宽度下限（360×1.5）
     private const float slotFixedW = 840f;   // 选项槽固定宽度：所有事件统一，不再按字数适配
     private const float slotTextPad = 20f;   // 选项文本左边距（左端对齐的那条线）
+    // 选项里物品名的高亮色（富文本 <color=#> 用，不带 #）
+    // 浅灰槽底上用较深一点的金黄，不加描边也有对比度
+    private const string ItemColorHex = "D99A00";
     private const float descTopGap = 20f;    // 描述文本顶部距框上侧
 
     /// <summary>描述文本左缘（框左起）＝ 选项槽最左侧，由 BuildOptions/占位槽写入</summary>
@@ -133,6 +136,11 @@ public class EventPanel : MonoBehaviour
     private void Awake()
     {
         instance = this;
+
+        // 每次打开事件都按当前资产重扫一遍物品名表：
+        // 策划新加了遗物 / 药水（或改了名字）后，选项里的黄字和悬停说明立刻跟上，
+        // 不用退出播放模式重进。补登过的名字（extraItems）重建时会自动补回。
+        RebuildItemTable();
 
 #if UNITY_EDITOR
         const string uiDir = "Assets/Game/Art/UI/";
@@ -320,20 +328,10 @@ public class EventPanel : MonoBehaviour
                 new Vector2(ws[i], slotH),
                 actions != null && actions[i] != null ? () => actions[captured](captured) :
                     (UnityEngine.Events.UnityAction)(() => { /* TODO: 接选项效果 */ }));
-            // 选项文本分段渲染：遗物/药水名 → 黄字 + [] + 下划线，悬停弹效果
+            // 选项文本分段渲染：遗物/药水名 → 黄字 + []，悬停弹效果
             BuildRichOptionLabel(slot.image.rectTransform, options[i], slot);
             optionSlots.Add(slot.image.rectTransform);
         }
-    }
-
-    /// <summary>估算一行文本宽度（中文按字号 1:1、ASCII 按 0.55 近似）</summary>
-    private static float EstimateTextWidth(string s, int fontSize)
-    {
-        if (string.IsNullOrEmpty(s)) return 0f;
-        float w = 0f;
-        foreach (char c in s)
-            w += c > 0x2E80 ? fontSize : fontSize * 0.55f;
-        return w;
     }
 
     // ══════════════════════════════════════════════════════════
@@ -362,17 +360,25 @@ public class EventPanel : MonoBehaviour
 
     /// <summary>按当前持有遗物刷新图标（获得遗物后由具体事件调用即可）</summary>
     public void RefreshRelicIcons()
-    {        if (relicRow == null) return;
+    {
+        if (relicRow == null) return;
         IReadOnlyList<RelicData> relics = CollectRelics();
         int count = relics != null ? relics.Count : 0;
 
         while (relicIcons.Count < count)
         {
-            Image icon = NewImage(relicRow, "RelicIcon_" + relicIcons.Count, null, Color.white,
+            int captured = relicIcons.Count;
+            Image icon = NewImage(relicRow, "RelicIcon_" + captured, null, Color.white,
                 new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), Vector2.zero,
                 new Vector2(relicIconSize, relicIconSize));
             icon.preserveAspect = true;
+            // pivot 取 (0,0.5) 才是"左缘贴位"，否则默认居中会让整排往左偏半个图标
+            icon.rectTransform.pivot = new Vector2(0f, 0.5f);
+            icon.raycastTarget = true;      // 要收悬停，不能像装饰图那样关掉射线
             relicIcons.Add(icon);
+
+            // 悬停只挂一次；显示内容按序号实时取，刷新后依然指向正确的遗物
+            AddHover(icon.gameObject, () => ShowRelicTip(captured), HideItemTip);
         }
 
         for (int i = 0; i < relicIcons.Count; i++)
@@ -386,12 +392,20 @@ public class EventPanel : MonoBehaviour
             relicIcons[i].sprite = relic.icon;
             relicIcons[i].color = relic.icon != null ? Color.white : new Color(0.95f, 0.85f, 0.4f, 1f);
             relicIcons[i].rectTransform.anchoredPosition = new Vector2(i * (relicIconSize + 5f), 0f);
-
-            RelicData captured = relic;
-            AddHover(relicIcons[i].gameObject,
-                () => ShowItemTip(captured.relicName, captured.description),
-                HideItemTip);
         }
+    }
+
+    /// <summary>悬停遗物图标：显示名称 + 效果（内容按序号实时取，图标刷新后不会串）</summary>
+    private void ShowRelicTip(int index)
+    {
+        IReadOnlyList<RelicData> relics = CollectRelics();
+        if (relics == null || index < 0 || index >= relics.Count) { HideItemTip(); return; }
+
+        RelicData relic = relics[index];
+        if (relic == null) { HideItemTip(); return; }
+
+        ShowItemTip(relic.relicName,
+            string.IsNullOrEmpty(relic.description) ? "效果待策划补充" : relic.description);
     }
 
     /// <summary>静态入口：事件里获得遗物后调用，立即刷新长条上的遗物栏</summary>
@@ -401,7 +415,7 @@ public class EventPanel : MonoBehaviour
     }
 
     // ══════════════════════════════════════════════════════════
-    //  选项文本：遗物 / 药水名特殊显示（黄字 + [] + 下划线 + 悬停效果）
+    //  选项文本：遗物 / 药水名特殊显示（黄字 + [] + 悬停效果）
     // ══════════════════════════════════════════════════════════
 
     private sealed class ItemInfo
@@ -419,6 +433,9 @@ public class EventPanel : MonoBehaviour
 
     private static List<ItemInfo> itemInfos;
 
+    /// <summary>运行时补登的物品名（名 → 说明），表重建后自动补回</summary>
+    private static readonly Dictionary<string, string> extraItems = new Dictionary<string, string>();
+
     /// <summary>遗物 / 药水名称表（名称长度降序，保证长名优先匹配）</summary>
     private static List<ItemInfo> ItemInfos
     {
@@ -426,28 +443,53 @@ public class EventPanel : MonoBehaviour
         {
             if (itemInfos != null) return itemInfos;
             itemInfos = new List<ItemInfo>();
-#if UNITY_EDITOR
-            foreach (string guid in UnityEditor.AssetDatabase.FindAssets("t:RelicData"))
-            {
-                string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
-                RelicData relic = UnityEditor.AssetDatabase.LoadAssetAtPath<RelicData>(path);
+
+            // 数据源统一走 EventItemLibrary：
+            //   编辑器里扫工程内全部 t:RelicData / t:PotionData；
+            //   打包版本没有 AssetDatabase，退回 LootSystem 的遗物池 / 药水池。
+            // 早先这里只在 UNITY_EDITOR 下建表，出包后整张表是空的 ——
+            // 选项里的物品名既不标黄也弹不出说明。
+            foreach (RelicData relic in EventItemLibrary.AllRelics)
                 if (relic != null && !string.IsNullOrEmpty(relic.relicName))
-                    itemInfos.Add(new ItemInfo { name = relic.relicName, desc = relic.description, isRelic = true });
-            }
-            foreach (string guid in UnityEditor.AssetDatabase.FindAssets("t:PotionData"))
-            {
-                string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
-                PotionData potion = UnityEditor.AssetDatabase.LoadAssetAtPath<PotionData>(path);
+                    itemInfos.Add(new ItemInfo
+                    {
+                        name = relic.relicName,
+                        desc = string.IsNullOrEmpty(relic.description) ? "效果待策划补充" : relic.description,
+                        isRelic = true
+                    });
+
+            foreach (PotionData potion in EventItemLibrary.AllPotions)
                 if (potion != null && !string.IsNullOrEmpty(potion.potionName))
-                    itemInfos.Add(new ItemInfo { name = potion.potionName, desc = potion.description, isRelic = false });
-            }
-#endif
+                    itemInfos.Add(new ItemInfo
+                    {
+                        name = potion.potionName,
+                        desc = string.IsNullOrEmpty(potion.description) ? "效果待策划补充" : potion.description,
+                        isRelic = false
+                    });
+
             itemInfos.Sort((a, b) => b.name.Length.CompareTo(a.name.Length));
 
             // 飞书事件文本与资产名不一致的别名：显示原文，取同一资产的描述
             AddAlias("次元抹除", "次元抹杀");
+
+            // 运行时补登的名字（资产还没建出来的）——资产表里没有才补，避免覆盖真描述
+            foreach (KeyValuePair<string, string> extra in extraItems)
+                if (!itemInfos.Exists(i => i.name == extra.Key))
+                    itemInfos.Add(new ItemInfo { name = extra.Key, desc = extra.Value, isRelic = true });
+
+            itemInfos.Sort((a, b) => b.name.Length.CompareTo(a.name.Length));
             return itemInfos;
         }
+    }
+
+    /// <summary>
+    /// 丢掉名称表缓存，下次用时按当前资产重新扫一遍。
+    /// 策划在编辑器里新建 / 改名遗物药水后，不用重进播放模式就能生效。
+    /// </summary>
+    public static void RebuildItemTable()
+    {
+        itemInfos = null;
+        EventItemLibrary.Invalidate();   // 资产表本身也要一起失效，否则扫到的还是旧列表
     }
 
     /// <summary>注册别名（alias 指向已加载的资产名，描述共用）</summary>
@@ -462,15 +504,23 @@ public class EventPanel : MonoBehaviour
 
     /// <summary>
     /// 运行时补登一个物品名（资产还没建出来的遗物/药水用）。
-    /// 登记后选项文本里的这个名字同样会变成"黄字 + [] + 下划线 + 悬停弹效果"。
+    /// 登记后选项文本里的这个名字同样会变成"黄字 + [] + 悬停弹效果"。
     /// 资产一旦建好（同名），会优先用资产的描述，这里不会覆盖。
+    ///
+    /// 登记内容存在 extraItems 里，表被 RebuildItemTable() 重建后会自动补回，
+    /// 不会因为"先登记、后面板才 Awake"的时序丢掉。
     /// </summary>
     public static void RegisterItemName(string name, string description)
     {
         if (string.IsNullOrEmpty(name)) return;
-        if (ItemInfos.Exists(i => i.name == name)) return;
-        itemInfos.Add(new ItemInfo { name = name, desc = description, isRelic = true });
-        itemInfos.Sort((a, b) => b.name.Length.CompareTo(a.name.Length));
+
+        extraItems[name] = string.IsNullOrEmpty(description) ? "效果待策划补充" : description;
+
+        if (itemInfos != null && !itemInfos.Exists(i => i.name == name))
+        {
+            itemInfos.Add(new ItemInfo { name = name, desc = extraItems[name], isRelic = true });
+            itemInfos.Sort((a, b) => b.name.Length.CompareTo(a.name.Length));
+        }
     }
 
     /// <summary>把选项文本按物品名拆段</summary>
@@ -509,65 +559,94 @@ public class EventPanel : MonoBehaviour
         return result;
     }
 
-    /// <summary>估算用：物品名加 [] 之后的纯文本</summary>
-    private static string BuildDisplayText(string text)
-    {
-        if (string.IsNullOrEmpty(text)) return text;
-        System.Text.StringBuilder sb = new System.Text.StringBuilder();
-        foreach (Segment seg in SplitByItems(text))
-        {
-            if (seg.item != null) sb.Append('[').Append(seg.text).Append(']');
-            else sb.Append(seg.text);
-        }
-        return sb.ToString();
-    }
-
-    /// <summary>选项文字分段排版：普通黑字 + 物品名（黄、[]、下划线、悬停弹效果），整体水平居中</summary>
+    /// <summary>
+    /// 选项文字排版：整句用**一个** Text 渲染（富文本只给物品名标黄），
+    /// 物品名再叠一块透明热区接悬停 / 点击。
+    ///
+    /// 之前是"每段一个 Text"横向拼起来，有两个毛病：
+    /// ① 分段 Text 的 rect 宽度是 0（靠 Overflow 撑出视觉文字），
+    ///    UGUI 的射线检测按 rect 判定 → **0 宽永远命中不了**，悬停没有反应；
+    /// ② 几个 Text 各自居中对齐，字宽 / 描边不同，几段拼起来会错开一两个像素。
+    /// 改成一整条文本后，字形、字号、基线天然一致，只有一块文字需要排版。
+    /// </summary>
     private void BuildRichOptionLabel(RectTransform slotRt, string text, Button slotBtn)
     {
         List<Segment> segs = SplitByItems(text ?? "");
         if (segs.Count == 0) return;
 
-        List<Text> labels = new List<Text>();
-        List<float> widths = new List<float>();
+        // ═══ 1. 拼两版文本 ═══
+        // rich：带 <color> 的富文本，给物品名标黄（[] 包裹）
+        // plain：纯文本（无标签），只用来量宽度定热区位置
+        System.Text.StringBuilder rich = new System.Text.StringBuilder();
+        System.Text.StringBuilder plain = new System.Text.StringBuilder();
+        List<int> spanStart = new List<int>();      // 物品名在 plain 里的字符起点
+        List<int> spanLen = new List<int>();
+        List<ItemInfo> spanItem = new List<ItemInfo>();
 
         foreach (Segment seg in segs)
         {
-            Text t = NewSegmentText(slotRt);
-            if (seg.item != null)
+            if (seg.item == null)
             {
-                // 黄字 + 下划线（富文本）；[] 包裹
-                t.text = "<u>[" + seg.text + "]</u>";
-                t.color = new Color(1f, 0.78f, 0.16f);          // 金黄
-                Outline outline = t.gameObject.AddComponent<Outline>();
-                outline.effectColor = new Color(0f, 0f, 0f, 0.85f);   // 浅灰槽底上加深描边保证可读
-                outline.effectDistance = new Vector2(1.2f, -1.2f);
-
-                ItemInfo captured = seg.item;
-                AddHover(t.gameObject,
-                    () => ShowItemTip(captured.name, captured.desc),
-                    HideItemTip);
-                // 名称文字拦住了射线，点击要转发给选项按钮，否则点名字点不动
-                if (slotBtn != null)
-                    AddClick(t.gameObject, () => slotBtn.onClick.Invoke());
-            }
-            else
-            {
-                t.text = seg.text;
-                t.color = Color.black;
-                t.raycastTarget = false;
+                rich.Append(seg.text);
+                plain.Append(seg.text);
+                continue;
             }
 
-            labels.Add(t);
-            widths.Add(t.preferredWidth);
+            string s = "[" + seg.text + "]";
+            spanStart.Add(plain.Length);
+            spanLen.Add(s.Length);
+            spanItem.Add(seg.item);
+            rich.Append("<color=#").Append(ItemColorHex).Append('>').Append(s).Append("</color>");
+            plain.Append(s);
         }
 
-        // 左端对齐：所有选项都从槽内左侧固定边距开始（槽等宽 → 文本左端落在同一条竖线）
-        float x = -slotFixedW / 2f + slotTextPad;
-        for (int i = 0; i < labels.Count; i++)
+        // ═══ 2. 单行文本：左端固定在槽内 slotTextPad 处 ═══
+        float availW = slotFixedW - slotTextPad * 2f;
+        Text t = NewSegmentText(slotRt);
+        t.rectTransform.sizeDelta = new Vector2(availW, 40f);
+        t.rectTransform.anchoredPosition = new Vector2(-slotFixedW / 2f + slotTextPad, 0f);
+        t.color = Color.black;
+        t.raycastTarget = false;      // 只有物品名热区接射线，其余点击穿透给选项槽
+
+        // ═══ 3. 量每个物品名在行内的 x 范围（用同一个 Text 量前缀宽度，单位与排版一致）═══
+        string plainText = plain.ToString();
+        float[] left = new float[spanStart.Count];
+        float[] right = new float[spanStart.Count];
+        for (int i = 0; i < spanStart.Count; i++)
         {
-            labels[i].rectTransform.anchoredPosition = new Vector2(x, 0f);
-            x += widths[i];
+            t.text = plainText.Substring(0, spanStart[i]);
+            left[i] = t.preferredWidth;
+            t.text = plainText.Substring(0, spanStart[i] + spanLen[i]);
+            right[i] = t.preferredWidth;
+        }
+
+        t.text = rich.ToString();     // 最终显示：整句一次渲染（字形基线完全一致）
+
+        // ═══ 4. 物品名热区（全透明图片，能接射线）═══
+        for (int i = 0; i < spanStart.Count; i++)
+        {
+            float w = Mathf.Max(8f, right[i] - left[i]);
+
+            GameObject hit = new GameObject("ItemHit_" + i, typeof(RectTransform));
+            hit.transform.SetParent(t.rectTransform, false);
+            Image img = hit.AddComponent<Image>();
+            img.color = new Color(1f, 1f, 1f, 0f);   // 完全透明：只看得到文字，但能接射线
+            img.raycastTarget = true;
+
+            RectTransform hr = hit.GetComponent<RectTransform>();
+            hr.anchorMin = new Vector2(0f, 0.5f);
+            hr.anchorMax = new Vector2(0f, 0.5f);
+            hr.pivot = new Vector2(0f, 0.5f);        // 文本 rect 的 pivot 也在左边 → x 即"距行首"
+            hr.anchoredPosition = new Vector2(left[i], 0f);
+            hr.sizeDelta = new Vector2(w, 40f);
+
+            ItemInfo captured = spanItem[i];
+            AddHover(hit,
+                () => ShowItemTip(captured.name, captured.desc),
+                HideItemTip);
+            // 热区挡住了射线，点击要转发给选项按钮，否则点名字点不动
+            if (slotBtn != null)
+                AddClick(hit, () => slotBtn.onClick.Invoke());
         }
     }
 
@@ -644,7 +723,9 @@ public class EventPanel : MonoBehaviour
         float bodyH = Mathf.Max(28f, itemTipBody.preferredHeight);
         float total = 12f + 32f + 6f + bodyH + 14f;
         itemTipRt.sizeDelta = new Vector2(w, total);
-        itemTipBody.rectTransform.sizeDelta = new Vector2(-32f, bodyH + 2f);
+        // 正文宽度 = 浮层宽 - 左右内边距；之前误写成 -32f（负宽度），文字一个都排不出来，
+        // 悬停时弹窗里就只剩标题没有描述。
+        itemTipBody.rectTransform.sizeDelta = new Vector2(w - 32f, bodyH + 2f);
 
         // 鼠标位置 → 画布局部坐标（overlay canvas：camera 传 null）
         Vector2 local;

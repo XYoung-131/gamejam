@@ -4,29 +4,59 @@ using UnityEngine;
 /// <summary>玩家与敌人共用的防御牌预验证和结算。</summary>
 public static class DefenseSkillResolver
 {
+    /// <summary>
+    /// 最近一次 CanResolve / Resolve 失败的原因（HUD 弹窗用）。
+    /// 这个类原来只返回 bool，UI 只能弹"目标不符"，具体差在哪儿看不到。
+    /// </summary>
+    public static string LastFailureReason { get; private set; }
+
+    /// <summary>记录失败原因并返回 false（供 `return 条件 || Reject(原因)` 这种写法用）</summary>
+    private static bool Reject(string reason)
+    {
+        LastFailureReason = reason;
+        return false;
+    }
+
     public static bool CanResolve(CardData card, Unit caster, IReadOnlyList<HexCoord> selected)
     {
-        if (card == null || card.IsAttack || caster == null || !caster.CanAttack() ||
-            !caster.DefenseState.CanUse(card) ||
-            !DefenseSkillTargeting.IsValidSelection(card, caster, selected)) return false;
+        if (card == null) return Reject("技能不存在");
+        if (card.IsAttack) return Reject("这是攻击技能，不走防御结算");
+        if (caster == null || !caster.CanAttack()) return Reject("当前无法行动，不能释放技能");
+        if (!caster.DefenseState.CanUse(card))
+            return Reject("本回合的「移动 / 坚守」额度已经用掉，这个防御技能不能再放");
+        if (!DefenseSkillTargeting.IsValidSelection(card, caster, selected))
+            return Reject($"【{card.cardName}】的目标或落点不合法");
+
         switch (card.defenseEffectRule)
         {
             case DefenseEffectRule.步行:
-                return DefenseSkillMath.IsPathWithinSteps(WalkingPath(caster, selected[0]),
+            {
+                bool ok = DefenseSkillMath.IsPathWithinSteps(WalkingPath(caster, selected[0]),
                     card.GetEffectiveMaxRange(caster));
+                return ok || Reject($"【{card.cardName}】的落点超出可移动步数");
+            }
             case DefenseEffectRule.错乱传送:
-                return DefenseSkillTargeting.GetRandomTeleportLandings(card, caster).Count > 0;
+            {
+                bool ok = DefenseSkillTargeting.GetRandomTeleportLandings(card, caster).Count > 0;
+                return ok || Reject("附近没有可传送的落点");
+            }
             case DefenseEffectRule.换位:
+            {
                 Unit other = HexGrid.Instance.GetCell(selected[0]).occupyUnit;
                 HexCell ownCell = HexGrid.Instance.GetCell(caster.GetCoord());
                 HexCell otherCell = HexGrid.Instance.GetCell(selected[0]);
-                return other != null && ownCell != null && otherCell != null &&
+                bool ok = other != null && ownCell != null && otherCell != null &&
                     ownCell.occupyUnit == caster && ownCell.isWalkable && otherCell.isWalkable &&
                     !ownCell.IsBlockedByObstacle() && !otherCell.IsBlockedByObstacle();
+                return ok || Reject("换位要求目标格有单位，且两格都是可通行的空地");
+            }
             case DefenseEffectRule.神圣祝福:
-                return !HasNamedBuff(caster, "神圣") || selected.Count == 1;
+            {
+                bool ok = !HasNamedBuff(caster, "神圣") || selected.Count == 1;
+                return ok || Reject("自身处于「神圣」状态，必须再选一只小天使作为目标");
+            }
             case DefenseEffectRule.投掷织毯:
-                return card.generatedTerrain != null;
+                return card.generatedTerrain != null || Reject("【投掷织毯】还没有配置要生成的地形");
             default:
                 return true;
         }
@@ -59,7 +89,8 @@ public static class DefenseSkillResolver
                 caster.TeleportTo(landings[Random.Range(0, landings.Count)]);
                 break;
             case DefenseEffectRule.换位:
-                if (!caster.TrySwapWith(HexGrid.Instance.GetCell(selected[0]).occupyUnit)) return false;
+                if (!caster.TrySwapWith(HexGrid.Instance.GetCell(selected[0]).occupyUnit))
+                    return Reject("换位失败：目标格无法交换");
                 break;
             default:
                 ResolveStationary(card, caster, selected);

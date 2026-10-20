@@ -128,8 +128,13 @@ public class LevelManager : MonoBehaviour
             cell.terrain = t.terrain;
         }
 
+        // 打一行能直接看出"跨关继承有没有生效"的日志：
+        // 血量应是上一关打完剩下的，maxStamina / maxThought 应是累计后的上限。
         Debug.Log($"[LevelManager] {level.levelName} / {variant.variantName} 布阵完成：" +
-                  $"玩家 {Player?.GetCurrentHealth() ?? 0} 血，敌人 {enemies.Count} 个，障碍物 {obstacles.Count} 个");
+                  $"玩家 {Player?.GetCurrentHealth() ?? 0}/{Player?.GetMaxHealth() ?? 0} 血，" +
+                  $"耐力上限 {Player?.maxStamina ?? 0}，思绪上限 {Player?.maxThought ?? 0}，" +
+                  $"遗物 {Player?.Relics.Count ?? 0}，药水 {Player?.Potions.Count ?? 0}，" +
+                  $"敌人 {enemies.Count} 个，障碍物 {obstacles.Count} 个");
 
         // ③ 一切就位后才开战
         if (startBattleAfterSpawn && GameManager.Instance != null)

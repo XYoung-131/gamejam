@@ -9,14 +9,25 @@ using UnityEngine.Events;
 //    描述   = 战斗结束后，你像往常一样感到头晕目眩，再将那些繁杂的思绪一扫而空后，头脑顿时清醒了许多
 //    选项   = 新的记忆涌现了出来——额外进行2次新技能选择 / 以前的记忆巩固了——获得 回归本质
 //  调用 EventPanel_重启.Show() 打开本事件界面。
+//
+//  效果（2026-10-20 接通）：
+//    选项 1 → 额外 2 次技能选择。事件里没有卡牌界面，所以先记进
+//             PlayerRunState.PendingExtraCardChoices，下一次战斗结算界面
+//             （BattleEndPanel）会多出「额外的记忆」按钮，按次数三选一。
+//    选项 2 → 获得遗物「回归本质」（普通稀有度技能伤害 +1）。
 // ═══════════════════════════════════════════════════════════════
 public static class EventPanel_重启
 {
+    private const string 事件名称 = "重启";
+    private const string 事件描述 =
+        "战斗结束后，你像往常一样感到头晕目眩，再将那些繁杂的思绪一扫而空后，头脑顿时清醒了许多";
+
+    private const string 遗物名 = "回归本质";
+    private const int 额外技能选择次数 = 2;
+
     public static void Show()
     {
-        EventPanel.Show(
-            "重启",
-            "战斗结束后，你像往常一样感到头晕目眩，再将那些繁杂的思绪一扫而空后，头脑顿时清醒了许多",
+        EventPanel.Show(事件名称, 事件描述,
             new[]
             {
                 "新的记忆涌现了出来——额外进行2次新技能选择",
@@ -24,16 +35,20 @@ public static class EventPanel_重启
             },
             new UnityAction<int>[]
             {
-                index =>
-                {
-                    // TODO: 选项 1「新的记忆涌现了出来——额外进行2次新技能选择」的效果（获得物品/属性变化等），接好后替换 Close
-                    EventPanel.Close();
-                },
-                index =>
-                {
-                    // TODO: 选项 2「以前的记忆巩固了——获得 回归本质」的效果（获得物品/属性变化等），接好后替换 Close
-                    EventPanel.Close();
-                },
+                _ => On新的记忆(),
+                _ => On以前的记忆(),
             });
+    }
+
+    private static void On新的记忆()
+    {
+        EventEffects.QueueExtraCardChoices(额外技能选择次数);
+        EventPanel.Close();
+    }
+
+    private static void On以前的记忆()
+    {
+        EventEffects.GrantRelic(遗物名);
+        EventPanel.Close();
     }
 }

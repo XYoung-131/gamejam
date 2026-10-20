@@ -80,6 +80,9 @@ public class BattleEndPanel : MonoBehaviour
     private Button potionOptionButton;
     private Button relicOptionButton;
     private Button statOptionButton;
+    // 「额外的记忆」按钮（事件「重启」选项 1 发来的技能选择次数，可能为 0 次 → 不建）
+    private Button extraSkillOptionButton;
+    private Text extraSkillOptionLabel;
 
     private Font font;
     private LootSystem loot;
@@ -92,6 +95,10 @@ public class BattleEndPanel : MonoBehaviour
     private GameObject cardBuffTooltip;
     private RectTransform cardBuffTooltipRt;
     private Text cardBuffTooltipText;
+
+    // 当前正在被悬停的卡牌按钮：PointerExit 只在指针真的移出时派发，
+    // 卡牌被销毁（选完卡关掉子选择层）时不会补发，靠这个引用每帧兜底关浮层
+    private GameObject tooltipHoverOwner;
 
     // ============================================================
     //                       初始化
@@ -303,6 +310,8 @@ public class BattleEndPanel : MonoBehaviour
 
         skillOptionLabel = potionOptionLabel = relicOptionLabel = statOptionLabel = null;
         skillOptionButton = potionOptionButton = relicOptionButton = statOptionButton = null;
+        extraSkillOptionLabel = null;
+        extraSkillOptionButton = null;
 
         const float optionW = 440f;
         float optionH = optionW / buttonAspect;
@@ -315,6 +324,15 @@ public class BattleEndPanel : MonoBehaviour
         // 技能选择按钮不放立绘：文字居中（其余选项仍可带左侧图标）
         MakeOption(frame, ref index, ref y, optionW, optionH, OptionSkillLabel(), null,
             OnSkillOptionClicked, out skillOptionButton, out skillOptionLabel);
+
+        // 「重启」选项 1 领到的额外技能选择：还剩几次就出一个可反复点的按钮，
+        // 每选 1 次只改这个按钮的文案（不整列重建，否则已领过的奖励会被重置）。
+        if (PlayerRunState.PendingExtraCardChoices > 0)
+        {
+            MakeOption(frame, ref index, ref y, optionW, optionH,
+                ExtraSkillLabel(), null, OnExtraSkillOptionClicked,
+                out extraSkillOptionButton, out extraSkillOptionLabel);
+        }
 
         if (pendingPotion != null)
             MakeOption(frame, ref index, ref y, optionW, optionH, OptionPotionLabel(), pendingPotion.icon,
@@ -415,9 +433,53 @@ public class BattleEndPanel : MonoBehaviour
         });
     }
 
-    /// <summary>Each reward is one physical copy, including repeated rewards.</summary>
-    private static bool AddCardToPool(PlayerCardSystem sys, CardData card)
+    /// <summary>
+    /// 「额外的记忆」：消费一次事件（「重启」选项 1）发来的额外技能选择。
+    /// 与普通技能选择走同一套三选一界面，只是选完不清空按钮，
+    /// 而是刷新剩余次数文案，次数用完按钮变灰。
+    /// </summary>
+    private void OnExtraSkillOptionClicked()
     {
+        if (PlayerRunState.PendingExtraCardChoices <= 0) return;
+        if (subPanel != null) return;   // 子选择层已打开
+
+        RewardCardCatalog catalog = Resources.Load<RewardCardCatalog>("RewardCardCatalog");
+        if (catalog == null)
+        {
+            Debug.LogWarning("[BattleEndPanel] RewardCardCatalog missing");
+            return;
+        }
+        List<CardData> choices = catalog.Roll(3);
+        if (choices.Count == 0) return;
+
+        ShowCardChoice("额外的记忆：选择 1 个技能加入卡池", choices, card =>
+        {
+            PlayerRunState.PendingExtraCardChoices = Mathf.Max(0, PlayerRunState.PendingExtraCardChoices - 1);
+            PlayerRunState.ExtraCards.Add(card);
+            PlayerCardSystem sys = FindObjectOfType<PlayerCardSystem>();
+            AddCardToPool(sys, card);
+            CloseSubPanel();
+
+            // 只刷新这一个按钮：整列重建会把已经领过的奖励按钮重置成"可再领一次"
+            if (extraSkillOptionLabel != null) extraSkillOptionLabel.text = ExtraSkillLabel();
+            if (extraSkillOptionButton != null)
+                extraSkillOptionButton.interactable = PlayerRunState.PendingExtraCardChoices > 0;
+
+            Debug.Log($"[战斗奖励] 额外的记忆：获得【{card.cardName}】，" +
+                      $"剩余 {PlayerRunState.PendingExtraCardChoices} 次选择");
+        });
+    }
+
+    private static string ExtraSkillLabel()
+    {
+        int left = PlayerRunState.PendingExtraCardChoices;
+        return left > 0
+            ? "额外的记忆：进行 1 次技能选择（剩 " + left + " 次）"
+            : "额外的记忆 已用完";
+    }
+
+    /// <summary>Each reward is one physical copy, including repeated rewards.</summary>
+    private static bool AddCardToPool(PlayerCardSystem sys, CardData card)    {
         if (sys == null || card == null) return false;
         List<CardData> pool = card.library == CardPool.防御 ? sys.defensePool : sys.attackPool;
         if (pool == null) return false;
@@ -694,23 +756,69 @@ public class BattleEndPanel : MonoBehaviour
 
     private void HideCardTooltip()
     {
+        tooltipHoverOwner = null;
         if (cardSkillTooltip != null) cardSkillTooltip.SetActive(false);
         if (cardBuffTooltip != null) cardBuffTooltip.SetActive(false);
     }
 
+    /// <summary>
+    /// 悬停浮层的保底隐藏（每帧调用）。
+    /// 选完卡后 CloseSubPanel() 会 Destroy 掉子选择层，被销毁的卡面收不到 PointerExit，
+    /// 浮层就会留着不走（截图里的现象）。这里检查"来源还在不在、指针还在不在它上面"，
+    /// 不满足就直接关。
+    /// </summary>
+    private void GuardCardTooltips()
+    {
+        bool visible = (cardSkillTooltip != null && cardSkillTooltip.activeSelf)
+                       || (cardBuffTooltip != null && cardBuffTooltip.activeSelf);
+        if (!visible) return;
+
+        GameObject owner = tooltipHoverOwner;
+        if (owner == null || !owner.activeInHierarchy)
+        {
+            HideCardTooltip();
+            return;
+        }
+
+        RectTransform rt = owner.transform as RectTransform;
+        if (rt == null)
+        {
+            HideCardTooltip();
+            return;
+        }
+
+        Camera cam = (canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay)
+            ? canvas.worldCamera : null;
+        if (!RectTransformUtility.RectangleContainsScreenPoint(rt, Input.mousePosition, cam))
+            HideCardTooltip();
+    }
+
+    private void Update()
+    {
+        GuardCardTooltips();
+    }
+
     /// <summary>给按钮挂"指针进入 / 离开"回调（EventTrigger，不干扰 Button 自己的点击）</summary>
-    private static void AddHoverTrigger(GameObject go, UnityAction onEnter, UnityAction onExit)
+    private void AddHoverTrigger(GameObject go, UnityAction onEnter, UnityAction onExit)
     {
         if (go == null) return;
         EventTrigger et = go.GetComponent<EventTrigger>();
         if (et == null) et = go.AddComponent<EventTrigger>();
 
         EventTrigger.Entry enter = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
-        enter.callback.AddListener(_ => onEnter());
+        enter.callback.AddListener(_ =>
+        {
+            tooltipHoverOwner = go;   // 记下来源，供 GuardCardTooltips() 兜底判断
+            onEnter();
+        });
         et.triggers.Add(enter);
 
         EventTrigger.Entry exit = new EventTrigger.Entry { eventID = EventTriggerType.PointerExit };
-        exit.callback.AddListener(_ => onExit());
+        exit.callback.AddListener(_ =>
+        {
+            if (tooltipHoverOwner == go) tooltipHoverOwner = null;
+            onExit();
+        });
         et.triggers.Add(exit);
     }
 
@@ -793,6 +901,9 @@ public class BattleEndPanel : MonoBehaviour
 
     private void CloseSubPanel()
     {
+        // 选完卡（或点"返回奖励列表"）会销毁整个子选择层：被销毁的卡面收不到 PointerExit，
+        // 悬停浮层必须在这里主动收掉，否则会一直贴在屏幕上
+        HideCardTooltip();
         if (subPanel != null) Destroy(subPanel);
         subPanel = null;
     }

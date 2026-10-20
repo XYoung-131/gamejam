@@ -261,6 +261,16 @@ public class EnemyUnit : Unit
                     card.attackTargetRule != AttackTargetRule.相邻地块定向扇形 &&
                     !card.CanSelectAttackCell(this, target.GetCoord()))
                     continue;
+
+                // 视线校验：和玩家侧 PlayerCardSystem.IsTargetReachable 用同一条规则。
+                // 原来敌人只查射程 + 可选中，能隔着柱子、别的单位或烟雾直接打到玩家，
+                // 而玩家用同一张远程卡却打不了，攻防不对称。
+                // 被挡住时不绕路（ApproachTarget 在射程内会立刻返回），本回合直接放弃这个技能。
+                if (!HasLineOfSight(card, target))
+                {
+                    Debug.Log($"{data.unitName} 的【{card.cardName}】视线被阻挡（单位/障碍物/烟雾），本回合跳过");
+                    continue;
+                }
             }
 
             Debug.Log($"{data.unitName} 释放【{card.cardName}】");
@@ -345,6 +355,23 @@ public class EnemyUnit : Unit
     // ============================================================
     //                       移动靠近（行动中）
     // ============================================================
+
+    /// <summary>
+    /// 敌人版视线判定，规则与玩家侧的 PlayerCardSystem.IsTargetReachable 完全一致：
+    ///   · 只有带「远程」标签、且没有勾"无视遮挡"的技能才受限制；
+    ///   · 施法者与目标之间有其他活着的单位或挡视线的障碍物 → 看不见；
+    ///   · 目标站在烟雾格 → 锁不住。
+    /// 近战技能不受影响（相邻本来就没有中间格）。
+    /// </summary>
+    protected virtual bool HasLineOfSight(CardData card, Unit target)
+    {
+        if (card == null || target == null || HexGrid.Instance == null) return true;
+        if (!card.tags.Contains(CardTag.远程) || card.ignoresLineBlock) return true;
+
+        if (HexGrid.Instance.IsLineBlocked(GetCoord(), target.GetCoord())) return false;
+        if (HexGrid.Instance.IsCellSmoky(target.GetCoord())) return false;
+        return true;
+    }
 
     /// <summary>
     /// 朝目标走，直到这个技能的射程够得着为止（最多 maxStepsPerTurn 格）。

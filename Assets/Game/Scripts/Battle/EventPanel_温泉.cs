@@ -9,14 +9,22 @@ using UnityEngine.Events;
 //    描述   = 研究所里搬来了个奇怪的温泉，大家都泡的很舒服，不过研究员叮嘱不能多泡
 //    选项   = 舒服——回复20%血量 / 好舒服——减少3点血量，增加2点最大生命值 / 太舒服了——减少6点血量，增加4点最大生命值
 //  调用 EventPanel_温泉.Show() 打开本事件界面。
+//
+//  效果（2026-10-20 接通）：
+//    选项 1 → 回复 20% 最大生命
+//    选项 2 → 当前生命 -3，最大生命上限 +2
+//    选项 3 → 当前生命 -6，最大生命上限 +4
 // ═══════════════════════════════════════════════════════════════
 public static class EventPanel_温泉
 {
+    private const string 事件名称 = "温泉";
+    private const string 事件描述 = "研究所里搬来了个奇怪的温泉，大家都泡的很舒服，不过研究员叮嘱不能多泡";
+
+    private const float 回血比例 = 0.2f;
+
     public static void Show()
     {
-        EventPanel.Show(
-            "温泉",
-            "研究所里搬来了个奇怪的温泉，大家都泡的很舒服，不过研究员叮嘱不能多泡",
+        EventPanel.Show(事件名称, 事件描述,
             new[]
             {
                 "舒服——回复20%血量",
@@ -25,19 +33,21 @@ public static class EventPanel_温泉
             },
             new UnityAction<int>[]
             {
-                index =>
+                _ =>
                 {
-                    // TODO: 选项 1「舒服——回复20%血量」的效果（获得物品/属性变化等），接好后替换 Close
+                    EventEffects.HealPercent(回血比例);
                     EventPanel.Close();
                 },
-                index =>
+                _ =>
                 {
-                    // TODO: 选项 2「好舒服——减少3点血量，增加2点最大生命值」的效果（获得物品/属性变化等），接好后替换 Close
+                    EventEffects.HealthDelta(-3);
+                    EventEffects.MaxHealthDelta(2);
                     EventPanel.Close();
                 },
-                index =>
+                _ =>
                 {
-                    // TODO: 选项 3「太舒服了——减少6点血量，增加4点最大生命值」的效果（获得物品/属性变化等），接好后替换 Close
+                    EventEffects.HealthDelta(-6);
+                    EventEffects.MaxHealthDelta(4);
                     EventPanel.Close();
                 },
             });

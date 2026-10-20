@@ -886,3 +886,268 @@ UGUI 的 `PointerExit` 只在**指针真的移出**某个物体时由 `EventSyst
   不等兜底判定，同帧就收掉。
 - `ShowMessage()` / `ShowInfuseConfirm()` 打开模态框时也先 `HideAllTooltips()`，
   避免"提示框 + 技能浮层"两个框叠着。
+
+## 小羊：修复战斗结算选卡后介绍浮层残留（2026-10-20）
+
+### 现象
+
+战斗结束界面点"进行 1 次技能选择"→ 悬停三张候选卡会弹技能介绍 + buff 说明；
+**选中一张后（按钮变成"技能已加入卡池"），两个浮层仍留在屏幕上不走**。
+
+### 根因（与战斗界面那次同一类）
+
+`CloseSubPanel()` 里 `Destroy(subPanel)` 把整个子选择层连同被悬停的卡面一起销毁，
+而 **UGUI 在物体被销毁时不会补发 PointerExit**，挂在 PointerExit 上的 `HideCardTooltip()`
+永远收不到调用，浮层就留在 Canvas 上。
+
+### 修法（`Battle/BattleEndPanel.cs`）
+
+- `CloseSubPanel()` 里**先 `HideCardTooltip()` 再 `Destroy(subPanel)`**（选卡完成、点"返回奖励列表"都走这条路）。
+- 新增 `tooltipHoverOwner` + `AddHoverTrigger` 改为实例方法记录悬停来源；
+  `HideCardTooltip()` 同时清空来源。
+- 新增 `GuardCardTooltips()` 并在 `Update()` 每帧调用：浮层可见时检查
+  ①来源是否还在（被销毁/隐藏 → 关）、②指针是否还在来源矩形内（`RectangleContainsScreenPoint`），
+  任一不满足立刻关。这样即便以后又出现"浮层随卡片一起被销毁"的路径，也不会再残留。
+
+## 小羊：事件里物品名去掉下划线（2026-10-20）
+
+需求：特殊文本只要"黄色 + `[名称]`"，不要下划线；悬停仍显示对应物品介绍。
+
+- `Battle/EventPanel.cs` · `BuildRichOptionLabel()`：物品名从 `<u>[名]</u>` 改为纯文本 `[名]`，
+  颜色（金黄 `(1, 0.78, 0.16)`）、黑描边、悬停浮层（`ShowItemTip` / `HideItemTip`）、
+  点击转发给选项按钮全部保留。
+- 相关注释同步更新（不再提"下划线"）。
+
+## 小羊：事件选项里物品名的黄色文本改单条富文本 + 透明热区（2026-10-20）
+
+### 两个现象
+
+1. 鼠标停在黄色的 `[次元抹除]` 上不弹物品介绍；
+2. 黄字和整句的黑字对不齐（看起来偏大、偏高）。
+
+### 根因
+
+原来是"每个文字段一个 Text，横向拼起来，宽度靠 `preferredWidth` 累加"：
+
+- `NewSegmentText()` 里 `sizeDelta = (0, 40)`，**rect 宽度是 0**，文字是靠 `HorizontalWrapMode.Overflow`
+  画出去的。而 UGUI 的射线检测 `Graphic.Raycast` 是**按 rect 判定**的，0 宽的 rect 永远命中不了 →
+  `EventTrigger` 的 PointerEnter 根本不会触发，悬停自然没反应（点击转发同理失效）。
+- 黄字段额外挂了 `Outline` 描边、颜色也不同，几个独立 Text 各自居中，视觉上会跟黑字差 1~2px，
+  叠上描边就显得"又大又高"。
+
+### 修法（`Battle/EventPanel.cs` · `BuildRichOptionLabel`）
+
+- **整句只用一个 Text 渲染**，物品名用富文本标黄：`<color=#D99A00>[名称]</color>`。
+  字形、字号、基线天然一致，不会再错位（`Outline` 描边一并去掉，改用深一点的金黄保证浅灰底上的对比度，
+  颜色常量是 `ItemColorHex`，想换色调只改这一个字符串）。
+- 物品名上再叠一块**全透明 Image 热区**（`color.a = 0`，`raycastTarget = true`）接 PointerEnter/Exit；
+  热区位置用同一个 Text 量前缀宽度得到（`t.preferredWidth` 量 `plain[0..start]` 与 `plain[0..end]` 之差），
+  与排版用的是同一套字宽，避免错位。热区同时转发点击给选项槽按钮。
+- 删掉不再使用的 `BuildDisplayText()` / `EstimateTextWidth()`。
+
+## 小羊：事件物品名悬停全覆盖 + 战斗长条遗物栏对齐 + 技能释放逻辑审计（2026-10-20）
+
+### 1. 事件里所有「特殊文本」都能弹效果说明
+
+原来物品名表只在 `#if UNITY_EDITOR` 里用 `AssetDatabase` 建，出包后整张表是空的
+（名字不标黄、也弹不出说明）。现在改成统一走 `EventItemLibrary`：
+
+- 编辑器：扫工程内全部 `t:RelicData` / `t:PotionData`；
+- 打包：退回 `LootSystem` 的三遗物池 + 两药水池（去重）；
+- 描述为空时兜底「效果待策划补充」，不会弹出空白框；
+- `EventPanel.RebuildItemTable()` 在每次 `Awake` 调一次：策划新加 / 改名遗物药水后
+  不用退出播放模式就生效。运行时补登的名字存在 `extraItems` 里，表重建后自动补回
+  （否则"先登记、后面板才 Awake"的顺序会把占位遗物名冲掉）。
+
+逐条核对过现有 10 个事件的选项文案，物品名全部命中：
+`解压垃圾 / 垃圾毁灭者 / X药 / 次元抹除（别名→次元抹杀）/ 焦黑十字架 / 回归本质`，
+自助售卖机的 `药水腰带 / 草席卷 / 黑鹅项圈` 由事件自己预登记。
+
+### 2. 战斗界面长条里的遗物栏
+
+- `BattleHUD.BuildRelicRow()` 的 y 从 `-90`（血槽圆心）改 `-52.5`（**空饮料槽中心**），
+  横排仍从生命槽右缘 +10 起；图标 pivot 改 `(0, 0.5)`，整排左缘贴位不再偏半个图标。
+- **悬停终于能触发了**：`MakeImage` 默认 `raycastTarget = false`（装饰图不挡格子点击），
+  遗物图标是"要接 PointerEnter 的装饰图"，必须单独打开射线，否则永远收不到悬停。
+- 新增 `relicTooltip`（360 宽，挂在长条下沿之外），`ShowRelicTooltip(i)` 显示
+  `【遗物名】+ 效果`；已并入 `HideAllTooltips()` 与每帧兜底的 `GuardTooltips()`，
+  进瞄准 / 弹模态框 / 图标隐藏时都会立刻收掉。
+- 悬停回调只在**建图标时挂一次**（刷新只改图和位置）：原来每次刷新都往同一个
+  `EventTrigger` 里塞一对 entry，刷新几次就会叠几个浮层。
+- `EventPanel.RefreshRelicIcons()` 同步改成"按序号实时取遗物"，避免闭包抓到旧资产。
+
+### 3. 技能释放逻辑审计：4 处已修
+
+| 问题 | 影响 | 修法 |
+|---|---|---|
+| 悬停预检用 `GetFinalActionCost`，实际扣费是 `GetPlayActionCost` / `DefenseState.GetStaminaCost` | 「连续拳」折扣后、 「自动屏障」首用 -3 时，付得起却被判"耐力不足"，进不了瞄准 | `BattleHUD` 新增 `StaminaCostOf()`，四处预检（推/跳/槽位/瞄准兜底）统一用它 |
+| 免费技能入口不判选格规则 | 药水发的范围 / 地块 / 全场技能会被当成单体，只结算一个目标 | `PlayerCardSystem.UseFreeCard()` 遇到 `attackTargetRule != 单位` 直接拒绝并打日志 |
+| 「愤怒之拳」25% 保留次数无条件判定 | 血量健康时也白送使用次数，强于策划文案 | 追加 `lowHealth` 前置条件（与 `+2` 伤害同一判断） |
+| 自身类防御卡一律"点插槽直接释放" | 「神圣祝福」自身带神圣时必须选一只小天使，拿空选择去放 100% 失败 | 快捷释放的判据改成 `DefenseSkillResolver.CanResolve(card, player, 空)` |
+
+### 4. 审计发现但**没动**的地方（需要策划/你拍板）
+
+| 问题 | 位置 | 说明 |
+|---|---|---|
+| 敌人远程技能不查视线 | `EnemyUnit.ExecutePlannedSkills` | 玩家远程要过 `IsLineBlocked` + 烟雾格，敌人只查射程与 `CanSelectAttackCell` → 能隔柱子 / 隔着烟雾打玩家 |
+| 结算失败退耐力但不退行动次数 | `TryUseDefenseCardOnCells` / `UseBasicDefense` | `TrySpendStamina` 已经给 `actionsThisTurn` +1，失败只 `RestoreStamina`；带黑鹅项圈（5 次/回合）时一次失败也吃掉一次额度 |
+| 范围技能 0 命中仍扣耐力与次数 | `UseSlotCardOnCells` | 地块 / 穿透类合理（空格也是目标）；`自身范围 / 全场` 在周围没目标时也照扣 |
+| 攻击卡的「传送」位移分支被跳过 | `CardData.ResolveWithOutcome` | `causesDisplacement && displacementType != 传送`；当前 0 张攻击卡用传送，属潜在坑 |
+| 青柠饮料救不回"已用完腾空"的技能 | `PotionData.RestoreSkillUses` | 只恢复 `slot` 里还在的卡；次数耗尽时 `slot.card = null`，那张牌已经不在槽位里了 |
+| 部分 `devNotes` 已过时 | 技能资产 | 狙杀 / 飞身刺击 / 愤怒之拳 的 devNotes 仍写"未实现"，实际逻辑早已接上 |
+
+> 另外核对过：42 张攻击卡的 `targetTypes`（`00000000` = 一个元素「敌方单位」）、
+> `defenseTargetTypes`（`01000000` = 「自身」）解出来的都是预期值，不是空列表；
+> 起始牌组的 2 张固定技能就是「推」「跳」，正好对应左下角两个常驻按钮，槽位 0/1 不参与三槽 UI 是对的。
+
+## 小羊：敌人视线对齐 / 失败退行动次数 / 空放拦截 / 失败原因弹窗（2026-10-20）
+
+### 1. 敌人远程技能也要过视线（`Units/EnemyUnit.cs`）
+
+新增 `HasLineOfSight(card, target)`，规则与玩家侧 `PlayerCardSystem.IsTargetReachable` **完全一致**：
+
+- 只有带 `远程` 标签且没勾"无视遮挡"的技能才受限制；
+- 施法者与目标之间有活着的单位或挡视线的障碍物 → 看不见；
+- 目标站在烟雾格 → 锁不住。
+
+`ExecutePlannedSkills` 在"射程够 + 可选中"之后补一道视线校验，被挡住就 `continue` 跳过本回合这个技能
+（不打日志式的"绕路"——`ApproachTarget` 在射程内会立刻返回，走不动）。
+这样敌人不再能隔柱子 / 隔着别的单位 / 隔着烟雾打玩家。
+
+### 2. 结算失败要退"行动次数"，不只是退耐力
+
+`TrySpendStamina` 在扣耐力的同时会让 `actionsThisTurn +1`。原来 `DefenseSkillResolver.Resolve` 返回 false 时
+只调 `RestoreStamina`，所以带「黑鹅项圈」（每回合最多 5 次行动）时，一次失败的释放会白吃一次额度。
+
+- `PlayerUnit` 新增 **`RefundAction(int stamina)`**：退耐力 + `actionsThisTurn--`，并广播 `PlayerResourceChanged`；
+- `TryUseDefenseCardOnCells` / `UseBasicDefense` 的结算失败分支改调 `RefundAction`。
+
+### 3. 「自身范围 / 全场 / 全场随机」空放不再扣耐力与次数（`Cards/PlayerCardSystem.cs`）
+
+新增 `AreaHasAnyTarget(card, area)`：范围里必须有**施法者以外的活着的单位**（或这张卡能打障碍物时的障碍物）才算有效。
+在 `UseSlotCardOnCells` 里、**扣费之前**拦截，没有目标就返回"范围内没有任何目标"。
+
+- 不适用于 `地块 / 穿透 / 固定地图图案`：它们打的是"格子"本身，空放是有效操作（礼炮轰炸可以砸空地）。
+- 注意 `自身范围` 的范围本身包含施法者自己的格子，所以判定里必须把施法者排掉，否则永远通过。
+- 典型例子：「回旋斩击」0 伤害、只给相邻目标挂 2 层流血 —— 身边没人时以前会白扣耐力和次数。
+
+### 4. 技能释放失败 → 弹窗说明原因
+
+新增 `Cards/SkillFailure.cs`（静态小信箱：`Set / Clear / Consume`）：
+
+- `PlayerCardSystem.Fail(原因)` 接管了原来所有"`Debug.Log` + `return false`"的校验点：
+  阶段、槽位空、次数用完、禁止行动、射程、视线、烟雾、亲密、目标类型、选格规则……
+- `PlayerUnit` 的耐力不足 / 行动次数上限也写入原因；
+- `DefenseSkillResolver.CanResolve` 新增 `LastFailureReason`（步行步数、换位条件、神圣祝福、投掷织毯未配地形…）。
+
+`BattleHUD` 新增 `RunCardAction(action, fallback)`：先 `SkillFailure.Clear()`，失败时 `Consume()` 一次取走原因，
+用现有 `ShowMessage` 模态框弹出来（没有具体原因才退回通用提示）。全部出牌入口都改走它：
+
+| 入口 | 覆盖场景 |
+|---|---|
+| 槽位卡点插槽直接释放 | 自身类防御卡 |
+| 瞄准点格 → 防御卡 | 治疗/护盾/位移的落点不合法 |
+| 瞄准点格 → 单体攻击 | 射程/视线/烟雾/亲密/次数 |
+| 瞄准点格 → 多目标、选格类、全场类 | 同上 + 空放拦截 |
+| 左下角 推 / 跳 | 落点不合法、目标不合法 |
+
+顺带把几处"点错格子"的静默提示也改成弹窗：点空白处放单攻、跳的落点不可站立、推的目标格没有敌人。
+
+---
+
+## 事件选项效果接通（2026-10-20）
+
+此前除「洗礼」「自助售卖机」外，其余事件的选项回调都是 `TODO` 空壳——**选了也不发物品、不改数值**。
+本次把「游戏事件」表里所有选项效果全部接上。
+
+### 新增 `Battle/EventEffects.cs`
+
+事件选项效果的统一入口（静态工具类），避免 7 个事件各写一遍重复逻辑：
+
+| 方法 | 作用 |
+|---|---|
+| `GrantRelic(名称)` | 按中文名找 `RelicData` 并发给玩家，成功后刷新长条遗物栏；找不到资产 / 已持有返回 false 并打日志 |
+| `GrantPotion(名称)` | 按名发一瓶药水（背包满返回 false） |
+| `GrantRandomPotions(n)` | 随机发 n 瓶，返回实际到手瓶数（背包满即停） |
+| `HealthDelta(n)` / `HealPercent(r)` | 当前生命增减（最少留 1 点）/ 按最大生命比例回血 |
+| `MaxHealthDelta(n)` / `MaxStaminaDelta(n)` / `MaxThoughtDelta(n)` | 三项上限增减 |
+| `QueueExtraCardChoices(n)` | 记下"额外 N 次技能选择"，下一次战斗结算界面消费 |
+
+所有方法都走 `PlayerRunState` 的事件入口（内部 `Capture` 快照），改动才能带进下一关。
+
+### 各事件接通情况
+
+| 事件 | 选项效果 |
+|---|---|
+| 垃圾清理 | ①获得遗物「解压垃圾」 ②获得遗物「垃圾毁灭者」 ③回复 20% 最大生命 |
+| 奇怪的药剂 | ①获得遗物「X药」 ②获得 3 瓶随机饮料 |
+| 重启 | ①额外 2 次技能选择（见下） ②获得遗物「回归本质」 |
+| 次元饮料 | ①当前生命 -2 + 获得遗物「次元抹杀」（文案写作"次元抹除"） ②最大思绪 +10 |
+| 小助手 | ①最大思绪 +10 ②最大耐力 +10 ③回复 20% 最大生命 |
+| 温泉 | ①回复 20% 最大生命 ②当前生命 -3、最大生命 +2 ③当前生命 -6、最大生命 +4 |
+| 抉择 | ①最大生命 -2 + 耐力/思绪上限各 +5 ②最大耐力 -5、当前生命 +2 ③最大思绪 -5、当前生命 +2 |
+| 洗礼 | （原有）扣血 2 换遗物「焦黑十字架」 / 回复 10% 最大生命 |
+| 自助售卖机 | （原有）三档连拍换三件遗物 / 捡 1 瓶随机饮料 |
+
+### 「额外进行 2 次新技能选择」的实现
+
+事件里没有卡牌界面，所以分两步：
+
+1. `PlayerRunState.PendingExtraCardChoices` 记下待进行的次数（`QueueExtraCardChoices`，战斗失败 `Reset` 时清零）；
+2. `BattleEndPanel.BuildOptions()` 发现该值 > 0 时，多出一个「额外的记忆：进行 1 次技能选择（剩 N 次）」
+   按钮——复用现有三选一子层，每选 1 次减 1，`BuildOptions()` 重建选项列，次数用完按钮自动消失。
+
+### `PlayerRunState` 新增
+
+- `ApplyMaxHealthDelta(player, delta)`：「温泉」「抉择」改最大生命上限；增加上限不补当前血，
+  减少上限时当前血压到新上限（不出现 30/28 这种数值）。
+
+---
+
+## 跨关继承核查 + 事件逻辑修复（2026-10-20）
+
+### 一、血量 / 耐力上限 / 思绪上限确实是整局继承的
+
+调用链（不需要改架构，只补了坑）：
+
+| 时机 | 代码 | 作用 |
+|---|---|---|
+| 每场战斗结束点"跳过奖励" | `BattleEndPanel.NextLevel` → `RunFlowController.ContinueAfterRewards` → `PlayerRunState.Capture(player)` | 把**当前血量**、最大生命、耐力/思绪上限、每回合回复量、牌池、遗物、药水写进静态快照 |
+| 休息处三选一 | `RunFlowController.ChooseRest` → 改数值 → `Capture` | 同上 |
+| 事件改数值（发遗物/扣血/加上限） | `EventEffects.*` → `PlayerRunState.*`（内部 `Capture`） | 事件发生在**上一场战斗的场景**里，玩家对象还活着，必须改完立刻存，否则活不过场景切换 |
+| 下一关生成玩家 | `LevelManager.SpawnPlayer` → `Player.Initialize`（先按 `UnitData` 回满）→ `PlayerRunState.ApplyTo(Player)` | 用快照覆盖血量与三项上限 |
+
+所以：**血量是打完上一场剩下的值，不会每关回满；耐力/思绪上限是累计后的值**。
+每场开局只有"当前耐力/思绪"会重置回 `startStamina / startThought`（20），这是策划文档规定的。
+
+`savedAttack/savedDefense` 只在真的存到过牌池时才回放（`hasPoolSnapshot`），
+避免"没卡系统时的空列表"把开局牌库清空。
+
+### 二、本轮修掉的四个坑
+
+| 问题 | 后果 | 修复 |
+|---|---|---|
+| `PlayerRunState.Capture` 在玩家没有 `PlayerCardSystem` 时整段 `return` | 血量/上限/遗物/药水全部**静默不保存**，表现就是"下一关血量被重置" | 卡池只是快照的一部分：血量和物品照存，只有牌池需要卡系统 |
+| `PlayerRunState.Reset()` 不清 `Health/MaxHealth/MaxStamina/MaxThought/回复量` | 上一局数值残留，事件在没有场上玩家时会直接改写这些脏值 | `Reset` 一并清零 |
+| 事件下调上限（自助售卖机 -3/-5/-7、抉择 -5）不夹当前值 | HUD 出现"20/8"，而且本场真的还能按 20 点花（`TrySpendStamina` 只比当前值） | 新增 `PlayerUnit.ClampResourcesToMax()`，改上限后 + `ApplyTo` 回放后各夹一次 |
+| `ApplyTo` 无快照分支写 `if (BonusStamina > 0)` | 负数增量（开局前减上限）被静默吞掉 | 改判 `!= 0` 并夹到 ≥1 / 回复量 ≥0 |
+
+顺手把 `LevelManager` 的布阵日志与 `ApplyTo` 的回放日志补全（血量 x/y、耐力上限、思绪上限、遗物/药水件数），
+进 Play 后看 Console 就能确认跨关继承有没有生效。
+
+### 三、事件选择逻辑核查结果
+
+九个事件的**选项文案与飞书「游戏事件」表逐条一致**（含 `选修3` 这一列的三选项事件），
+效果全部接通。核查中发现并修掉：
+
+- **「自助售卖机」拍一拍**：这件遗物可能已经先从战斗结算的"思维碎片"拿到过（见下），
+  以前照样扣 3/5/7 点最大耐力上限 → 白扣。现在先判 `已持有`，已持有就跳过这一档、不扣上限。
+- **「次元饮料」选项 1**：遗物已持有时以前仍然扣 2 点血 → 纯亏选项。现在扣血跟着发放结果走。
+
+核查中确认的**设计层缺口（未改，等策划拍板）**：
+
+1. 5 件事件遗物（X药 / 回归本质 / 垃圾毁灭者 / 次元抹杀 / 解压垃圾）`pool = 通用`，
+   而 `LootSystem.RollRelicCandidates` 每次都会把 `generalPool` 混进去 —— 所以它们在战斗结算的
+   三选一里就能抽到，"事件专属"并不专属。已经被抽走后，对应事件选项会**空转**（垃圾清理 / 重启）。
+2. 「奇怪的药剂」选项 2 承诺 3 瓶随机饮料，但药水背包上限是 3 —— 事件多发生在战斗后（背包常有存货），
+   实际可能一瓶也塞不进去，目前只有 Console 警告。
