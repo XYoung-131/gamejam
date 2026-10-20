@@ -40,6 +40,14 @@ public static class PlayerRunState
     public static int BonusStamina;
     public static int BonusThought;
 
+    // ---- 存档（RunSaveSystem）读取用：这几项本来只有内部可见 ----
+    /// <summary>存档下来的攻击牌池（只读）</summary>
+    public static IReadOnlyList<CardData> SavedAttackPool { get { return savedAttack; } }
+    /// <summary>存档下来的防御牌池（只读）</summary>
+    public static IReadOnlyList<CardData> SavedDefensePool { get { return savedDefense; } }
+    /// <summary>牌池有没有真的存过一次</summary>
+    public static bool HasPoolSnapshot { get { return hasPoolSnapshot; } }
+
     /// <summary>
     /// 「重启」选项 1「额外进行 2 次新技能选择」暂存次数。
     /// 事件里没有卡牌界面，先记在这里；下一次战斗结算界面（BattleEndPanel）
@@ -294,5 +302,38 @@ public static class PlayerRunState
         MaxThought = 0;
         StaminaRegen = 0;
         ThoughtRegen = 0;
+    }
+
+    /// <summary>
+    /// 从存档恢复整份快照（RunSaveSystem.Load 调用）。
+    /// 先 Reset 再灌入，避免上一局残留；资产引用已在读档时按名字解析好。
+    /// </summary>
+    public static void LoadSnapshot(bool hasSnapshot, int health, int maxHealth, int maxStamina, int maxThought,
+        int staminaRegen, int thoughtRegen, int potionMisses, bool hasPoolSnapshot,
+        List<CardData> attackPool, List<CardData> defensePool, List<CardData> extraCards,
+        List<RelicData> relics, List<PotionData> potions,
+        int bonusStamina, int bonusThought, int pendingExtraCardChoices)
+    {
+        Reset();
+
+        HasSnapshot = hasSnapshot;
+        Health = health;
+        MaxHealth = maxHealth;
+        MaxStamina = maxStamina;
+        MaxThought = maxThought;
+        StaminaRegen = staminaRegen;
+        ThoughtRegen = thoughtRegen;
+        PotionMisses = potionMisses;
+        BonusStamina = bonusStamina;
+        BonusThought = bonusThought;
+        PendingExtraCardChoices = pendingExtraCardChoices;
+
+        if (attackPool != null) savedAttack.AddRange(attackPool);
+        if (defensePool != null) savedDefense.AddRange(defensePool);
+        // 牌池快照标记只在这两份列表真的有内容时才算数——空牌池回放会清空开局牌库
+        PlayerRunState.hasPoolSnapshot = hasPoolSnapshot && (savedAttack.Count > 0 || savedDefense.Count > 0);
+        if (extraCards != null) ExtraCards.AddRange(extraCards);
+        if (relics != null) Relics.AddRange(relics);
+        if (potions != null) Potions.AddRange(potions);
     }
 }

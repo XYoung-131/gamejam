@@ -11,8 +11,10 @@ public sealed class RunFlowController : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
     {
-        string sceneName = SceneManager.GetActiveScene().name;
-        if ((sceneName != "Start" && sceneName != "MainMenu") || Instance != null) return;
+        // RunFlowController 只在这里自举，之后 DontDestroyOnLoad 跨场景常驻。
+        // 不能在场景名上设限：直接从 Battle.unity 起播时若不建它，
+        // 之后回到主界面点「唤醒」就会报 "RunFlowController is missing"。
+        if (Instance != null) return;
         new GameObject("RunFlowController").AddComponent<RunFlowController>();
     }
 
@@ -46,12 +48,39 @@ public sealed class RunFlowController : MonoBehaviour
         PlayerRunState.Reset();
         lastRequestedEventKey = null;
         ShowInterlude();
+        RunSaveSystem.Save();   // 开局就落一次档，之后"唤醒"才会提示已存在存档
     }
 
-    public void CompleteEvent()
+    /// <summary>
+    /// 从存档继续上一局：读档成功后按恢复出来的相位接着推界面
+    /// （战斗 → 直接进战斗场景；事件 → 弹该事件；休息处 → 弹休息界面）。
+    /// </summary>
+    public bool ContinueRun()
     {
-        if (!Progression.CompleteEvent()) return;
-        EnterBattle();
+        if (!RunSaveSystem.Load()) return false;
+        lastRequestedEventKey = null;
+        ShowInterlude();
+        return true;
+    }
+
+    /// <summary>把存档里的进度灌回 Progression（RunSaveSystem.Load 调用）</summary>
+    public bool RestoreProgression(RunRouteData route, RunPhase phase, int chapterIndex, int battleIndex,
+        string eventId, int[] eliteChoices, string[] remainingEvents, int variantIndex)
+    {
+        return Progression.Restore(route, phase, chapterIndex, battleIndex, eventId,
+            eliteChoices, remainingEvents, variantIndex);
+    }
+
+    /// <summary>
+    /// 事件做完 → 存一次档 → 进下一关。
+    /// 返回是否真的推进了（并且已经发出换场景的请求），
+    /// 供调用方判断"要不要自己收掉界面"——换场景时界面该留着挡视线。
+    /// </summary>
+    public bool CompleteEvent()
+    {
+        if (!Progression.CompleteEvent()) return false;
+        RunSaveSystem.Save();
+        return EnterBattle();
     }
 
     public void ChooseRest(RestOption option)
@@ -85,7 +114,11 @@ public sealed class RunFlowController : MonoBehaviour
         }
 
         PlayerRunState.Capture(player);
-        if (Progression.ChooseRest(option)) EnterBattle();
+        if (Progression.ChooseRest(option))
+        {
+            RunSaveSystem.Save();
+            EnterBattle();
+        }
     }
 
     public void ContinueAfterRewards()
@@ -96,24 +129,47 @@ public sealed class RunFlowController : MonoBehaviour
         LootSystem loot = FindObjectOfType<LootSystem>();
         if (loot != null) PlayerRunState.PotionMisses = loot.ConsecutivePotionMisses;
         if (!Progression.ContinueAfterRewards()) return;
+        RunSaveSystem.Save();
         if (Progression.Phase == RunPhase.Battle) EnterBattle();
         else ShowInterlude();
     }
 
     public void ReturnToMenu()
     {
+        RunSaveSystem.Delete();   // 这一局已经打完 / 失败了，回主界面前把存档清掉
+        GoToMainMenu();
+    }
+
+    /// <summary>
+    /// ESC 菜单「保存并返回主界面」：把当局进度存档并**保留存档**，回主界面。
+    /// 与 ReturnToMenu 的区别就是这里不删档——之后在主界面点「回忆」可以接着打。
+    /// </summary>
+    public void SaveAndReturnToMenu()
+    {
+        RunSaveSystem.Save();
+        GoToMainMenu();
+    }
+
+    /// <summary>回到主界面：清掉本局的内存状态（不动存档文件），加载 Start 场景</summary>
+    private void GoToMainMenu()
+    {
         PlayerRunState.Reset();
         lastRequestedEventKey = null;
         Progression = new RunProgression();
         LevelManager.pendingNextLevel = null;
         LevelManager.pendingVariantIndex = null;
+        Time.timeScale = 1f;   // 万一是从暂停的 ESC 菜单过来的，别把冻结的时间带进主界面
         SceneManager.LoadScene("Start");
     }
 
     private void OnGameStateChanged(GameState state)
     {
         if (state == GameState.Victory) Progression.CompleteBattle();
-        else if (state == GameState.Defeat && Progression.Defeat()) ShowInterlude();
+        else if (state == GameState.Defeat && Progression.Defeat())
+        {
+            RunSaveSystem.Delete();   // 这一局失败了，存档作废
+            ShowInterlude();
+        }
     }
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
@@ -140,6 +196,12 @@ public sealed class RunFlowController : MonoBehaviour
         {
             if (ui != null) ui.Hide();
             RequestCurrentEvent();
+        }
+        // 读档续玩时可能直接落在"战斗"相位：这里补一条分支，直接进战斗场景
+        else if (Progression.Phase == RunPhase.Battle)
+        {
+            if (ui != null) ui.Hide();
+            EnterBattle();
         }
         else if (ui != null) ui.Show(Progression);
     }
@@ -177,16 +239,18 @@ public sealed class RunFlowController : MonoBehaviour
         return true;
     }
 
-    private void EnterBattle()
+    /// <summary>切到这一关的战斗场景；返回是否成功发出换场景请求</summary>
+    private bool EnterBattle()
     {
         LevelData level = Progression.CurrentLevel;
-        if (level == null) { Debug.LogError("[RunFlow] Current battle level missing."); return; }
+        if (level == null) { Debug.LogError("[RunFlow] Current battle level missing."); return false; }
         int variant = Progression.CurrentVariantIndex;
-        if (variant < 0) { Debug.LogError("[RunFlow] Current battle has no variants."); return; }
+        if (variant < 0) { Debug.LogError("[RunFlow] Current battle has no variants."); return false; }
         LevelManager.pendingNextLevel = level;
         LevelManager.pendingVariantIndex = variant;
         RunFlowUI ui = GetComponent<RunFlowUI>();
         if (ui != null) ui.Hide();
         SceneManager.LoadScene("Battle");
+        return true;
     }
 }

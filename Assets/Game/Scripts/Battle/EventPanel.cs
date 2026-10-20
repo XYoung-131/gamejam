@@ -68,6 +68,7 @@ public class EventPanel : MonoBehaviour
 
     // 运行时引用
     private Text nameText;              // 名称按钮上的黑字
+    private Text hpText;                // 左上角血量槽圆心的"当前/上限"数字（与战斗 HUD 同一口径）
     private readonly System.Collections.Generic.List<RectTransform> optionSlots
         = new System.Collections.Generic.List<RectTransform>();
 
@@ -107,9 +108,24 @@ public class EventPanel : MonoBehaviour
     public static void Close()
     {
         if (instance == null) return;
-        CloseCurrent();
-        if (RunFlowController.Instance != null)
+
+        EventPanel panel = instance;
+        instance = null;
+
+        // 推进本局流程。返回 true = 成功发出换场景请求（事件做完就是进战斗场景）。
+        bool switched = RunFlowController.Instance != null &&
             RunFlowController.Instance.CompleteEvent();
+
+        // 换场景时故意不在这里隐藏 / 销毁面板：
+        // 场景切换要等本帧结束才真正生效，若先把面板关掉，旧场景里下层的界面
+        // 会先露出来一帧——从主界面点「唤醒」开第一场战斗时，露出来的正是主界面。
+        // 面板留着随旧场景一起销毁，正好把这一帧挡住。
+        // 没换场景（相位不对等异常情况）才按老路收掉界面。
+        if (!switched && panel != null)
+        {
+            panel.gameObject.SetActive(false);
+            Destroy(panel.gameObject);
+        }
     }
 
     /// <summary>只关闭界面、不推进流程（供"同一个事件内换一套选项"的场景，如自助售卖机连拍）</summary>
@@ -246,7 +262,17 @@ public class EventPanel : MonoBehaviour
             new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(24f, -24f), new Vector2(132f, 132f));
         hpSlot.rectTransform.pivot = new Vector2(0f, 1f);
         hpSlot.raycastTarget = false;
-        Text hpText = MakeChildText(hpSlot.rectTransform, "12/12", 30, Color.white);
+        hpText = MakeChildText(hpSlot.rectTransform, "12/12", 30, Color.white);
+
+        // 圆里补一个"血量"小字压在数字上方 —— 与战斗 HUD 红圆完全同款
+        // （字号 20 / 白 85% / 距圆顶 8px / 132×26 居中）
+        Text hpLabel = MakeChildText(hpSlot.rectTransform, "血量", 20, new Color(1f, 1f, 1f, 0.85f));
+        RectTransform hpLabelRt = hpLabel.rectTransform;
+        hpLabelRt.anchorMin = new Vector2(0.5f, 1f);
+        hpLabelRt.anchorMax = new Vector2(0.5f, 1f);
+        hpLabelRt.pivot = new Vector2(0.5f, 1f);
+        hpLabelRt.anchoredPosition = new Vector2(0f, -8f);
+        hpLabelRt.sizeDelta = new Vector2(132f, 26f);
 
         // ---- 生命槽右侧：流程内已获得的遗物（图标 + 悬停看效果） ----
         BuildRelicRow();
@@ -430,6 +456,53 @@ public class EventPanel : MonoBehaviour
     public static void RefreshRelics()
     {
         if (instance != null) instance.RefreshRelicIcons();
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  左上角血量槽（与战斗 HUD 同一份数值 / 同一个外观）
+    // ══════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// 每帧把红圆里的数字刷成和战斗 HUD 一样的"当前/上限"。
+    /// 战斗 HUD 取的是场上玩家的实时血量，所以这里同序取值，两边永远一致。
+    /// </summary>
+    private void Update()
+    {
+        if (hpText == null) return;
+
+        int current, max;
+        if (!TryGetRunHealth(out current, out max)) return;   // 取不到就保持原样，不显示 0/0
+
+        string want = current + "/" + max;
+        if (hpText.text != want) hpText.text = want;
+    }
+
+    /// <summary>
+    /// 本局血量（当前 / 上限），取值顺序与战斗 HUD 对齐：
+    ///  · 场上有玩家 → 玩家实时血量（战斗场景里开的事件，与战斗界面一模一样）
+    ///  · 场上没有玩家（从主界面点「唤醒」开的第一场事件）→ 本局快照 PlayerRunState
+    ///  · 都取不到（还没打过第一场，快照为空）→ 返回 false，界面留着占位文本
+    /// </summary>
+    private static bool TryGetRunHealth(out int current, out int max)
+    {
+        PlayerUnit player = FindObjectOfType<PlayerUnit>();
+        if (player != null)
+        {
+            current = player.GetCurrentHealth();
+            max = player.GetMaxHealth();
+            return true;
+        }
+
+        if (PlayerRunState.HasSnapshot)
+        {
+            current = PlayerRunState.Health;
+            max = PlayerRunState.MaxHealth;
+            return true;
+        }
+
+        current = 0;
+        max = 0;
+        return false;
     }
 
     // ══════════════════════════════════════════════════════════

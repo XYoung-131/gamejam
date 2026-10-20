@@ -163,6 +163,11 @@ public class ProjectileVFX : MonoBehaviour
         clusterGo.transform.SetParent(transform, false);
         cluster = clusterGo.AddComponent<ParticleSystem>();
 
+        // AddComponent 出来的粒子系统会立刻开始播放，这时改 duration 会被 Unity 拒绝并报
+        // "Setting the duration while system is still playing is not supported"。
+        // 先停掉并清空（配置完下面再 Play），才能安全地写 duration。
+        cluster.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
         var main = cluster.main;
         main.loop = true;
         main.duration = 5f;
@@ -263,6 +268,8 @@ public class ProjectileVFX : MonoBehaviour
         go.transform.position = new Vector3(to.x, to.y, transform.position.z);
 
         var ps = go.AddComponent<ParticleSystem>();
+        // 同上：先停掉并清空，才改得动 duration（末尾 ps.Play() 会重新开播）
+        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
         var main = ps.main;
         main.loop = false;
         main.duration = 0.3f;
