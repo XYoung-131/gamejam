@@ -2154,7 +2154,7 @@ public class BattleHUD : MonoBehaviour
         DimEnemies(true);   // 例图：选择技能时小怪半透明
     }
 
-    /// <summary>推：按卡牌射程（minRange~maxRange）标出范围内的敌人（红圈加深）</summary>
+    /// <summary>推：按卡牌射程标出范围内的敌人和障碍物（红圈加深）。</summary>
     private void HighlightPushTargets(PlayerUnit player)
     {
         if (pushCard == null || HexGrid.Instance == null) return;
@@ -2168,8 +2168,8 @@ public class BattleHUD : MonoBehaviour
             if (dist < min || dist > max) continue;
 
             Unit occupant = cell.occupyUnit;
-            if (occupant is EnemyUnit && !occupant.IsDead)
-                cell.SetTargetHighlight(true);   // 有敌人：红圈加深（可点）
+            if ((occupant is EnemyUnit && !occupant.IsDead) || cell.obstacle != null)
+                cell.SetTargetHighlight(true);
         }
     }
 
@@ -2421,10 +2421,12 @@ public class BattleHUD : MonoBehaviour
             case AttackTargetRule.多个单位:
             {
                 Unit target = cell.occupyUnit;
-                if (!(target is EnemyUnit) || target.IsDead ||
+                bool validEnemy = target is EnemyUnit && !target.IsDead;
+                bool validObstacle = cell.obstacle != null && card.CanTargetObstacle;
+                if ((!validEnemy && !validObstacle) ||
                     !card.CanSelectAttackCell(FindObjectOfType<PlayerUnit>(), cell.coord))
                 {
-                    ShowMessage("请点击高亮的敌方单位");
+                    ShowMessage("请点击高亮的敌方单位或障碍物");
                     return;
                 }
 
@@ -2670,9 +2672,10 @@ public class BattleHUD : MonoBehaviour
         if (mode == SelectMode.推)
         {
             Unit target = cell.occupyUnit;
-            if (!(target is EnemyUnit) || target.IsDead)
+            Obstacle obstacle = cell.obstacle;
+            if ((!(target is EnemyUnit) || target.IsDead) && obstacle == null)
             {
-                ShowMessage("推 只能对敌方单位使用：这一格没有敌人");
+                ShowMessage("推 只能对敌方单位或障碍物使用：这一格没有目标");
                 return;
             }
             PlayerCardSystem cards = FindCardSystem();
@@ -2688,9 +2691,15 @@ public class BattleHUD : MonoBehaviour
                 ShowMessage("耐力不足，无法释放技能");
                 return;
             }
-            if (RunCardAction(() => cards.UseBasicAttack(pushCard, target), "推 释放失败"))
+            bool used = obstacle != null && !(target is EnemyUnit)
+                ? RunCardAction(() => cards.UseBasicAttackOnObstacle(pushCard, obstacle), "推 释放失败")
+                : RunCardAction(() => cards.UseBasicAttack(pushCard, target), "推 释放失败");
+            if (used)
             {
-                ShowStatus($"推：对 {target.data.unitName} 造成 {pushCard.damage} 伤害并击退");
+                string targetName = obstacle != null && !(target is EnemyUnit)
+                    ? (obstacle.data != null ? obstacle.data.obstacleName : "障碍物")
+                    : target.data.unitName;
+                ShowStatus($"推：对 {targetName} 造成 {pushCard.damage} 伤害");
                 ExitMode();
             }
         }
@@ -2821,26 +2830,29 @@ public class BattleHUD : MonoBehaviour
         if (cam == null || canvasRt == null) { HideEnemyHoverInfo(); return; }
 
         EnemyUnit hovered = FindHoveredEnemy(cam);
-        if (hovered == null) { HideEnemyHoverInfo(); return; }
+        Obstacle hoveredObstacle = hovered == null ? FindHoveredObstacle(cam) : null;
+        if (hovered == null && hoveredObstacle == null) { HideEnemyHoverInfo(); return; }
 
         // 非悬停目标的标签先关掉
         PlannedSkillLabel hoveredLabel = null;
         foreach (PlannedSkillLabel label in plannedLabels)
         {
             if (label == null || label.Root == null) continue;
-            if (label.Enemy == hovered) { hoveredLabel = label; continue; }
+            if (hovered != null && label.Enemy == hovered) { hoveredLabel = label; continue; }
             if (label.Root.gameObject.activeSelf) label.Root.gameObject.SetActive(false);
         }
 
         // 悬停的这只重新量一次包围盒（可能刚被击退/翻面，缓存值会滞后）
-        Bounds bounds = ComputeSpriteBounds(hovered);
+        Bounds bounds = hovered != null
+            ? ComputeSpriteBounds(hovered)
+            : ComputeSpriteBounds(hoveredObstacle);
         if (hoveredLabel != null) hoveredLabel.SpriteBounds = bounds;
 
         float halfW = canvasRt.rect.width * 0.5f;
         float halfH = canvasRt.rect.height * 0.5f;
 
         // ---------- 头顶：本回合预告技能 ----------
-        string text = BuildPlannedSkillText(hovered);
+        string text = hovered != null ? BuildPlannedSkillText(hovered) : "";
         if (hoveredLabel != null && hoveredLabel.Root != null)
         {
             if (string.IsNullOrEmpty(text))
@@ -2893,13 +2905,14 @@ public class BattleHUD : MonoBehaviour
                 RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRt, feetScreen, null, out local);
                 enemyHpBar.anchoredPosition = local;
 
-                int max = hovered.GetMaxHealth();
-                float ratio = max > 0 ? Mathf.Clamp01((float)hovered.GetCurrentHealth() / max) : 0f;
+                int max = hovered != null ? hovered.GetMaxHealth() : hoveredObstacle.GetMaxHealth();
+                int current = hovered != null ? hovered.GetCurrentHealth() : hoveredObstacle.GetCurrentHealth();
+                float ratio = max > 0 ? Mathf.Clamp01((float)current / max) : 0f;
                 if (enemyHpBarFill != null)
                     enemyHpBarFill.rectTransform.sizeDelta =
                         new Vector2(hpBarInnerWidth * hoverInfoScale * ratio, 8f * hoverInfoScale);
                 if (enemyHpBarText != null)
-                    enemyHpBarText.text = hovered.GetCurrentHealth() + "/" + max;
+                    enemyHpBarText.text = current + "/" + max;
             }
         }
     }
@@ -2934,6 +2947,39 @@ public class BattleHUD : MonoBehaviour
             // 多只立绘重叠时取屏幕中心离鼠标最近的那只
             float d = Mathf.Abs(mouse.x - rect.center.x) + Mathf.Abs(mouse.y - rect.center.y);
             if (d < bestDistance) { bestDistance = d; best = label.Enemy; }
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// 查找鼠标下的有限生命障碍物。使用精灵的屏幕包围盒，不依赖预制体是否配置碰撞体；
+    /// 无限生命的柱子等直接跳过，因此不会显示血条。
+    /// </summary>
+    private static Obstacle FindHoveredObstacle(Camera cam)
+    {
+        if (cam == null || HexGrid.Instance == null) return null;
+
+        Vector3 mouse = Input.mousePosition;
+        Obstacle best = null;
+        float bestDistance = float.MaxValue;
+        foreach (HexCell cell in HexGrid.Instance.GetAllCells())
+        {
+            Obstacle obstacle = cell != null ? cell.obstacle : null;
+            if (obstacle == null || obstacle.IsDestroyed || !obstacle.HasFiniteHealth) continue;
+
+            Bounds bounds = ComputeSpriteBounds(obstacle);
+            Vector3 a = cam.WorldToScreenPoint(bounds.min);
+            Vector3 b = cam.WorldToScreenPoint(bounds.max);
+            Rect rect = Rect.MinMaxRect(Mathf.Min(a.x, b.x), Mathf.Min(a.y, b.y),
+                                        Mathf.Max(a.x, b.x), Mathf.Max(a.y, b.y));
+            if (!rect.Contains(mouse)) continue;
+
+            float distance = Mathf.Abs(mouse.x - rect.center.x) + Mathf.Abs(mouse.y - rect.center.y);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                best = obstacle;
+            }
         }
         return best;
     }
@@ -3086,16 +3132,30 @@ public class BattleHUD : MonoBehaviour
     /// <summary>合并敌人身上全部 SpriteRenderer 的世界包围盒（没有精灵时给个占位盒）</summary>
     private static Bounds ComputeSpriteBounds(EnemyUnit enemy)
     {
+        return ComputeSpriteBounds(enemy != null ? enemy.transform : null);
+    }
+
+    private static Bounds ComputeSpriteBounds(Obstacle obstacle)
+    {
+        return ComputeSpriteBounds(obstacle != null ? obstacle.transform : null);
+    }
+
+    private static Bounds ComputeSpriteBounds(Transform target)
+    {
         bool has = false;
         Bounds bounds = default;
-        foreach (SpriteRenderer r in enemy.GetComponentsInChildren<SpriteRenderer>(true))
+        if (target != null)
+        foreach (SpriteRenderer r in target.GetComponentsInChildren<SpriteRenderer>(true))
         {
             if (r == null || r.sprite == null) continue;
             if (!has) { bounds = r.bounds; has = true; }
             else bounds.Encapsulate(r.bounds);
         }
         if (!has)
-            bounds = new Bounds(enemy.transform.position + Vector3.up * 0.5f, new Vector3(1f, 1f, 0f));
+        {
+            Vector3 origin = target != null ? target.position : Vector3.zero;
+            bounds = new Bounds(origin + Vector3.up * 0.5f, new Vector3(1f, 1f, 0f));
+        }
         return bounds;
     }
 

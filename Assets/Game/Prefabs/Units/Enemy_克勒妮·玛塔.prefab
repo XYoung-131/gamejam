@@ -77,7 +77,7 @@ SpriteRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 10
   m_Sprite: {fileID: 21300000, guid: 2460691e131e4c3fb2a2b235cf2606ae, type: 3}
-  m_Color: {r: 1, g: 0.78, b: 0.68, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
@@ -136,6 +136,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   data: {fileID: 11400000, guid: 618103312cd38da438accfd3aea9908c, type: 2}
   currentHealth: 0
+  runtimeMaxHealth: 0
   shield: 0
   currentCoord:
     q: 0
@@ -144,9 +145,11 @@ MonoBehaviour:
   collisionBlockerDamage: 2
   reflectsDisplacement: 0
   activeBuffs: []
+  skipDecayOnAppliedTurn: 0
   thinkDelay: 0.8
   stepDelay: 0.3
   skillsPerTurn: 1
+  maxStepsPerTurn: 3
 --- !u!114 &3719415654711483531
 MonoBehaviour:
   m_ObjectHideFlags: 0

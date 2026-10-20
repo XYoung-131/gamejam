@@ -172,6 +172,12 @@ public class Obstacle : MonoBehaviour
     /// </summary>
     public int GetCurrentHealth() => currentHealth;
 
+    /// <summary>配置的最大生命；-1 表示无限生命。</summary>
+    public int GetMaxHealth() => data != null ? data.maxHealth : -1;
+
+    /// <summary>有限生命的障碍物才显示血条并正常受到伤害。</summary>
+    public bool HasFiniteHealth => data != null && data.maxHealth >= 0;
+
     /// <summary>单位被位移撞到该障碍物时，撞击者额外承受的伤害。</summary>
     public int GetCollisionDamageBonus()
     {

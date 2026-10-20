@@ -626,7 +626,7 @@ public class PlayerCardSystem : MonoBehaviour
             return false;
         if (card.attackTargetRule == AttackTargetRule.单位)
             return Fail($"【{card.cardName}】是单体技能，请直接点击目标单位释放");
-        if (!card.IsAttack || !card.CanTargetUnit)
+        if (!card.IsAttack)
             return Fail($"【{card.cardName}】不是可对敌方范围释放的攻击技能");
 
         var area = new List<AttackAreaCell>();
@@ -644,7 +644,14 @@ public class PlayerCardSystem : MonoBehaviour
                     return Fail($"这一格无法被【{card.cardName}】选中");
                 HexCell cell = HexGrid.Instance.GetCell(coord);
                 Unit target = cell.occupyUnit;
-                if (!ValidateCardTargeting(card, target)) return false;
+                if (target != null)
+                {
+                    if (!ValidateCardTargeting(card, target)) return false;
+                }
+                else if (cell.obstacle == null || !card.CanTargetObstacle)
+                {
+                    return Fail($"这一格没有可攻击的目标");
+                }
                 if (firstTarget == null) firstTarget = target;
                 area.Add(new AttackAreaCell(coord, card.damage));
             }
@@ -772,6 +779,27 @@ public class PlayerCardSystem : MonoBehaviour
         if (card.attackEffectRule == AttackEffectRule.飞身刺击冲刺 && outcome.KilledTarget)
             player.RestoreStamina(AttackEffectMath.HalfRefund(staminaCost));
         EventManager.Trigger("CardUsed", card, player, finalTarget);
+        return true;
+    }
+
+    /// <summary>基础攻击技能攻击障碍物；与普通攻击使用同一套阶段、耐力、射程和视线规则。</summary>
+    public virtual bool UseBasicAttackOnObstacle(CardData card, Obstacle obstacle)
+    {
+        if (card == null || !card.IsAttack || obstacle == null) return false;
+        if (!CanActNow()) return Fail("现在不是你的行动阶段，无法使用技能");
+        if (player.HasEffect(BuffEffectType.禁止行动))
+            return Fail("你被禁止行动（眩晕等），本回合无法使用技能");
+        if (card.attackTargetRule != AttackTargetRule.单位)
+            return Fail($"【{card.cardName}】不是单体技能，不能这样释放");
+        if (!IsInRange(card, player.GetCoord(), obstacle.GetCoord())) return false;
+        if (!IsTargetReachable(card, player.GetCoord(), obstacle.GetCoord())) return false;
+
+        int staminaCost = card.GetPlayActionCost(player);
+        if (!player.TrySpendStamina(staminaCost)) return false;
+
+        EventManager.Trigger("PlayerCardAboutToResolve", card, player);
+        card.Resolve(player, obstacle);
+        EventManager.Trigger("CardUsedOnObstacle", card, player, obstacle);
         return true;
     }
 

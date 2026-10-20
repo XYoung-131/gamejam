@@ -195,7 +195,7 @@ public class CardData : ScriptableObject
     public int damage = 0;
     [Tooltip("伤害类型：物理=最普通伤害（先扣护盾）；真实=无视护甲(护盾)但可被减伤；Buff=中毒/灼烧/流血等持续伤害")]
     public DamageType damageType = DamageType.物理;
-    [Tooltip("攻击卡可以选择哪些目标类型，可多选（只勾敌方单位就不能打障碍物）")]
+    [Tooltip("攻击卡的单位目标类型。障碍物是所有攻击卡都可攻击的环境目标，无需逐卡配置")]
     public List<CardTargetType> targetTypes = new List<CardTargetType> { CardTargetType.敌方单位 };
     [Tooltip("攻击牌选目标方式：单体、多目标、地块、以自身为中心、全场、穿透或连锁")]
     public AttackTargetRule attackTargetRule = AttackTargetRule.单位;
@@ -285,8 +285,11 @@ public class CardData : ScriptableObject
     /// <summary>攻击卡能不能以敌方单位为目标</summary>
     public bool CanTargetUnit => targetTypes.Contains(CardTargetType.敌方单位);
 
-    /// <summary>攻击卡能不能以障碍物为目标</summary>
-    public bool CanTargetObstacle => targetTypes.Contains(CardTargetType.障碍物);
+    /// <summary>
+    /// 所有攻击卡都能以障碍物为目标。保留 CardTargetType.障碍物 枚举与旧资产兼容，
+    /// 但不再要求每张攻击卡逐一勾选。
+    /// </summary>
+    public bool CanTargetObstacle => IsAttack;
 
     /// <summary>防御卡能不能对自身使用（护盾/位移等）</summary>
     public bool CanDefenseSelf => defenseTargetTypes.Contains(DefenseTargetType.自身);
