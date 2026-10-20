@@ -1,5 +1,4 @@
 using UnityEngine.Events;
-using UnityEngine.SceneManagement;
 
 // ═══════════════════════════════════════════════════════════════
 //  具体事件：实验开始
@@ -24,9 +23,8 @@ public static class EventPanel_实验开始
             {
                 index =>
                 {
-                    // 选项 1「迎接第一场战斗」→ 关闭事件界面，进入战斗场景
+                    // 关闭后由本局流程进入第一关。
                     EventPanel.Close();
-                    SceneManager.LoadScene("Battle");
                 },
             });
     }

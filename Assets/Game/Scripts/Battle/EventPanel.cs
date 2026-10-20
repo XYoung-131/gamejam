@@ -75,7 +75,7 @@ public class EventPanel : MonoBehaviour
     public static EventPanel Show(string eventName = null, string description = null,
         string[] options = null, UnityEngine.Events.UnityAction<int>[] optionActions = null)
     {
-        Close();
+        CloseCurrent();
         pendingName = eventName;
         pendingDesc = description;
         pendingOptions = options;
@@ -84,11 +84,21 @@ public class EventPanel : MonoBehaviour
         return go.GetComponent<EventPanel>();
     }
 
-    /// <summary>关闭事件界面</summary>
+    /// <summary>事件选项完成后关闭界面，并通知本局流程进入下一关。</summary>
     public static void Close()
     {
-        if (instance != null)
-            Destroy(instance.gameObject);
+        if (instance == null) return;
+        CloseCurrent();
+        if (RunFlowController.Instance != null)
+            RunFlowController.Instance.CompleteEvent();
+    }
+
+    private static void CloseCurrent()
+    {
+        if (instance == null) return;
+        EventPanel panel = instance;
+        instance = null;
+        Destroy(panel.gameObject);
     }
 
     // ══════════════════════════════════════════════════════════
@@ -282,7 +292,7 @@ public class EventPanel : MonoBehaviour
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                 new Vector2(rightEdge - ws[i] / 2f, -(bottom + slotH / 2f)),
                 new Vector2(ws[i], slotH),
-                actions != null && actions[i] != null ? () => actions[i](captured) :
+                actions != null && actions[i] != null ? () => actions[captured](captured) :
                     (UnityEngine.Events.UnityAction)(() => { /* TODO: 接选项效果 */ }));
             Text t = MakeChildText(slot.image.rectTransform, options[i], 26, Color.black);
             t.alignment = TextAnchor.MiddleCenter;

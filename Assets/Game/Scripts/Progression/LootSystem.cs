@@ -64,9 +64,11 @@ public class LootSystem : MonoBehaviour
 
     // 已连续多少关没有掉药水（用于保底计数）
     private int consecutivePotionMisses = 0;
+    private bool battleEndSettled;
 
     /// <summary>当前连续没掉药水的关卡数（UI 可读）</summary>
     public int ConsecutivePotionMisses => consecutivePotionMisses;
+    public void RestorePotionMisses(int misses) => consecutivePotionMisses = Mathf.Max(0, misses);
 
     // ============================================================
     //       战斗结束必定发放的遗物（"劣质混合饮料" → 饮料成瘾）
@@ -176,6 +178,8 @@ public class LootSystem : MonoBehaviour
     {
         if (state == GameState.Victory)
         {
+            if (battleEndSettled) return;
+            battleEndSettled = true;
             FlushBattleEndRelics();
             DropBattleEndPotion();
         }

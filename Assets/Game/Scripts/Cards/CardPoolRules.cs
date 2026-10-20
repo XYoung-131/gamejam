@@ -5,7 +5,12 @@ public static class CardPoolRules
 {
     public static bool IsOfferEligible(CardData card, CardPool requestedPool) =>
         card != null && card.library == requestedPool &&
+        !string.IsNullOrWhiteSpace(card.cardName) &&
         card.rarity != Rarity.敌方特有 && !card.initialOnly;
+
+    public static bool IsEnemySkillInfusionEligible(CardData card) =>
+        card != null && !string.IsNullOrWhiteSpace(card.cardName) &&
+        card.rarity != Rarity.敌方特有;
 
     public static List<CardData> GetInitialCards(IEnumerable<CardData> source)
     {
