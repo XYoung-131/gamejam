@@ -122,6 +122,11 @@ public class BattleHUD : MonoBehaviour
     private RectTransform buffTooltipRt;
     private Text buffTooltipText;
 
+    // 当前正在被悬停的来源按钮（技能卡 / 饮料槽 / 待选卡）。
+    // UGUI 只在指针真正"移出"时才发 PointerExit，来源物体被隐藏或销毁时不会补发，
+    // 所以记下来源，由每帧的 GuardTooltips() 兜底判断浮层该不该关。
+    private GameObject tooltipHoverOwner;
+
     // 底部插槽 / 左侧卡面的布局参数（建 UI 时记下，悬停浮层要按它们定位）
     private float slotCardW = 203f;
     private float slotCardFaceH = 265f;
@@ -897,19 +902,76 @@ public class BattleHUD : MonoBehaviour
         if (buffTooltip != null) buffTooltip.SetActive(false);
     }
 
+    /// <summary>关掉所有悬停浮层并清掉来源（弹模态框 / 切换界面时统一用这个）</summary>
+    private void HideAllTooltips()
+    {
+        tooltipHoverOwner = null;
+        HideSkillTooltip();
+        HidePotionTooltip();
+    }
+
+    /// <summary>
+    /// 悬停浮层的保底隐藏（每帧调用）。
+    ///
+    /// UGUI 的 PointerExit 只在"指针真的移出"时由 EventSystem 派发，下面这些情况收不到，
+    /// 浮层就会一直贴在屏幕上，必须重新悬停一次再移开才能关掉（此前的 bug）：
+    /// ① 进入瞄准 / 打牌堆 / 选卡时，左下角按钮组与敌方技能栏被整体 SetActive(false)
+    ///    ——物体失活不会补发 PointerExit；
+    /// ② 卡面 / 待选卡被销毁重建 —— 销毁同样不会补发 PointerExit；
+    /// ③ 指针瞬间移出窗口、或被后来居上的全屏层盖住。
+    /// 所以这里直接检查"来源按钮还在不在、指针是不是还在它上面"，不满足就关。
+    /// </summary>
+    private void GuardTooltips()
+    {
+        bool visible = (skillTooltip != null && skillTooltip.activeSelf)
+                       || (buffTooltip != null && buffTooltip.activeSelf)
+                       || (potionTooltip != null && potionTooltip.activeSelf);
+        if (!visible) return;
+
+        GameObject owner = tooltipHoverOwner;
+
+        // ① 来源已隐藏 / 已销毁：立刻关（这是"选范围时浮层不消失"的主因）
+        if (owner == null || !owner.activeInHierarchy)
+        {
+            HideAllTooltips();
+            return;
+        }
+
+        // ② 指针已经不在来源按钮的矩形内：补一次 PointerExit 该做的事
+        RectTransform rt = owner.transform as RectTransform;
+        if (rt == null)
+        {
+            HideAllTooltips();
+            return;
+        }
+
+        Camera cam = (canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay)
+            ? canvas.worldCamera : null;
+        if (!RectTransformUtility.RectangleContainsScreenPoint(rt, Input.mousePosition, cam))
+            HideAllTooltips();
+    }
+
     /// <summary>给按钮挂"指针进入 / 离开"回调（EventTrigger，不干扰 Button 自己的点击）</summary>
-    private static void AddHoverTrigger(GameObject go, UnityAction onEnter, UnityAction onExit)
+    private void AddHoverTrigger(GameObject go, UnityAction onEnter, UnityAction onExit)
     {
         if (go == null) return;
         EventTrigger et = go.GetComponent<EventTrigger>();
         if (et == null) et = go.AddComponent<EventTrigger>();
 
         EventTrigger.Entry enter = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
-        enter.callback.AddListener(_ => onEnter());
+        enter.callback.AddListener(_ =>
+        {
+            tooltipHoverOwner = go;   // 记下来源，供 GuardTooltips() 兜底判断
+            onEnter();
+        });
         et.triggers.Add(enter);
 
         EventTrigger.Entry exit = new EventTrigger.Entry { eventID = EventTriggerType.PointerExit };
-        exit.callback.AddListener(_ => onExit());
+        exit.callback.AddListener(_ =>
+        {
+            if (tooltipHoverOwner == go) tooltipHoverOwner = null;
+            onExit();
+        });
         et.triggers.Add(exit);
     }
 
@@ -1380,6 +1442,7 @@ public class BattleHUD : MonoBehaviour
 
     private void ShowInfuseConfirm(CardData card)
     {
+        HideAllTooltips();
         pendingInfuseCard = card;
         if (confirmText != null)
             confirmText.text = "是否花费 " + card.thoughtCost + " 点思绪\n来灌注当前选中技能？\n\n【" + card.cardName + "】";
@@ -1448,6 +1511,7 @@ public class BattleHUD : MonoBehaviour
 
     private void ShowMessage(string msg)
     {
+        HideAllTooltips();   // 弹模态框时先把悬停浮层收掉，避免两个框叠在屏幕上
         if (messageText != null) messageText.text = msg;
         if (messagePanel != null) messagePanel.SetActive(true);
     }
@@ -2036,6 +2100,7 @@ public class BattleHUD : MonoBehaviour
 
     private void Update()
     {
+        GuardTooltips();     // 先兜底关掉该关的悬停浮层，再处理本帧输入
         RefreshHud();
         RefreshEnemyPlannedLabels();
 
@@ -2586,10 +2651,18 @@ public class BattleHUD : MonoBehaviour
 
         // 选技能/选牌期间：隐藏左下角按钮与插槽组、左侧敌方技能栏
         // （保留左上状态和右下取消），释放/取消后恢复
+        // 注意：SetActive(false) 不会补发 PointerExit，悬停浮层必须在这里显式关掉，
+        // 否则进入瞄准 / 打牌堆时会一直贴在屏幕上（必须重新悬停一次再移开才能消失）
         if (skillGroup != null && skillGroup.activeSelf == busy)
+        {
+            if (busy) HideAllTooltips();
             skillGroup.SetActive(!busy);
+        }
         if (enemySkillGroup != null && enemySkillGroup.activeSelf == busy)
+        {
+            if (busy) HideAllTooltips();
             enemySkillGroup.SetActive(!busy);
+        }
 
         // 插槽文字（卡名/次数）随槽位变化刷新；每帧兜底一次，事件丢失也能补上
         RefreshSlotTexts();

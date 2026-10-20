@@ -854,3 +854,35 @@ defenseValue / defenseTargetTypes / library / rarity / tags / buffs / devNotes`�
 
 - 这 6 件遗物**没有美术图标**（`Assets/Game/Art/Relics/` 里只有老 22 张），`icon` 留空：
   战斗 HUD 与事件长条会画浅色方块占位，悬停仍能看到名称与效果。美术出了图直接拖到 `icon` 即可。
+
+## 小羊：修复悬停介绍浮层"进了瞄准模式就不消失"（2026-10-20）
+
+### 现象
+
+战斗界面鼠标停在技能卡上会弹出介绍浮层；点进技能瞄准（选范围）后浮层留在屏幕上不消失，
+必须重新把鼠标移到那张卡上刷新一次、再移开才会关闭。
+
+### 根因
+
+UGUI 的 `PointerExit` 只在**指针真的移出**某个物体时由 `EventSystem` 派发。这些情况下收不到：
+
+1. **物体被 `SetActive(false)`**——进瞄准 / 打牌堆 / 选卡时，`RefreshHud()` 会把左下角
+   `skillGroup` 与左侧 `enemySkillGroup` 整体隐藏（这正是"选范围时浮层不消失"的主因），
+   失活不会补发 PointerExit；
+2. **物体被销毁重建**——出牌后卡面 / 待选卡重建，销毁同样不补发 PointerExit；
+3. 指针瞬间移出窗口、或被后来居上的全屏层盖住。
+
+`HideSkillTooltip()` 原来只挂在 PointerExit 上，所以上面三种情况一发生，浮层就"卡住"了。
+
+### 修法（`Battle/BattleHUD.cs`）
+
+- 新增 `tooltipHoverOwner`：`AddHoverTrigger` 在 PointerEnter 时记下来源按钮，PointerExit 时清掉
+  （`AddHoverTrigger` 顺带从 `static` 改成实例方法，因为要写实例字段）。
+- 新增 `GuardTooltips()`，在 `Update()` 最前面每帧调用（浮层没显示时直接 return，零开销）：
+  - 来源已隐藏 / 已销毁 → 立刻关；
+  - 指针已不在来源按钮矩形内（`RectTransformUtility.RectangleContainsScreenPoint`）→ 立刻关。
+- 新增 `HideAllTooltips()`（关技能浮层 + buff 浮层 + 药水浮层，并清来源）。
+- `RefreshHud()` 里隐藏 `skillGroup` / `enemySkillGroup` 的那一刻显式 `HideAllTooltips()`，
+  不等兜底判定，同帧就收掉。
+- `ShowMessage()` / `ShowInfuseConfirm()` 打开模态框时也先 `HideAllTooltips()`，
+  避免"提示框 + 技能浮层"两个框叠着。
