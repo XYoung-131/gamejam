@@ -258,13 +258,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cf47d7cba2c444bc838b35c241c71cb3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  backgroundSprite: {fileID: 0}
+  backgroundSprite: {fileID: 21300000, guid: 82b0939b74d96844a9ed7a123b6fcd9d, type: 3}
   menuSprites:
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  menuHoverSprite: {fileID: 0}
+  - {fileID: 21300000, guid: d9c478436f0f4432a65692c2943f725e, type: 3}
+  - {fileID: 21300000, guid: 9fd7eb1e5577451481ca8d5ffb11657d, type: 3}
+  - {fileID: 21300000, guid: 747ec33639f04d7f83c4433aeae67c85, type: 3}
+  - {fileID: 21300000, guid: cf4c09a9b5b340bab35d656cde0cc492, type: 3}
+  menuHoverSprite: {fileID: 21300000, guid: 66552795a3814dc0b3ad7f8c17f0a25f, type: 3}
   battleSceneName: Battle
 --- !u!1660057539 &9223372036854775807
 SceneRoots:

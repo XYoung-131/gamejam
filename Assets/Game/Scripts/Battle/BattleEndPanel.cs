@@ -117,6 +117,26 @@ public class BattleEndPanel : MonoBehaviour
         if (font == null)
             font = Resources.GetBuiltinResource<Font>("Arial.ttf");
 
+        // 本面板由 BattleHUD 在运行时 AddComponent 创建，没有 Inspector 引用。
+        // 从 Resources 配置资产取素材，确保正式 Build 与编辑器表现一致。
+        BattleUIAssetCatalog runtimeAssets = Resources.Load<BattleUIAssetCatalog>("BattleUIAssetCatalog");
+        if (runtimeAssets != null)
+        {
+            if (frameSprite == null) frameSprite = runtimeAssets.rewardFrameSprite;
+            if (titleBarSprite == null) titleBarSprite = runtimeAssets.rewardTitleBarSprite;
+            if (buttonSprite == null) buttonSprite = runtimeAssets.buttonSprite;
+            if (buttonHoverSprite == null) buttonHoverSprite = runtimeAssets.buttonHoverSprite;
+            if (arrowSprite == null) arrowSprite = runtimeAssets.arrowSprite;
+            if (arrowHoverSprite == null) arrowHoverSprite = runtimeAssets.arrowHoverSprite;
+            if (cardFaceSprite == null) cardFaceSprite = runtimeAssets.emptyCardFaceSprite;
+            if (attackCardFaceSprite == null) attackCardFaceSprite = runtimeAssets.attackCardFaceSprite;
+            if (defenseCardFaceSprite == null) defenseCardFaceSprite = runtimeAssets.defenseCardFaceSprite;
+        }
+        else
+        {
+            Debug.LogError("[BattleEndPanel] Resources/BattleUIAssetCatalog 缺失，战斗结束界面将缺少 UI 素材");
+        }
+
 #if UNITY_EDITOR
         const string uiDir = "Assets/Game/Art/UI/";
         if (frameSprite == null) frameSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(uiDir + "一个UI框_2.png");

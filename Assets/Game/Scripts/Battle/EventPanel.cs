@@ -142,6 +142,24 @@ public class EventPanel : MonoBehaviour
         // 不用退出播放模式重进。补登过的名字（extraItems）重建时会自动补回。
         RebuildItemTable();
 
+        // EventPanel 每次通过 new GameObject 动态创建，无法依赖场景 Inspector 引用。
+        // 从 Resources 配置资产取素材，正式 Build 中也可用。
+        BattleUIAssetCatalog runtimeAssets = Resources.Load<BattleUIAssetCatalog>("BattleUIAssetCatalog");
+        if (runtimeAssets != null)
+        {
+            if (statusBarSprite == null) statusBarSprite = runtimeAssets.statusBarSprite;
+            if (frameBackSprite == null) frameBackSprite = runtimeAssets.eventFrameSprite;
+            if (buttonSprite == null) buttonSprite = runtimeAssets.buttonSprite;
+            if (buttonHoverSprite == null) buttonHoverSprite = runtimeAssets.buttonHoverSprite;
+            if (slotSprite == null) slotSprite = runtimeAssets.staminaSlotSprite;
+            if (hpSlotSprite == null) hpSlotSprite = runtimeAssets.hpSlotSprite;
+            if (potionSlotSprite == null) potionSlotSprite = runtimeAssets.potionSlotSprite;
+        }
+        else
+        {
+            Debug.LogError("[EventPanel] Resources/BattleUIAssetCatalog 缺失，事件界面将缺少 UI 素材");
+        }
+
 #if UNITY_EDITOR
         const string uiDir = "Assets/Game/Art/UI/";
         if (statusBarSprite == null)
