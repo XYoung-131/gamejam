@@ -38,6 +38,68 @@ public static class PlayerRunState
     public static int BonusStamina;
     public static int BonusThought;
 
+    // ============================================================
+    //        事件（战斗外）改动玩家的入口
+    //
+    //  事件是在"上一场战斗的场景"里弹的，玩家对象还活着，但下一关会
+    //  重新生成玩家并走 ApplyTo 回放快照——所以事件改完玩家必须立刻
+    //  Capture 一次，否则改动活不过场景切换。
+    //  没有场上玩家（开局的"实验开始"）时，直接改快照 / 待回放增量。
+    // ============================================================
+
+    /// <summary>事件里给"最大耐力上限"加减（负数 = 减少），会带到后续关卡</summary>
+    public static void ApplyMaxStaminaDelta(PlayerUnit player, int delta)
+    {
+        if (delta == 0) return;
+        if (player != null)
+        {
+            player.maxStamina = Mathf.Max(1, player.maxStamina + delta);
+            Capture(player);
+        }
+        else if (HasSnapshot) MaxStamina = Mathf.Max(1, MaxStamina + delta);
+        else BonusStamina += delta;
+    }
+
+    /// <summary>事件里给"最大思绪上限"加减（负数 = 减少），会带到后续关卡</summary>
+    public static void ApplyMaxThoughtDelta(PlayerUnit player, int delta)
+    {
+        if (delta == 0) return;
+        if (player != null)
+        {
+            player.maxThought = Mathf.Max(1, player.maxThought + delta);
+            Capture(player);
+        }
+        else if (HasSnapshot) MaxThought = Mathf.Max(1, MaxThought + delta);
+        else BonusThought += delta;
+    }
+
+    /// <summary>事件里发一件遗物：有场上玩家就当场获得（永久 buff 立刻生效），然后刷新快照</summary>
+    public static void GrantRelic(PlayerUnit player, RelicData relic)
+    {
+        if (relic == null) return;
+        if (player != null)
+        {
+            if (!player.HasRelic(relic)) player.AddRelic(relic);
+            Capture(player);
+            return;
+        }
+        if (!Relics.Contains(relic)) Relics.Add(relic);
+    }
+
+    /// <summary>事件里发一瓶药水（背包满则拿不到，返回 false），然后刷新快照</summary>
+    public static bool GrantPotion(PlayerUnit player, PotionData potion)
+    {
+        if (potion == null) return false;
+        if (player != null)
+        {
+            bool added = player.AddPotion(potion);
+            Capture(player);
+            return added;
+        }
+        Potions.Add(potion);
+        return true;
+    }
+
     public static void Capture(PlayerUnit player)
     {
         if (player == null) return;

@@ -1,4 +1,7 @@
+using System;
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 // ═══════════════════════════════════════════════════════════════
@@ -40,6 +43,8 @@ public class EventPanel : MonoBehaviour
     private const float slotBottomGap = 10f; // 最下槽底缘距黑框下
     private const float slotMaxW = 1260f;    // 选项槽宽度上限（840×1.5）
     private const float slotMinW = 540f;     // 选项槽宽度下限（360×1.5）
+    private const float slotFixedW = 840f;   // 选项槽固定宽度：所有事件统一，不再按字数适配
+    private const float slotTextPad = 20f;   // 选项文本左边距（左端对齐的那条线）
     private const float descTopGap = 20f;    // 描述文本顶部距框上侧
 
     /// <summary>描述文本左缘（框左起）＝ 选项槽最左侧，由 BuildOptions/占位槽写入</summary>
@@ -62,6 +67,17 @@ public class EventPanel : MonoBehaviour
     private Text nameText;              // 名称按钮上的黑字
     private readonly System.Collections.Generic.List<RectTransform> optionSlots
         = new System.Collections.Generic.List<RectTransform>();
+
+    // ---- 遗物栏（长条内、生命槽右侧） ----
+    private const float relicIconSize = 64f;
+    private RectTransform relicRow;
+    private readonly List<Image> relicIcons = new List<Image>();
+
+    // ---- 物品悬停浮层（遗物 / 药水效果） ----
+    private GameObject itemTip;
+    private RectTransform itemTipRt;
+    private Text itemTipTitle;
+    private Text itemTipBody;
 
     // ══════════════════════════════════════════════════════════
     //  对外接口
@@ -93,11 +109,20 @@ public class EventPanel : MonoBehaviour
             RunFlowController.Instance.CompleteEvent();
     }
 
+    /// <summary>只关闭界面、不推进流程（供"同一个事件内换一套选项"的场景，如自助售卖机连拍）</summary>
+    public static void CloseWithoutCompleting()
+    {
+        CloseCurrent();
+    }
+
     private static void CloseCurrent()
     {
         if (instance == null) return;
         EventPanel panel = instance;
         instance = null;
+        // 先隐藏再销毁：Destroy 要到帧末才生效，同一帧里立刻重开同一事件时
+        // 旧面板会和新面板叠一帧（两层黑框闪一下），隐藏掉就没有这个闪烁。
+        panel.gameObject.SetActive(false);
         Destroy(panel.gameObject);
     }
 
@@ -197,6 +222,9 @@ public class EventPanel : MonoBehaviour
         hpSlot.raycastTarget = false;
         Text hpText = MakeChildText(hpSlot.rectTransform, "12/12", 30, Color.white);
 
+        // ---- 生命槽右侧：流程内已获得的遗物（图标 + 悬停看效果） ----
+        BuildRelicRow();
+
         // 屏幕正中的纯黑长方形（事件内容区）
         RectTransform frame = NewRect(transform, "EventFrame",
             new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(frameW, frameH));
@@ -231,11 +259,11 @@ public class EventPanel : MonoBehaviour
                 Image slot = NewImage(frame, "EventSlot_" + i, slotSprite,
                     slotSprite == null ? new Color(0.85f, 0.85f, 0.87f, 0.9f) : Color.white,
                     new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                    new Vector2(frameW / 2f - slotRightGap - slotMinW / 2f, -(bottom + slotH / 2f)),
-                    new Vector2(slotMinW, slotH));
+                    new Vector2(frameW / 2f - slotRightGap - slotFixedW / 2f, -(bottom + slotH / 2f)),
+                    new Vector2(slotFixedW, slotH));
                 slot.raycastTarget = false;
             }
-            optionLeftEdge = frameW - slotRightGap - slotMinW;
+            optionLeftEdge = frameW - slotRightGap - slotFixedW;
         }
 
         // ---- 填充事件数据（Show() 传入的内容） ----
@@ -273,10 +301,8 @@ public class EventPanel : MonoBehaviour
         float[] ws = new float[n];
         for (int i = 0; i < n; i++)
         {
-            // 先量文本：按字号 26 + 左右留白估槽宽
-            string s = options[i] ?? "";
-            float textW = EstimateTextWidth(s, 26);
-            ws[i] = Mathf.Clamp(textW + 48f, slotMinW, slotMaxW);
+            // 槽宽固定（不随字数变化）：三槽等宽、右缘对齐 → 文本左端自然落在同一条竖线上
+            ws[i] = slotFixedW;
         }
 
         // 竖排：选项 n-1 在最下（底缘距框下 10），选项 0 在最上；所有槽右缘对齐
@@ -294,8 +320,8 @@ public class EventPanel : MonoBehaviour
                 new Vector2(ws[i], slotH),
                 actions != null && actions[i] != null ? () => actions[captured](captured) :
                     (UnityEngine.Events.UnityAction)(() => { /* TODO: 接选项效果 */ }));
-            Text t = MakeChildText(slot.image.rectTransform, options[i], 26, Color.black);
-            t.alignment = TextAnchor.MiddleCenter;
+            // 选项文本分段渲染：遗物/药水名 → 黄字 + [] + 下划线，悬停弹效果
+            BuildRichOptionLabel(slot.image.rectTransform, options[i], slot);
             optionSlots.Add(slot.image.rectTransform);
         }
     }
@@ -308,6 +334,361 @@ public class EventPanel : MonoBehaviour
         foreach (char c in s)
             w += c > 0x2E80 ? fontSize : fontSize * 0.55f;
         return w;
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  遗物栏（长条内、生命槽右侧）
+    // ══════════════════════════════════════════════════════════
+
+    private void BuildRelicRow()
+    {
+        // 遗物图标中心与长条右侧空饮料槽位同高（药水槽中心 y = -52.5）
+        // 横向：生命槽右缘 156 再右移 10px
+        relicRow = NewRect(transform, "RelicRow",
+            new Vector2(0f, 1f), new Vector2(0f, 1f),
+            new Vector2(24f + 132f + 10f, -52.5f), new Vector2(620f, relicIconSize));
+        relicRow.pivot = new Vector2(0f, 0.5f);
+        RefreshRelicIcons();
+    }
+
+    /// <summary>已获得的遗物：优先取本局流程存档（PlayerRunState），其次取场上玩家</summary>
+    private static IReadOnlyList<RelicData> CollectRelics()
+    {
+        if (PlayerRunState.Relics != null && PlayerRunState.Relics.Count > 0)
+            return PlayerRunState.Relics;
+        PlayerUnit player = FindObjectOfType<PlayerUnit>();
+        return player != null ? player.Relics : null;
+    }
+
+    /// <summary>按当前持有遗物刷新图标（获得遗物后由具体事件调用即可）</summary>
+    public void RefreshRelicIcons()
+    {        if (relicRow == null) return;
+        IReadOnlyList<RelicData> relics = CollectRelics();
+        int count = relics != null ? relics.Count : 0;
+
+        while (relicIcons.Count < count)
+        {
+            Image icon = NewImage(relicRow, "RelicIcon_" + relicIcons.Count, null, Color.white,
+                new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), Vector2.zero,
+                new Vector2(relicIconSize, relicIconSize));
+            icon.preserveAspect = true;
+            relicIcons.Add(icon);
+        }
+
+        for (int i = 0; i < relicIcons.Count; i++)
+        {
+            bool used = i < count;
+            if (relicIcons[i].gameObject.activeSelf != used)
+                relicIcons[i].gameObject.SetActive(used);
+            if (!used) continue;
+
+            RelicData relic = relics[i];
+            relicIcons[i].sprite = relic.icon;
+            relicIcons[i].color = relic.icon != null ? Color.white : new Color(0.95f, 0.85f, 0.4f, 1f);
+            relicIcons[i].rectTransform.anchoredPosition = new Vector2(i * (relicIconSize + 5f), 0f);
+
+            RelicData captured = relic;
+            AddHover(relicIcons[i].gameObject,
+                () => ShowItemTip(captured.relicName, captured.description),
+                HideItemTip);
+        }
+    }
+
+    /// <summary>静态入口：事件里获得遗物后调用，立即刷新长条上的遗物栏</summary>
+    public static void RefreshRelics()
+    {
+        if (instance != null) instance.RefreshRelicIcons();
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  选项文本：遗物 / 药水名特殊显示（黄字 + [] + 下划线 + 悬停效果）
+    // ══════════════════════════════════════════════════════════
+
+    private sealed class ItemInfo
+    {
+        public string name;
+        public string desc;
+        public bool isRelic;
+    }
+
+    private sealed class Segment
+    {
+        public string text;
+        public ItemInfo item;   // null = 普通文字
+    }
+
+    private static List<ItemInfo> itemInfos;
+
+    /// <summary>遗物 / 药水名称表（名称长度降序，保证长名优先匹配）</summary>
+    private static List<ItemInfo> ItemInfos
+    {
+        get
+        {
+            if (itemInfos != null) return itemInfos;
+            itemInfos = new List<ItemInfo>();
+#if UNITY_EDITOR
+            foreach (string guid in UnityEditor.AssetDatabase.FindAssets("t:RelicData"))
+            {
+                string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
+                RelicData relic = UnityEditor.AssetDatabase.LoadAssetAtPath<RelicData>(path);
+                if (relic != null && !string.IsNullOrEmpty(relic.relicName))
+                    itemInfos.Add(new ItemInfo { name = relic.relicName, desc = relic.description, isRelic = true });
+            }
+            foreach (string guid in UnityEditor.AssetDatabase.FindAssets("t:PotionData"))
+            {
+                string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
+                PotionData potion = UnityEditor.AssetDatabase.LoadAssetAtPath<PotionData>(path);
+                if (potion != null && !string.IsNullOrEmpty(potion.potionName))
+                    itemInfos.Add(new ItemInfo { name = potion.potionName, desc = potion.description, isRelic = false });
+            }
+#endif
+            itemInfos.Sort((a, b) => b.name.Length.CompareTo(a.name.Length));
+
+            // 飞书事件文本与资产名不一致的别名：显示原文，取同一资产的描述
+            AddAlias("次元抹除", "次元抹杀");
+            return itemInfos;
+        }
+    }
+
+    /// <summary>注册别名（alias 指向已加载的资产名，描述共用）</summary>
+    private static void AddAlias(string alias, string assetName)
+    {
+        ItemInfo source = itemInfos.Find(i => i.name == assetName);
+        if (source == null) return;
+        if (itemInfos.Exists(i => i.name == alias)) return;
+        itemInfos.Add(new ItemInfo { name = alias, desc = source.desc, isRelic = source.isRelic });
+        itemInfos.Sort((a, b) => b.name.Length.CompareTo(a.name.Length));
+    }
+
+    /// <summary>
+    /// 运行时补登一个物品名（资产还没建出来的遗物/药水用）。
+    /// 登记后选项文本里的这个名字同样会变成"黄字 + [] + 下划线 + 悬停弹效果"。
+    /// 资产一旦建好（同名），会优先用资产的描述，这里不会覆盖。
+    /// </summary>
+    public static void RegisterItemName(string name, string description)
+    {
+        if (string.IsNullOrEmpty(name)) return;
+        if (ItemInfos.Exists(i => i.name == name)) return;
+        itemInfos.Add(new ItemInfo { name = name, desc = description, isRelic = true });
+        itemInfos.Sort((a, b) => b.name.Length.CompareTo(a.name.Length));
+    }
+
+    /// <summary>把选项文本按物品名拆段</summary>
+    private static List<Segment> SplitByItems(string text)
+    {
+        List<Segment> result = new List<Segment>();
+        if (string.IsNullOrEmpty(text)) return result;
+
+        int pos = 0;
+        while (pos < text.Length)
+        {
+            ItemInfo best = null;
+            int bestIdx = -1;
+            foreach (ItemInfo info in ItemInfos)
+            {
+                int idx = text.IndexOf(info.name, pos, StringComparison.Ordinal);
+                if (idx < 0) continue;
+                if (bestIdx < 0 || idx < bestIdx ||
+                    (idx == bestIdx && info.name.Length > best.name.Length))
+                {
+                    bestIdx = idx;
+                    best = info;
+                }
+            }
+
+            if (best == null)
+            {
+                result.Add(new Segment { text = text.Substring(pos) });
+                break;
+            }
+            if (bestIdx > pos)
+                result.Add(new Segment { text = text.Substring(pos, bestIdx - pos) });
+            result.Add(new Segment { text = best.name, item = best });
+            pos = bestIdx + best.name.Length;
+        }
+        return result;
+    }
+
+    /// <summary>估算用：物品名加 [] 之后的纯文本</summary>
+    private static string BuildDisplayText(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return text;
+        System.Text.StringBuilder sb = new System.Text.StringBuilder();
+        foreach (Segment seg in SplitByItems(text))
+        {
+            if (seg.item != null) sb.Append('[').Append(seg.text).Append(']');
+            else sb.Append(seg.text);
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>选项文字分段排版：普通黑字 + 物品名（黄、[]、下划线、悬停弹效果），整体水平居中</summary>
+    private void BuildRichOptionLabel(RectTransform slotRt, string text, Button slotBtn)
+    {
+        List<Segment> segs = SplitByItems(text ?? "");
+        if (segs.Count == 0) return;
+
+        List<Text> labels = new List<Text>();
+        List<float> widths = new List<float>();
+
+        foreach (Segment seg in segs)
+        {
+            Text t = NewSegmentText(slotRt);
+            if (seg.item != null)
+            {
+                // 黄字 + 下划线（富文本）；[] 包裹
+                t.text = "<u>[" + seg.text + "]</u>";
+                t.color = new Color(1f, 0.78f, 0.16f);          // 金黄
+                Outline outline = t.gameObject.AddComponent<Outline>();
+                outline.effectColor = new Color(0f, 0f, 0f, 0.85f);   // 浅灰槽底上加深描边保证可读
+                outline.effectDistance = new Vector2(1.2f, -1.2f);
+
+                ItemInfo captured = seg.item;
+                AddHover(t.gameObject,
+                    () => ShowItemTip(captured.name, captured.desc),
+                    HideItemTip);
+                // 名称文字拦住了射线，点击要转发给选项按钮，否则点名字点不动
+                if (slotBtn != null)
+                    AddClick(t.gameObject, () => slotBtn.onClick.Invoke());
+            }
+            else
+            {
+                t.text = seg.text;
+                t.color = Color.black;
+                t.raycastTarget = false;
+            }
+
+            labels.Add(t);
+            widths.Add(t.preferredWidth);
+        }
+
+        // 左端对齐：所有选项都从槽内左侧固定边距开始（槽等宽 → 文本左端落在同一条竖线）
+        float x = -slotFixedW / 2f + slotTextPad;
+        for (int i = 0; i < labels.Count; i++)
+        {
+            labels[i].rectTransform.anchoredPosition = new Vector2(x, 0f);
+            x += widths[i];
+        }
+    }
+
+    /// <summary>建立一个可用于流式排版的文字段（锚点居中、左对齐自身）</summary>
+    private static Text NewSegmentText(RectTransform parent)
+    {
+        Text t = new GameObject("Seg", typeof(RectTransform)).AddComponent<Text>();
+        t.rectTransform.SetParent(parent, false);
+        t.rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+        t.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+        t.rectTransform.pivot = new Vector2(0f, 0.5f);
+        t.rectTransform.sizeDelta = new Vector2(0f, 40f);
+        t.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        if (t.font == null) t.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        t.fontSize = 26;
+        t.alignment = TextAnchor.MiddleLeft;
+        t.horizontalOverflow = HorizontalWrapMode.Overflow;
+        t.verticalOverflow = VerticalWrapMode.Overflow;
+        t.supportRichText = true;
+        t.raycastTarget = true;
+        return t;
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  物品效果浮层（遗物 / 药水通用）
+    // ══════════════════════════════════════════════════════════
+
+    private void EnsureItemTip()
+    {
+        if (itemTip != null) return;
+
+        itemTip = new GameObject("ItemTip", typeof(RectTransform));
+        itemTipRt = itemTip.GetComponent<RectTransform>();
+        itemTipRt.SetParent(transform, false);
+        itemTipRt.anchorMin = new Vector2(0.5f, 0.5f);
+        itemTipRt.anchorMax = new Vector2(0.5f, 0.5f);
+        itemTipRt.pivot = new Vector2(0.5f, 0.5f);
+
+        Image bg = itemTip.AddComponent<Image>();
+        bg.color = new Color(0.06f, 0.09f, 0.14f, 0.97f);
+        bg.raycastTarget = false;
+
+        itemTipTitle = MakeChildText(itemTipRt, "", 26, new Color(1f, 0.78f, 0.16f));
+        itemTipTitle.alignment = TextAnchor.UpperLeft;
+        RectTransform titleRt = itemTipTitle.rectTransform;
+        titleRt.anchorMin = titleRt.anchorMax = new Vector2(0f, 1f);
+        titleRt.pivot = new Vector2(0f, 1f);
+        titleRt.anchoredPosition = new Vector2(16f, -12f);
+        titleRt.sizeDelta = new Vector2(428f, 32f);
+
+        itemTipBody = MakeChildText(itemTipRt, "", 22, Color.white);
+        itemTipBody.alignment = TextAnchor.UpperLeft;
+        itemTipBody.horizontalOverflow = HorizontalWrapMode.Wrap;
+        itemTipBody.verticalOverflow = VerticalWrapMode.Truncate;
+        RectTransform bodyRt = itemTipBody.rectTransform;
+        bodyRt.anchorMin = bodyRt.anchorMax = new Vector2(0f, 1f);
+        bodyRt.pivot = new Vector2(0f, 1f);
+        bodyRt.anchoredPosition = new Vector2(16f, -50f);
+        bodyRt.sizeDelta = new Vector2(428f, 80f);
+
+        itemTip.SetActive(false);
+    }
+
+    /// <summary>在鼠标位置显示物品效果浮层（自动避让屏幕边缘）</summary>
+    private void ShowItemTip(string title, string body)
+    {
+        EnsureItemTip();
+
+        itemTipTitle.text = title;
+        itemTipBody.text = body;
+
+        const float w = 460f;
+        itemTipRt.sizeDelta = new Vector2(w, 140f);
+        float bodyH = Mathf.Max(28f, itemTipBody.preferredHeight);
+        float total = 12f + 32f + 6f + bodyH + 14f;
+        itemTipRt.sizeDelta = new Vector2(w, total);
+        itemTipBody.rectTransform.sizeDelta = new Vector2(-32f, bodyH + 2f);
+
+        // 鼠标位置 → 画布局部坐标（overlay canvas：camera 传 null）
+        Vector2 local;
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            (RectTransform)transform, Input.mousePosition, null, out local);
+
+        Vector2 half = ((RectTransform)transform).rect.size * 0.5f;
+        float px = Mathf.Clamp(local.x + 24f, -half.x + w / 2f + 10f, half.x - w / 2f - 10f);
+        float py = Mathf.Clamp(local.y - total / 2f - 12f, -half.y + total / 2f + 10f, half.y - total / 2f - 10f);
+        itemTipRt.anchoredPosition = new Vector2(px, py);
+
+        itemTip.transform.SetAsLastSibling();   // 压在所有元素之上
+        itemTip.SetActive(true);
+    }
+
+    private void HideItemTip()
+    {
+        if (itemTip != null) itemTip.SetActive(false);
+    }
+
+    /// <summary>给任意 UI 元素加点击转发（用于挡住射线的子元素）</summary>
+    private static void AddClick(GameObject go, UnityEngine.Events.UnityAction click)
+    {
+        EventTrigger trigger = go.GetComponent<EventTrigger>();
+        if (trigger == null) trigger = go.AddComponent<EventTrigger>();
+        EventTrigger.Entry entry = new EventTrigger.Entry { eventID = EventTriggerType.PointerClick };
+        if (click != null) entry.callback.AddListener(_ => click());
+        trigger.triggers.Add(entry);
+    }
+
+    /// <summary>给任意 UI 元素加 悬停进入 / 离开 回调</summary>
+    private static void AddHover(GameObject go, UnityEngine.Events.UnityAction enter,
+        UnityEngine.Events.UnityAction exit)
+    {
+        EventTrigger trigger = go.GetComponent<EventTrigger>();
+        if (trigger == null) trigger = go.AddComponent<EventTrigger>();
+
+        EventTrigger.Entry e1 = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
+        if (enter != null) e1.callback.AddListener(_ => enter());
+        trigger.triggers.Add(e1);
+
+        EventTrigger.Entry e2 = new EventTrigger.Entry { eventID = EventTriggerType.PointerExit };
+        if (exit != null) e2.callback.AddListener(_ => exit());
+        trigger.triggers.Add(e2);
     }
 
     private void OnDestroy()

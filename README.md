@@ -711,3 +711,96 @@ defenseValue / defenseTargetTypes / library / rarity / tags / buffs / devNotes`�
   属性增减、额外选卡等）——待对应系统（药水/遗物发放、PlayerRunState 属性接口）就绪后替换。
 - 「自助售卖机」的"拍一拍连拍/选项变化"机制写在文件头策划备注里，实现时需重开面板刷新选项。
 - 各文件 .meta 已生成（guid 唯一）。事件触发点未接（除实验开始 → 开始界面），后续按流程挂载。
+
+## 小羊：耐力 / 思绪不足改为弹窗提示（2026-10-20）
+
+原先"耐力不足""思绪不足"只在 Console 打日志，玩家看不到。现在统一在 UI 层预判并弹窗：
+
+- **释放技能耐力不足** → 弹窗「耐力不足，无法释放技能」
+  - `BattleHUD.EnterSlotMode`：点技能插槽时先按 `CardData.GetFinalActionCost(玩家)` 判定，
+    不足则不进入瞄准模式（含"防御卡只对自己"的直接释放分支）
+  - `BattleHUD.EnterMode`：推 / 跳进入瞄准前同样按 `pushCard` / `jumpCard` 的消耗判定
+  - `BattleHUD.ExecuteSkillCell` 与 `ExecuteCell` 的推/跳分支：执行前再查一次（兜底瞄准期间被扣）
+- **抽取 / 灌注思绪不足** → 弹窗「思绪不足，无法灌注当前技能」
+  - `BattleHUD.DrawFromDeck`：点牌堆按钮先看 `player.CurrentThought < drawThoughtCost`，不足则关牌堆面板 + 弹窗（不再走 `BeginDraw` 只打 Console）
+  - `BattleHUD.TryInfuse`：点抽卡待选卡前看 `card.thoughtCost`，不足则弹窗并留在选牌界面
+  - `OnConfirmInfuseClicked` 的 `InfuseResult.思绪不足` 文案统一为「思绪不足，无法灌注当前技能」
+- 弹窗复用已有的 `MessagePanel`（BuildMessagePanel 最后创建，层级压在所有面板之上）。
+
+## 小羊：事件界面遗物栏 + 物品名特殊显示（2026-10-20）
+
+`Battle/EventPanel.cs` 两项：
+
+1. **遗物栏**（深蓝色长条内、生命槽红圆右侧 10px）
+   - 数据源：优先 `PlayerRunState.Relics`（本局已获得的遗物），其次场上 `PlayerUnit.Relics`
+   - 图标 64×64、preserveAspect、间隔 5px，y 取生命槽圆心（-90）
+   - 鼠标悬停弹浮层：遗物名（金黄）+ 效果描述，跟随鼠标、自动避让屏幕边缘
+   - 提供 `EventPanel.RefreshRelics()` 静态入口：事件选项发放遗物后调用即可立即刷新
+   - 战斗结算界面领取的遗物会写进 `PlayerRunState.Relics`，下次打开事件界面自动显示
+2. **选项里的遗物 / 药水名特殊显示**
+   - 选项文字改为**分段渲染**：普通文字黑字；能匹配到遗物/药水资产名的片段显示为
+     `<u>[名称]</u>` + 金黄 + 黑色细描边（浅灰槽底上保证可读），鼠标悬停弹该物品的效果浮层
+   - 名称表由编辑器扫描 `ScriptableObjects/遗物`（RelicData）与 `ScriptableObjects/药水`（PotionData）
+     得到，按名称长度降序匹配；对飞书笔误注册别名（`次元抹除 → 次元抹杀`）
+   - 选项槽宽度估算改用"加 [] 后的显示文本"，避免长名被截
+   - 名称文字会拦射线，已补 PointerClick 转发到选项按钮（点名字也能选中该选项）
+
+## 小羊：事件界面两项对齐调整 + 自助售卖机三档连拍（2026-10-20）
+
+### 1. 遗物栏与药水槽对齐
+
+- `Battle/EventPanel.cs` 的 `BuildRelicRow()`：遗物图标的 **y 从"生命槽圆心"(-90) 改到"药水槽中心"(-52.5)**，
+  横向仍从生命槽红圆右缘 +10px 起（x = 24+132+10）。现在新获得的遗物图标与深蓝长条右侧空饮料槽同高。
+
+### 2. 事件选项槽统一尺寸 + 文本左端对齐
+
+- 新增常量 `slotFixedW = 840f`（所有事件统一的槽宽）、`slotTextPad = 20f`（文本左边距）。
+- `BuildOptions()` 里 `ws[i] = slotFixedW`，**不再按选项字数自适应**；占位空槽同样用固定宽度。
+- `BuildRichOptionLabel()` 的起始 x 改为 `-slotFixedW/2 + slotTextPad`，于是所有选项的
+  第一行文字左端都落在同一个竖直位置上（一条直线），不再因为槽宽不同而错开。
+
+### 3. `Battle/EventPanel_自助售卖机.cs` 重写为三档状态机
+
+按飞书 record `reczz28OmZGJIdtN` 的「补充描述」实现连拍：
+
+| 第几次拍 | 最大耐力上限 | 获得遗物 | 拍完后的界面 |
+|---|---|---|---|
+| 1 | -3 | 药水腰带 | 选项文案变成 5 点 / 草席卷 |
+| 2 | -5 | 草席卷 | 选项文案变成 7 点 / 黑鹅项圈 |
+| 3 | -7 | 黑鹅项圈 | 事件结束，正常推进流程 |
+
+- 选项 2「捡个饮料——获得1瓶随机饮料」在任意一次拍之前都能点：拿 1 瓶随机饮料后**直接离开事件**。
+- 换档不结束事件：用新增的 `EventPanel.CloseWithoutCompleting()`（只销毁界面、不调
+  `RunFlowController.CompleteEvent()`）关掉旧面板，立刻按下一档文案重新 `Show()`。
+  为此 `CloseCurrent()` 补了 `SetActive(false)`——`Destroy` 要到帧末才生效，同帧重开时
+  旧面板会和新的叠一帧（两层黑框闪一下）。
+- 静态字段 `已拍次数` 记录本局进度，`Show()` 时归零。
+
+### 4. 新增 `Progression/EventItemLibrary.cs`（事件按名字找物品）
+
+事件文案来自飞书表，只有中文名（"获得 药水腰带"）。这个工具类把名字换成真正的资产：
+
+- `FindRelic(名)` / `FindPotion(名)` / `RandomPotion()`；
+- 数据来源 = 编辑器 `AssetDatabase` 扫 `t:RelicData` / `t:PotionData`，再并上
+  `LootSystem` 的 3 个遗物池 + 2 个药水池（去重）——打包后没有 AssetDatabase 也能退回掉落池；
+- `CreatePlaceholderRelic(名, 描述)`：**资产还没建时的占位遗物**（一次性、只在内存里），
+  让事件不至于白扣属性；真资产建到 `ScriptableObjects/遗物/` 下并保持同名即自动接管。
+
+> ⚠️ 目前工程里 **没有** `药水腰带 / 草席卷 / 黑鹅项圈` 这三件遗物资产（22 件遗物里都不含它们），
+> 所以现在走的是占位遗物：图标空缺（金色方块）、悬停显示"效果待策划补充"。
+> 需要策划给出这三件的效果后建资产。
+
+### 5. `Battle/PlayerRunState.cs` 增加"事件改动玩家"的入口
+
+事件是在上一场战斗的场景里弹的，下一关会重新生成玩家并走 `ApplyTo` 回放快照，
+**所以事件改完玩家必须立刻 `Capture()` 一次，否则改动活不过场景重载**。新增：
+
+- `ApplyMaxStaminaDelta(玩家, delta)` / `ApplyMaxThoughtDelta(玩家, delta)`：改上限 + 立刻刷新快照；
+  没有场上玩家（开局的"实验开始"）时改快照值 / 待回放增量；
+- `GrantRelic(玩家, 遗物)`：有玩家就当场获得（永久 buff 立刻生效），再刷新快照；
+- `GrantPotion(玩家, 药水)`：返回是否拿到（背包上限 3 瓶），再刷新快照。
+
+### 6. `EventPanel.RegisterItemName(名, 描述)`
+
+占位遗物不在资产表里，选项文案里的名字本来不会变黄加下划线。现在事件可以运行时补登物品名，
+效果与真实资产一致（黄字 + `[]` + 下划线 + 悬停弹效果浮层）。

@@ -1374,7 +1374,7 @@ public class BattleHUD : MonoBehaviour
                 ShowMessage("当前技能槽已满，灌注失败");
                 break;
             case InfuseResult.思绪不足:
-                ShowMessage("思绪不足，灌注失败");
+                ShowMessage("思绪不足，无法灌注当前技能");
                 break;
             default:
                 ShowMessage("灌注失败：" + result);
@@ -1487,6 +1487,16 @@ public class BattleHUD : MonoBehaviour
     {
         if (cardSystem == null) cardSystem = FindCardSystem();
         if (cardSystem == null) return;
+
+        // 思绪不足：直接弹窗拦下（BeginDraw 里扣费失败只在 Console 打日志，玩家看不到）
+        PlayerUnit drawer = FindObjectOfType<PlayerUnit>();
+        if (drawer != null && drawer.CurrentThought < cardSystem.drawThoughtCost)
+        {
+            CloseDeckPanel();
+            ShowMessage("思绪不足，无法灌注当前技能");
+            return;
+        }
+
         if (!cardSystem.BeginDraw(pool))
         {
             ShowStatus("抽卡失败（思绪不足 / 槽位已满，详见 Console）");
@@ -1556,6 +1566,15 @@ public class BattleHUD : MonoBehaviour
     private void TryInfuse(CardData card)
     {
         if (cardSystem == null) return;
+
+        // 选牌灌注同样要付卡的思绪：不足时弹窗拦下（ConfirmInfuse 失败只会留 Console 日志）
+        PlayerUnit infuser = FindObjectOfType<PlayerUnit>();
+        if (infuser != null && card != null && infuser.CurrentThought < card.thoughtCost)
+        {
+            ShowMessage("思绪不足，无法灌注当前技能");
+            return;
+        }
+
         IReadOnlyList<CardData> choices = cardSystem.CurrentChoices;
         for (int i = 0; i < choices.Count; i++)
         {
@@ -1619,6 +1638,15 @@ public class BattleHUD : MonoBehaviour
 
         // 再点同一个按钮 = 取消
         if (mode == target) { ExitMode(); return; }
+
+        // 推 / 跳 也要先看耐力：不足直接弹窗，不进入瞄准
+        CardData basicCard = target == SelectMode.推 ? pushCard :
+                             (target == SelectMode.跳 ? jumpCard : null);
+        if (basicCard != null && player.CurrentStamina < basicCard.GetFinalActionCost(player))
+        {
+            ShowMessage("耐力不足，无法释放技能");
+            return;
+        }
 
         ExitMode();
         mode = target;
@@ -1742,6 +1770,14 @@ public class BattleHUD : MonoBehaviour
         CardData card = slot.card;
         if (player == null || card == null) { ExitMode(); return; }
 
+        // 耐力不足：直接弹窗，不进入瞄准（否则要等选完格子才在 Console 里失败）
+        if (player.CurrentStamina < card.GetFinalActionCost(player))
+        {
+            ExitMode();
+            ShowMessage("耐力不足，无法释放技能");
+            return;
+        }
+
         // 防御卡且只能对自己用：点插槽直接释放，无需瞄准
         if (!card.IsAttack && card.defenseTargetRule == DefenseTargetRule.自身)
         {
@@ -1828,6 +1864,15 @@ public class BattleHUD : MonoBehaviour
         CardSlot slot = cardSystem.Slots[aimSlot];
         CardData card = slot.card;
         if (card == null || !slot.CanUse) { ExitMode(); return; }
+
+        // 兜底：瞄准期间耐力被扣（buff 等）导致不足时，弹窗而不是只打 Console
+        PlayerUnit caster = FindObjectOfType<PlayerUnit>();
+        if (caster != null && caster.CurrentStamina < card.GetFinalActionCost(caster))
+        {
+            ExitMode();
+            ShowMessage("耐力不足，无法释放技能");
+            return;
+        }
 
         // ---------- 防御/增益卡：点击合法目标格（自身型已在进槽时直接释放） ----------
         if (!card.IsAttack)
@@ -2077,6 +2122,13 @@ public class BattleHUD : MonoBehaviour
                 ShowStatus("推 未配置（缺 PlayerCardSystem 或卡牌引用）");
                 return;
             }
+            // 耐力不足：弹窗（推的消耗）
+            if (player.CurrentStamina < pushCard.GetFinalActionCost(player))
+            {
+                ExitMode();
+                ShowMessage("耐力不足，无法释放技能");
+                return;
+            }
             if (cards.UseBasicAttack(pushCard, target))
             {
                 ShowStatus($"推：对 {target.data.unitName} 造成 {pushCard.damage} 伤害并击退");
@@ -2096,6 +2148,13 @@ public class BattleHUD : MonoBehaviour
             if (cards == null || jumpCard == null)
             {
                 ShowStatus("跳 未配置（缺 PlayerCardSystem 或卡牌引用）");
+                return;
+            }
+            // 耐力不足：弹窗（跳的消耗）
+            if (player.CurrentStamina < jumpCard.GetFinalActionCost(player))
+            {
+                ExitMode();
+                ShowMessage("耐力不足，无法释放技能");
                 return;
             }
             if (cards.UseBasicDefense(jumpCard, new[] { cell.coord }))
