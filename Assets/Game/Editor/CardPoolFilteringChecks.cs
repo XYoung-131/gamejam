@@ -9,6 +9,7 @@ public static class CardPoolFilteringChecks
     {
         CheckGeneratedPools();
         CheckRuntimeOffer();
+        CheckEnemyInfusionEligibility();
         Debug.Log("Card pool filtering checks passed.");
     }
 
@@ -37,6 +38,7 @@ public static class CardPoolFilteringChecks
         var valid = ScriptableObject.CreateInstance<CardData>();
         var enemyOnly = ScriptableObject.CreateInstance<CardData>();
         var wrongPool = ScriptableObject.CreateInstance<CardData>();
+        var unnamed = ScriptableObject.CreateInstance<CardData>();
         var go = new GameObject("CardPoolFilteringChecks");
 
         try
@@ -50,6 +52,8 @@ public static class CardPoolFilteringChecks
             wrongPool.cardName = "Wrong pool";
             wrongPool.library = CardPool.防御;
             wrongPool.rarity = Rarity.普通;
+            unnamed.library = CardPool.攻击;
+            unnamed.rarity = Rarity.普通;
 
             var cards = go.AddComponent<PlayerCardSystem>();
             MethodInfo build = typeof(PlayerCardSystem).GetMethod(
@@ -58,7 +62,7 @@ public static class CardPoolFilteringChecks
             Require(build.GetParameters().Length == 2,
                 "Runtime offer builder must receive the requested pool");
 
-            var mixed = new List<CardData> { valid, enemyOnly, wrongPool };
+            var mixed = new List<CardData> { valid, enemyOnly, wrongPool, unnamed };
             var offered = (List<CardData>)build.Invoke(cards, new object[] { mixed, CardPool.攻击 });
             Require(offered.Count == cards.offerCount, "Expected a full offer from the valid card");
             foreach (CardData card in offered)
@@ -74,6 +78,29 @@ public static class CardPoolFilteringChecks
             UnityEngine.Object.DestroyImmediate(valid);
             UnityEngine.Object.DestroyImmediate(enemyOnly);
             UnityEngine.Object.DestroyImmediate(wrongPool);
+            UnityEngine.Object.DestroyImmediate(unnamed);
+        }
+    }
+
+    private static void CheckEnemyInfusionEligibility()
+    {
+        var ordinary = ScriptableObject.CreateInstance<CardData>();
+        var enemyOnly = ScriptableObject.CreateInstance<CardData>();
+        var unnamed = ScriptableObject.CreateInstance<CardData>();
+        try
+        {
+            ordinary.cardName = "Valid";
+            enemyOnly.cardName = "Enemy only";
+            enemyOnly.rarity = Rarity.敌方特有;
+            Require(CardPoolRules.IsEnemySkillInfusionEligible(ordinary), "Ordinary enemy skill should be selectable");
+            Require(!CardPoolRules.IsEnemySkillInfusionEligible(enemyOnly), "Enemy-only skill should not be selectable");
+            Require(!CardPoolRules.IsEnemySkillInfusionEligible(unnamed), "Unnamed skill should not be selectable");
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(ordinary);
+            UnityEngine.Object.DestroyImmediate(enemyOnly);
+            UnityEngine.Object.DestroyImmediate(unnamed);
         }
     }
 

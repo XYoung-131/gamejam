@@ -1247,7 +1247,7 @@ public class BattleHUD : MonoBehaviour
             }
 
             if (enemySkillFaces[i] != null)
-                enemySkillFaces[i].interactable = card != null;
+                enemySkillFaces[i].interactable = CardPoolRules.IsEnemySkillInfusionEligible(card);
         }
 
         if (enemySkillUpArrow != null)
@@ -1276,7 +1276,7 @@ public class BattleHUD : MonoBehaviour
         int idx = enemySkillScroll + i;
         if (idx < 0 || idx >= enemySkillEntries.Count) return;
         CardData card = enemySkillEntries[idx].Card;
-        if (card == null) return;
+        if (!CardPoolRules.IsEnemySkillInfusionEligible(card)) return;
 
         // 下方三张技能插槽已经全部有技能 → 直接提示，不再走灌注确认
         if (IsVisibleSlotFull())
