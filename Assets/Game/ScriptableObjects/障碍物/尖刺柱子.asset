@@ -16,6 +16,7 @@ MonoBehaviour:
   maxHealth: -1
   tags: 0000000001000000
   specialAbility: "\u78B0\u649E\u4F24\u5BB3\u52A02"
+  collisionDamageBonus: 2
   buffs: []
   icon: {fileID: 21300000, guid: f52ba6121eb34ca6a3cad5acfca057f1, type: 3}
   prefab: {fileID: 6254300748214587852, guid: dccaee486175a9a4ba0a1f73fbdef74b, type: 3}

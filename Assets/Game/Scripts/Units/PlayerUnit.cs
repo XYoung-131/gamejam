@@ -8,14 +8,14 @@ using System.Collections.Generic;
 public class PlayerUnit : Unit
 {
     [Header("玩家特有")]
-    [Tooltip("思绪上限（文档：耐力和思绪上限都是 40）")]
-    public int maxThought = 40;
+    [Tooltip("思绪上限（文档：耐力和思绪上限都是 50）")]
+    public int maxThought = 50;
     [Tooltip("耐力上限（用于移动、普通攻击和使用技能）")]
-    public int maxStamina = 40;
-    [Tooltip("战斗开始时的思绪（文档：战斗开始时有 20 点）")]
-    public int startThought = 20;
-    [Tooltip("战斗开始时的耐力（文档：战斗开始时有 20 点）")]
-    public int startStamina = 20;
+    public int maxStamina = 50;
+    [Tooltip("战斗开始时的思绪（文档：战斗开始时有 25 点）")]
+    public int startThought = 25;
+    [Tooltip("战斗开始时的耐力（文档：战斗开始时有 25 点）")]
+    public int startStamina = 25;
     [Tooltip("每回合结束时恢复的思绪（文档：每回合结束恢复 15 点）")]
     public int thoughtRegenPerTurnEnd = 15;
     [Tooltip("每回合结束时恢复的耐力（文档：每回合结束恢复 15 点）")]

@@ -90,6 +90,12 @@ public class EventPanel : MonoBehaviour
     private Text itemTipTitle;
     private Text itemTipBody;
 
+    // 「重启」等事件在事件界面内立即进行的连续技能选择。
+    private GameObject cardChoiceOverlay;
+    private int remainingImmediateCardChoices;
+    private int totalImmediateCardChoices;
+    private Action immediateCardChoicesCompleted;
+
     // ══════════════════════════════════════════════════════════
     //  对外接口
     // ══════════════════════════════════════════════════════════
@@ -141,6 +147,22 @@ public class EventPanel : MonoBehaviour
         CloseCurrent();
     }
 
+    /// <summary>在当前事件界面上立即连续进行若干次技能三选一。</summary>
+    public static void BeginImmediateCardChoices(int count, Action onCompleted)
+    {
+        if (instance == null)
+        {
+            Debug.LogWarning("[EventPanel] 当前没有事件界面，无法立即进行技能选择");
+            onCompleted?.Invoke();
+            return;
+        }
+
+        instance.totalImmediateCardChoices = Mathf.Max(0, count);
+        instance.remainingImmediateCardChoices = instance.totalImmediateCardChoices;
+        instance.immediateCardChoicesCompleted = onCompleted;
+        instance.ShowNextImmediateCardChoice();
+    }
+
     private static void CloseCurrent()
     {
         if (instance == null) return;
@@ -150,6 +172,105 @@ public class EventPanel : MonoBehaviour
         // 旧面板会和新面板叠一帧（两层黑框闪一下），隐藏掉就没有这个闪烁。
         panel.gameObject.SetActive(false);
         Destroy(panel.gameObject);
+    }
+
+    private void ShowNextImmediateCardChoice()
+    {
+        CloseCardChoiceOverlay();
+
+        if (remainingImmediateCardChoices <= 0)
+        {
+            Action completed = immediateCardChoicesCompleted;
+            immediateCardChoicesCompleted = null;
+            completed?.Invoke();
+            return;
+        }
+
+        RewardCardCatalog catalog = Resources.Load<RewardCardCatalog>("RewardCardCatalog");
+        if (catalog == null)
+        {
+            Debug.LogError("[重启] Resources/RewardCardCatalog 缺失，无法进行技能选择");
+            remainingImmediateCardChoices = 0;
+            ShowNextImmediateCardChoice();
+            return;
+        }
+
+        List<CardData> choices = catalog.Roll(3);
+        if (choices == null || choices.Count == 0)
+        {
+            Debug.LogWarning("[重启] 技能奖励池为空，跳过剩余技能选择");
+            remainingImmediateCardChoices = 0;
+            ShowNextImmediateCardChoice();
+            return;
+        }
+
+        cardChoiceOverlay = new GameObject("ImmediateCardChoice", typeof(RectTransform));
+        RectTransform overlayRt = cardChoiceOverlay.GetComponent<RectTransform>();
+        overlayRt.SetParent(transform, false);
+        overlayRt.anchorMin = Vector2.zero;
+        overlayRt.anchorMax = Vector2.one;
+        overlayRt.offsetMin = Vector2.zero;
+        overlayRt.offsetMax = Vector2.zero;
+        Image dim = cardChoiceOverlay.AddComponent<Image>();
+        dim.color = new Color(0f, 0f, 0f, 0.9f);
+        dim.raycastTarget = true;
+
+        int currentIndex = totalImmediateCardChoices - remainingImmediateCardChoices + 1;
+        Text title = MakeChildText(overlayRt,
+            $"新的记忆：选择技能（第 {currentIndex}/{totalImmediateCardChoices} 次）", 34, Color.white);
+        title.rectTransform.anchorMin = title.rectTransform.anchorMax = new Vector2(0.5f, 1f);
+        title.rectTransform.pivot = new Vector2(0.5f, 1f);
+        title.rectTransform.anchoredPosition = new Vector2(0f, -70f);
+        title.rectTransform.sizeDelta = new Vector2(1000f, 60f);
+
+        BattleUIAssetCatalog ui = Resources.Load<BattleUIAssetCatalog>("BattleUIAssetCatalog");
+        const float cardW = 300f;
+        const float cardH = 392f;
+        const float gap = 42f;
+        for (int i = 0; i < choices.Count; i++)
+        {
+            CardData card = choices[i];
+            if (card == null) continue;
+            CardData captured = card;
+            float x = (i - (choices.Count - 1) * 0.5f) * (cardW + gap);
+            Sprite face = ui == null ? null :
+                (card.IsAttack ? ui.attackCardFaceSprite : ui.defenseCardFaceSprite);
+
+            Button button = NewImageButton(overlayRt, "Choice_" + i, face,
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                new Vector2(x, -5f), new Vector2(cardW, cardH),
+                () => SelectImmediateCard(captured));
+            if (face == null)
+                button.image.color = new Color(0.78f, 0.82f, 0.88f, 1f);
+
+            Text label = MakeChildText(button.image.rectTransform,
+                $"【{card.cardName}】\n\n{card.description}", 24, Color.black);
+            label.rectTransform.offsetMin = new Vector2(24f, 35f);
+            label.rectTransform.offsetMax = new Vector2(-24f, -35f);
+            label.horizontalOverflow = HorizontalWrapMode.Wrap;
+            label.verticalOverflow = VerticalWrapMode.Truncate;
+        }
+
+        cardChoiceOverlay.transform.SetAsLastSibling();
+    }
+
+    private void SelectImmediateCard(CardData card)
+    {
+        if (cardChoiceOverlay == null || card == null || remainingImmediateCardChoices <= 0)
+            return;
+
+        PlayerRunState.AddCardToRunPool(card);
+        remainingImmediateCardChoices--;
+        Debug.Log($"[重启] 立即技能选择：获得【{card.cardName}】，剩余 {remainingImmediateCardChoices} 次");
+        ShowNextImmediateCardChoice();
+    }
+
+    private void CloseCardChoiceOverlay()
+    {
+        if (cardChoiceOverlay == null) return;
+        cardChoiceOverlay.SetActive(false);
+        Destroy(cardChoiceOverlay);
+        cardChoiceOverlay = null;
     }
 
     // ══════════════════════════════════════════════════════════

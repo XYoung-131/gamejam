@@ -16,6 +16,8 @@ public class Obstacle : MonoBehaviour
 
     // 是否已经被摧毁（防止同一帧内被多次打爆导致重复结算）
     protected bool isDestroyed = false;
+    private int completedRoundCount;
+    private bool eventsRegistered;
 
     /// <summary>
     /// 初始化障碍物
@@ -26,6 +28,7 @@ public class Obstacle : MonoBehaviour
         currentHealth = obstacleData.maxHealth;
         currentCoord = coord;
         isDestroyed = false;
+        completedRoundCount = 0;
 
         // 把自己注册到格子上
         if (HexGrid.Instance != null)
@@ -34,6 +37,29 @@ public class Obstacle : MonoBehaviour
             if (cell != null)
                 cell.obstacle = this;
         }
+
+        RegisterEvents();
+    }
+
+    protected virtual void OnDestroy()
+    {
+        UnregisterEvents();
+    }
+
+    private void RegisterEvents()
+    {
+        if (eventsRegistered) return;
+        EventManager.AddListener<int>("PlayerTurnStarted", HandlePlayerTurnStarted);
+        EventManager.AddListener("EnemyBuffsSettled", HandleRoundCompleted);
+        eventsRegistered = true;
+    }
+
+    private void UnregisterEvents()
+    {
+        if (!eventsRegistered) return;
+        EventManager.RemoveListener<int>("PlayerTurnStarted", HandlePlayerTurnStarted);
+        EventManager.RemoveListener("EnemyBuffsSettled", HandleRoundCompleted);
+        eventsRegistered = false;
     }
 
     /// <summary>
@@ -74,6 +100,7 @@ public class Obstacle : MonoBehaviour
     {
         if (isDestroyed) return;
         isDestroyed = true;
+        UnregisterEvents();
 
         // 先结算爆炸（炸药桶等），此时障碍物还在原格子上、周围单位还没被移走
         ApplyExplosion();
@@ -100,7 +127,9 @@ public class Obstacle : MonoBehaviour
     protected virtual void ApplyExplosion()
     {
         if (data == null || !data.isExplosion) return;
-        if (data.explosionDamage <= 0) return;
+        if (data.explosionDamage <= 0 &&
+            data.explosionDamageToPlayer <= 0 &&
+            data.explosionDamageToEnemies <= 0) return;
         if (HexGrid.Instance == null) return;
 
         int radius = Mathf.Max(1, data.explosionRadius);
@@ -112,12 +141,20 @@ public class Obstacle : MonoBehaviour
             Unit unit = cell.occupyUnit;
             if (unit.GetCurrentHealth() <= 0) continue;
 
-            DamageContext ctx = new DamageContext(data.explosionDamage, data.explosionDamageType);
+            int damage = unit is PlayerUnit
+                ? (data.explosionDamageToPlayer >= 0 ? data.explosionDamageToPlayer : data.explosionDamage)
+                : (data.explosionDamageToEnemies >= 0 ? data.explosionDamageToEnemies : data.explosionDamage);
+            if (damage <= 0) continue;
+
+            DamageContext ctx = new DamageContext(damage, data.explosionDamageType);
             ctx.isExplosion = true;
             unit.TakeDamage(ctx);
         }
 
-        Debug.Log($"【{data.obstacleName}】爆炸：对 {radius} 格内的单位造成 {data.explosionDamage} 点爆炸伤害");
+        Debug.Log($"【{data.obstacleName}】爆炸：玩家伤害 " +
+                  $"{(data.explosionDamageToPlayer >= 0 ? data.explosionDamageToPlayer : data.explosionDamage)}，" +
+                  $"敌人伤害 {(data.explosionDamageToEnemies >= 0 ? data.explosionDamageToEnemies : data.explosionDamage)}，" +
+                  $"范围 {radius} 格");
     }
 
     /// <summary>
@@ -134,6 +171,93 @@ public class Obstacle : MonoBehaviour
     /// 获取当前血量
     /// </summary>
     public int GetCurrentHealth() => currentHealth;
+
+    /// <summary>单位被位移撞到该障碍物时，撞击者额外承受的伤害。</summary>
+    public int GetCollisionDamageBonus()
+    {
+        return data != null ? Mathf.Max(0, data.collisionDamageBonus) : 0;
+    }
+
+    private void HandlePlayerTurnStarted(int turnCount)
+    {
+        if (isDestroyed || data == null || data.areaBuff == null || data.areaBuffRadius <= 0)
+            return;
+
+        ApplyAreaBuff();
+    }
+
+    private void ApplyAreaBuff()
+    {
+        if (HexGrid.Instance == null) return;
+
+        int affected = 0;
+        foreach (HexCell cell in HexGrid.Instance.GetCellsInRange(currentCoord, data.areaBuffRadius))
+        {
+            Unit unit = cell != null ? cell.occupyUnit : null;
+            if (unit == null || unit.IsDead) continue;
+            unit.ApplyBuff(data.areaBuff, Mathf.Max(1, data.areaBuffStacks));
+            affected++;
+        }
+
+        Debug.Log($"【{data.obstacleName}】向 {data.areaBuffRadius} 格内 {affected} 个单位施加 {data.areaBuff.buffName}");
+    }
+
+    private void HandleRoundCompleted()
+    {
+        if (isDestroyed || data == null || data.triggerEveryRounds <= 0) return;
+
+        completedRoundCount++;
+        if (completedRoundCount % data.triggerEveryRounds != 0) return;
+
+        if (data.periodicSpawnUnit != null)
+            TrySpawnInRandomAdjacentCell(data.periodicSpawnUnit);
+
+        if (data.timedDestroySpawnUnit != null)
+        {
+            UnitData unitToSpawn = data.timedDestroySpawnUnit;
+            HexCoord spawnCoord = currentCoord;
+            OnDestroyed();
+            SpawnEnemy(unitToSpawn, spawnCoord);
+        }
+    }
+
+    private void TrySpawnInRandomAdjacentCell(UnitData unitData)
+    {
+        if (HexGrid.Instance == null || unitData == null || unitData.prefab == null) return;
+
+        var candidates = new System.Collections.Generic.List<HexCell>();
+        foreach (HexCell cell in HexGrid.Instance.GetNeighborCells(currentCoord))
+            if (cell != null && cell.CanStopOn()) candidates.Add(cell);
+
+        if (candidates.Count == 0)
+        {
+            Debug.Log($"【{data.obstacleName}】周围没有空格，无法生成 {unitData.unitName}");
+            return;
+        }
+
+        HexCell destination = candidates[Random.Range(0, candidates.Count)];
+        if (!SpawnEnemy(unitData, destination.coord)) return;
+
+        if (data.healthCostAfterSpawn > 0)
+            TakeDamage(data.healthCostAfterSpawn);
+    }
+
+    private static bool SpawnEnemy(UnitData unitData, HexCoord coord)
+    {
+        if (unitData == null || unitData.prefab == null || HexGrid.Instance == null) return false;
+        HexCell cell = HexGrid.Instance.GetCell(coord);
+        if (cell == null || !cell.CanStopOn()) return false;
+
+        GameObject go = Instantiate(unitData.prefab, HexGrid.Instance.HexToWorld(coord), Quaternion.identity);
+        go.name = "Enemy_" + unitData.unitName + "_" + coord;
+        EnemyUnit enemy = go.GetComponent<EnemyUnit>();
+        if (enemy == null) enemy = go.AddComponent<EnemyUnit>();
+        enemy.Initialize(unitData, coord);
+
+        LevelManager manager = FindObjectOfType<LevelManager>();
+        if (manager != null) manager.RegisterSummonedEnemy(enemy);
+        return true;
+    }
 
     /// <summary>
     /// 是否阻挡移动（默认阻挡）

@@ -11,9 +11,8 @@ using UnityEngine.Events;
 //  调用 EventPanel_重启.Show() 打开本事件界面。
 //
 //  效果（2026-10-20 接通）：
-//    选项 1 → 额外 2 次技能选择。事件里没有卡牌界面，所以先记进
-//             PlayerRunState.PendingExtraCardChoices，下一次战斗结算界面
-//             （BattleEndPanel）会多出「额外的记忆」按钮，按次数三选一。
+//    选项 1 → 在当前事件界面立即连续进行 2 次技能三选一；每次选中的技能加入卡池，
+//             两次都完成后才关闭事件并进入下一场战斗。
 //    选项 2 → 获得遗物「回归本质」（普通稀有度技能伤害 +1）。
 // ═══════════════════════════════════════════════════════════════
 public static class EventPanel_重启
@@ -42,8 +41,7 @@ public static class EventPanel_重启
 
     private static void On新的记忆()
     {
-        EventEffects.QueueExtraCardChoices(额外技能选择次数);
-        EventPanel.Close();
+        EventPanel.BeginImmediateCardChoices(额外技能选择次数, EventPanel.Close);
     }
 
     private static void On以前的记忆()

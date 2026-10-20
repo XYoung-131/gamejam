@@ -62,6 +62,26 @@ public static class PlayerRunState
         PendingExtraCardChoices += count;
     }
 
+    /// <summary>
+    /// 事件界面立即获得技能时，将一张实体卡加入本局抽牌池。
+    /// 已有跨关快照时直接修改快照；首场战斗前则暂存在 ExtraCards，等玩家生成后回放。
+    /// </summary>
+    public static void AddCardToRunPool(CardData card)
+    {
+        if (card == null || card.initialOnly || card.rarity == Rarity.敌方特有) return;
+
+        if (HasSnapshot)
+        {
+            List<CardData> pool = card.library == CardPool.防御 ? savedDefense : savedAttack;
+            pool.Add(card);
+            hasPoolSnapshot = true;
+        }
+        else
+        {
+            ExtraCards.Add(card);
+        }
+    }
+
     // ============================================================
     //        事件（战斗外）改动玩家的入口
     //

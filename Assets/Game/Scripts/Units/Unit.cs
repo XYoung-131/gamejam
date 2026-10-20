@@ -1169,7 +1169,10 @@ public abstract class Unit : MonoBehaviour
         }
 
         // 普通碰撞：撞的一方和被撞的一方都掉血，然后停止
-        TakeDamage(collisionSelfDamage, DamageType.物理);
+        int selfDamage = collisionSelfDamage;
+        if (obstacle != null)
+            selfDamage += obstacle.GetCollisionDamageBonus();
+        TakeDamage(selfDamage, DamageType.物理);
         if (blocker != null) blocker.TakeDamage(collisionBlockerDamage, DamageType.物理);
         if (obstacle != null) obstacle.TakeDamage(collisionBlockerDamage);
         return true;

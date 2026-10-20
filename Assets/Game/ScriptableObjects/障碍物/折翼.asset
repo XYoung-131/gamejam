@@ -16,6 +16,8 @@ MonoBehaviour:
   maxHealth: 2
   tags: 
   specialAbility: "2\u56DE\u5408\u540E\u6467\u6BC1\u81EA\u8EAB\uFF0C\u5728\u539F\u5730\u751F\u6210 \u5C0F\u5929\u4F7F\uFF08\u26A0 \u7B56\u5212\u8868\u7C7B\u578B\u5217\u5199\u7684\u662F\u300C\u7279\u6B8A\u300D\uFF0CObstacleTag \u53EA\u6709 \u73AF\u5883/\u9AD8\u5927\uFF0C\u6682\u672A\u627F\u8F7D\uFF09"
+  triggerEveryRounds: 2
+  timedDestroySpawnUnit: {fileID: 11400000, guid: dcec1d8063b280459f22cbedcbe57ad3, type: 2}
   buffs: []
   icon: {fileID: 21300000, guid: 246aa65924914f5f9f0fe233ed23a961, type: 3}
   prefab: {fileID: 7458477937087658686, guid: b99fec295eb64c77889390076e00a15e, type: 3}

@@ -9,9 +9,10 @@ using UnityEngine;
 //  （"获得 解压垃圾""获得 药水腰带"），没有资产引用。
 //  具体事件脚本结算时要把名字换成真正的 ScriptableObject 资产。
 //
-//  查找顺序（先工程，后掉落池）：
-//    ① 编辑器下扫工程里所有 t:RelicData / t:PotionData；
-//    ② 再并上 LootSystem 的三个遗物池 / 两个药水池（去重）。
+//  查找顺序：
+//    ① Resources/RelicCatalog（Build 也可用，包含事件专属遗物）；
+//    ② 编辑器下扫描工程中的全部资产，作为配置检查兜底；
+//    ③ 再并上 LootSystem 的三个遗物池 / 两个药水池（去重）。
 //  两边都没有 = 这件物品的资产还没建，返回 null，调用方自己兜底。
 // ═══════════════════════════════════════════════════════════════
 public static class EventItemLibrary
@@ -83,12 +84,20 @@ public static class EventItemLibrary
         relics = new List<RelicData>();
         potions = new List<PotionData>();
 
+        // 完整遗物目录放在 Resources 中。事件专属遗物不必加入随机掉落池，
+        // 正式 Build 仍能按中文名找到，并能在读档时恢复。
+        RelicCatalog catalog = Resources.Load<RelicCatalog>("RelicCatalog");
+        if (catalog != null)
+            Merge(relics, catalog.relics);
+        else
+            Debug.LogError("[EventItemLibrary] Resources/RelicCatalog 缺失，事件遗物和存档恢复可能失败");
+
 #if UNITY_EDITOR
         foreach (string guid in UnityEditor.AssetDatabase.FindAssets("t:RelicData"))
         {
             RelicData relic = UnityEditor.AssetDatabase.LoadAssetAtPath<RelicData>(
                 UnityEditor.AssetDatabase.GUIDToAssetPath(guid));
-            if (relic != null) relics.Add(relic);
+            if (relic != null && !relics.Contains(relic)) relics.Add(relic);
         }
         foreach (string guid in UnityEditor.AssetDatabase.FindAssets("t:PotionData"))
         {
