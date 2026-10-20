@@ -29,11 +29,11 @@ MonoBehaviour:
   defenseEffectType: 1
   defenseValue: 2
   defenseTargetTypes: 01000000
-  initialOnly: 0
+  initialOnly: 1
   defenseTargetRule: 0
   defenseEffectRule: 0
   library: 1
   rarity: 0
   tags: 03000000
   buffs: []
-  devNotes: "可从防御牌库抽取"
+  devNotes: "\u8865\u5145\uFF1A\u521D\u59CB\u5C31\u6709\uFF0C\u4E0D\u4F1A\u901A\u8FC7\u5176\u4ED6\u65B9\u5F0F\u83B7\u5F97"

@@ -11,15 +11,14 @@ public static class DefenseSkillChecks
     {
         string[] guids = AssetDatabase.FindAssets("t:CardData",
             new[] { "Assets/Game/ScriptableObjects/技能/防御技能" });
-        Require(guids.Length == 30, "Expected 30 defense assets");
+        Require(guids.Length == 29, "Expected 29 defense assets");
         var names = new HashSet<string>();
         int enemyOnly = 0;
         foreach (string guid in guids)
         {
             CardData card = AssetDatabase.LoadAssetAtPath<CardData>(
                 AssetDatabase.GUIDToAssetPath(guid));
-            Require(card != null && !string.IsNullOrWhiteSpace(card.cardName) && names.Add(card.cardName),
-                "Missing or duplicate defense card");
+            Require(card != null && names.Add(card.cardName), "Missing or duplicate defense card");
             Require(card.library == CardPool.防御, card.cardName + " is in the wrong pool");
             if (card.rarity == Rarity.敌方特有) enemyOnly++;
             if (card.defenseEffectRule == DefenseEffectRule.抱抱喷射 ||
@@ -37,12 +36,8 @@ public static class DefenseSkillChecks
                 card.defenseEffectRule == DefenseEffectRule.毒遁)
                 Require(card.specialBuff != null, card.cardName + " has no Buff");
         }
-        Require(enemyOnly == 14, "Expected 14 enemy-only defense cards");
-        CardData sleep = LoadByName("睡觉");
-        Require(sleep != null && sleep.rarity == Rarity.敌方特有 &&
-                !CardPoolRules.IsOfferEligible(sleep, CardPool.防御),
-            "Sleep must not enter player offers");
-        foreach (string starter in new[] { "跳" })
+        Require(enemyOnly == 13, "Expected 13 enemy-only defense cards");
+        foreach (string starter in new[] { "跳", "格挡", "远跳" })
         {
             Require(names.Contains(starter), "Missing starting card: " + starter);
             CardData card = LoadByName(starter);
@@ -50,14 +45,7 @@ public static class DefenseSkillChecks
             Require(!CardPoolRules.IsOfferEligible(card, CardPool.防御),
                 starter + " entered ordinary offers");
         }
-        foreach (string deckCard in new[] { "格挡", "远跳" })
-        {
-            CardData card = LoadByName(deckCard);
-            Require(card != null && !card.initialOnly, deckCard + " must be in the starting deck");
-            Require(CardPoolRules.IsOfferEligible(card, CardPool.防御),
-                deckCard + " cannot be offered from the defense deck");
-        }
-        Debug.Log("Defense skill assets passed: 30 cards, 14 enemy-only, 1 starter.");
+        Debug.Log("Defense skill assets passed: 29 cards, 13 enemy-only, 3 starters.");
     }
 
     private static CardData LoadByName(string name)

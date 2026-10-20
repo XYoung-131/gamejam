@@ -17,7 +17,7 @@ public class LevelManager : MonoBehaviour
     [Tooltip("要加载的关卡数据（ScriptableObjects/关卡/ 下的 .asset）")]
     public LevelData level;
 
-    [Tooltip("单独打开示例场景时使用的变种序号；正式流程会从该关变种池随机选择")]
+    [Tooltip("用第几个变种：0 = 变种1，1 = 变种2")]
     public int variantIndex = 0;
 
     [Header("玩家")]
@@ -48,7 +48,6 @@ public class LevelManager : MonoBehaviour
     /// 为 null 时沿用场景里配好的 level（重打本关）。
     /// </summary>
     public static LevelData pendingNextLevel;
-    public static int? pendingVariantIndex;
 
     private readonly List<EnemyUnit> enemies = new List<EnemyUnit>();
 
@@ -71,17 +70,6 @@ public class LevelManager : MonoBehaviour
             pendingNextLevel = null;
             Debug.Log($"[LevelManager] 进入下一关：{level.levelName}");
         }
-        else if (RunFlowController.Instance != null &&
-                 RunFlowController.Instance.Progression.Phase == RunPhase.Battle)
-            level = RunFlowController.Instance.Progression.CurrentLevel;
-        if (pendingVariantIndex.HasValue)
-        {
-            variantIndex = pendingVariantIndex.Value;
-            pendingVariantIndex = null;
-        }
-        else if (RunFlowController.Instance != null &&
-                 RunFlowController.Instance.Progression.Phase == RunPhase.Battle)
-            variantIndex = RunFlowController.Instance.Progression.CurrentVariantIndex;
 
         // 布阵在 Start 里做，所以先让 GameManager 别自动开战
         GameManager manager = GameManager.Instance != null
@@ -133,13 +121,7 @@ public class LevelManager : MonoBehaviour
 
         // ③ 一切就位后才开战
         if (startBattleAfterSpawn && GameManager.Instance != null)
-        {
-            if (RunFlowController.Instance != null &&
-                RunFlowController.Instance.Progression.Phase == RunPhase.Battle)
-                GameManager.Instance.StartLevel(RunFlowController.Instance.Progression.ChapterIndex + 1);
-            else
-                GameManager.Instance.StartBattle();
-        }
+            GameManager.Instance.StartBattle();
     }
 
     // ============================================================
@@ -171,16 +153,18 @@ public class LevelManager : MonoBehaviour
         PlayerCardSystem cards = go.GetComponent<PlayerCardSystem>();
         if (cards == null)
             cards = go.AddComponent<PlayerCardSystem>();
-        StartingDeckData startingDeck = Resources.Load<StartingDeckData>("StartingDeck");
-        if (startingDeck != null)
-            startingDeck.ApplyTo(cards);
-        else
-        {
-            Debug.LogError("[LevelManager] 缺少 Resources/StartingDeck 开局牌库配置");
-            if (attackPool.Count > 0) cards.attackPool = new List<CardData>(attackPool);
-            if (defensePool.Count > 0) cards.defensePool = new List<CardData>(defensePool);
-            cards.initialCards = CardPoolRules.MergeInitialCards(cards.initialCards, cards.defensePool);
-        }
+
+        // 场景里没配牌库时（当前 Battle.unity 就是空的），编辑器下按目录自动装载，
+        // 否则抽卡按钮会直接报"牌库为空"，整条抽卡/插槽链路都用不了。
+#if UNITY_EDITOR
+        if (attackPool.Count == 0)
+            attackPool = LoadCardsFromFolder("Assets/Game/ScriptableObjects/技能/攻击技能");
+        if (defensePool.Count == 0)
+            defensePool = LoadCardsFromFolder("Assets/Game/ScriptableObjects/技能/防御技能");
+#endif
+        if (attackPool.Count > 0) cards.attackPool = new List<CardData>(attackPool);
+        if (defensePool.Count > 0) cards.defensePool = new List<CardData>(defensePool);
+        cards.initialCards = CardPoolRules.MergeInitialCards(cards.initialCards, cards.defensePool);
 
         // 遗物条件触发总调度（RelicData.Trigger 的唯一驱动者，必须和 PlayerUnit 同物体）
         if (go.GetComponent<RelicController>() == null)

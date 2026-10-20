@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ed92a0a7f31f8a141bb6e09597cf5c87, type: 3}
   m_Name: "\u7761\u89C9"
   m_EditorClassIdentifier: 
-  cardName: "\u7761\u89C9"
+  cardName: 
   description: 
   thoughtCost: 0
   actionCost: 0
@@ -50,8 +50,8 @@ MonoBehaviour:
   summonUnit: {fileID: 0}
   alternateSummonUnit: {fileID: 0}
   generatedTerrain: {fileID: 0}
-  library: 1
-  rarity: 4
+  library: 0
+  rarity: 0
   tags: 
   buffs: []
   devNotes: 
