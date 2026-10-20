@@ -385,8 +385,7 @@ public class PlayerCardSystem : MonoBehaviour
         currentChoices.Clear();
         foreach (var card in enemy.LastTurnUsedSkills)
         {
-            if (card == null) continue;
-            if (card.rarity == Rarity.敌方特有) continue;   // 规则：敌方特有不能偷
+            if (!CardPoolRules.IsEnemySkillInfusionEligible(card)) continue;
             if (!currentChoices.Contains(card))              // 去重（同技能用两次只显示一次）
                 currentChoices.Add(card);
         }
@@ -418,7 +417,7 @@ public class PlayerCardSystem : MonoBehaviour
     /// </summary>
     public virtual InfuseResult TryInfuseCardDirectly(CardData card)
     {
-        if (card == null) return InfuseResult.无效卡牌;
+        if (!CardPoolRules.IsEnemySkillInfusionEligible(card)) return InfuseResult.无效卡牌;
         if (!CanActNow()) return InfuseResult.非玩家回合;
         if (IsChoosing) return InfuseResult.选牌进行中;
         if (!HasEmptySlot)
