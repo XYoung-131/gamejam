@@ -15,7 +15,7 @@ MonoBehaviour:
   unitName: 黛亚
   seenKey:
   charactersPerSecond: 45
-  leftName: 主
+  leftName: 勒忒
   leftPortrait: {fileID: 21300000, guid: 7a3c5e91b2d44f0e8c6105d9a4b73e21, type: 3}
   leftPortraitHeight: 960
   rightName: 黛亚
@@ -28,9 +28,9 @@ MonoBehaviour:
     text: （轻微地摇晃）
   - speaker: 黛亚
     text: 又见面了呢，勒忒，虽然我并看不见你的容貌。
-  - speaker: 主
+  - speaker: 勒忒
     text: ……
-  - speaker: 主
+  - speaker: 勒忒
     text: 好奇怪。
   - speaker: 黛亚
     text: 又忘了吗？那我再介绍一遍，我叫黛亚，这位是普兰，是我的……很重要的人。
@@ -40,28 +40,28 @@ MonoBehaviour:
     text: 普兰她行动不便，所以我一直带着她，我们之间心意相通，我看不见的，她会通过心声直接告诉我。她还能操控这里的机械，在我表演的时候为我发射礼炮庆贺。
   - speaker: 普兰
     text: （点了点头）
-  - speaker: 主
+  - speaker: 勒忒
     text: 更奇怪了。
   - speaker: 黛亚
     text: 每次讲完你都会这么说，不过也没时间解释了，表演要开始了。
-  - speaker: 主
+  - speaker: 勒忒
     text: 什么表演？
   - speaker: 普兰
     text: （兴奋地剧烈摇晃）
   repeatEncounter:
   - speaker: 黛亚
     text: 这个脚步声，是勒忒吗？
-  - speaker: 主
+  - speaker: 勒忒
     text: 是我
   - speaker: 普兰
     text: （惊讶地摇头晃脑）
   - speaker: 黛亚
     text: 你还记得我们一起表演的事情吗？
-  - speaker: 主
+  - speaker: 勒忒
     text: 我只记得我被一个抱着什么东西的红衣服打的落花流水。
   - speaker: 黛亚
     text: 看来你并没有完全忘却，那我们能跳过介绍的环节，直接开始表演吗？
-  - speaker: 主
+  - speaker: 勒忒
     text: 我能只在台下看你们表演吗？
   - speaker: 普兰
     text: （无奈地摇了摇头）
@@ -70,5 +70,5 @@ MonoBehaviour:
     text: 表演……再一次落幕，演出很成功，谢谢你的参与……勒忒，你所展现的痛苦感，远远超过了我们。
   - speaker: 普兰
     text: （抽搐了几下）
-  - speaker: 主
+  - speaker: 勒忒
     text: 演的不错，但我不想再参演了，再见。

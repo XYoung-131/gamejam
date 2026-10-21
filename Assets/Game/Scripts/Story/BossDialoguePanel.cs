@@ -410,6 +410,12 @@ public class BossDialoguePanel : MonoBehaviour
     {
         RefreshHealth();
 
+        // 空格翻页：需求是"点击屏幕或按空格"。
+        // 全屏底图的 Button 只响应鼠标点击；EventSystem 的 Submit 必须先用 SetSelectedGameObject
+        // 选中某个对象才会派发（本面板没选中任何按钮），所以这里直接读键盘，
+        // 编辑器与打包版（activeInputHandler = 旧版 Input Manager）表现一致。
+        if (Input.GetKeyDown(KeyCode.Space)) Advance();
+
         if (!typing || bodyText == null) return;
 
         // 用 unscaledDeltaTime：万一有界面把 timeScale 归零，打字机也要能走

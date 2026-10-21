@@ -15,7 +15,7 @@ MonoBehaviour:
   unitName: 克勒妮·玛塔
   seenKey:
   charactersPerSecond: 45
-  leftName: 主
+  leftName: 勒忒
   leftPortrait: {fileID: 21300000, guid: 7a3c5e91b2d44f0e8c6105d9a4b73e21, type: 3}
   leftPortraitHeight: 960
   rightName: 克勒妮·玛塔
@@ -24,41 +24,41 @@ MonoBehaviour:
   firstEncounter:
   - speaker: 克勒妮·玛塔
     text: 早上好啊勒忒，你今天记得我吗？
-  - speaker: 主
+  - speaker: 勒忒
     text: ……
-  - speaker: 主
+  - speaker: 勒忒
     text: 没印象。
   - speaker: 克勒妮·玛塔
     text: 真的吗？你再想想，我昨天还邀请你一起共进早餐来着，你还是把我忘了吗？
-  - speaker: 主
+  - speaker: 勒忒
     text: 真没印象。
   - speaker: 克勒妮·玛塔
     text: 好吧，那我再自我介绍一下吧，我叫克勒妮·玛塔，这些毛茸茸的小家伙都是我的朋友。
-  - speaker: 主
+  - speaker: 勒忒
     text: 你的朋友差点要了我的命。
   - speaker: 克勒妮·玛塔
     text: 我替他们说声抱歉，但架还是要打的，要不你直接认输，我们还有时间喝下午茶。
-  - speaker: 主
+  - speaker: 勒忒
     text: ……
-  - speaker: 主
+  - speaker: 勒忒
     text: 不能。
   - speaker: 克勒妮·玛塔
     text: 那好吧，希望打完之后，你能多记住我一点。
   repeatEncounter:
   - speaker: 克勒妮·玛塔
     text: 你好啊勒忒，你今天记得我吗？
-  - speaker: 主
+  - speaker: 勒忒
     text: 有点印象，你是……
-  - speaker: 主
+  - speaker: 勒忒
     text: 嘶，我脑海中有好多个名字，你是哪个来着……
   - speaker: 克勒妮·玛塔
     text: 克勒妮·玛塔。
-  - speaker: 主
+  - speaker: 勒忒
     text: 嗯，对，玛塔。
   - speaker: 克勒妮·玛塔
     text: 你还真记住了一点，希望这次打完之后，你能多记住我一点。
   victory:
   - speaker: 克勒妮·玛塔
     text: 你赢了，勒忒。虽然我不能体会反复记忆和失去的痛苦，但我记得每一只死去朋友的样子，我们的痛苦也许是相通的呢。
-  - speaker: 主
+  - speaker: 勒忒
     text: 也许吧，再见，我下次会记住你的。
