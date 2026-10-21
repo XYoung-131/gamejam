@@ -1151,3 +1151,36 @@ UGUI 的 `PointerExit` 只在**指针真的移出**某个物体时由 `EventSyst
    三选一里就能抽到，"事件专属"并不专属。已经被抽走后，对应事件选项会**空转**（垃圾清理 / 重启）。
 2. 「奇怪的药剂」选项 2 承诺 3 瓶随机饮料，但药水背包上限是 3 —— 事件多发生在战斗后（背包常有存货），
    实际可能一瓶也塞不进去，目前只有 Console 警告。
+
+---
+
+## 克勒妮·玛塔对话（2026-10-21，合并队友 BossDialoguePanel 后）
+
+队友 PR 已实现通用首领对话系统（`Story/BossDialoguePanel.cs` + `Story/BossDialogueData.cs`），
+布局与需求 PSD《对话界面_1》一致：全屏白底、顶部深蓝长条 105 + 血量槽 132（不含耐力/思绪槽）、
+底部 一个UI框_1（71%）、左上 淡蓝色按键_1（82%）写说话人、左右立绘底贴屏幕、打字机 + 跳过按钮；
+素材走 `Resources/BattleUIAssetCatalog`（打包可用），三段式对话（第一次遇见 / 第二次及以后 / 胜利），
+"第一次"用 PlayerPrefs 记录，之后自动播"第二次及以后"。
+
+因此本轮自建的 `DialogPanel_克` 独立面板已删除（功能重复），改为给这套系统补配置资产：
+
+**新增 `Assets/Game/Resources/BossDialogues/克勒妮·玛塔.asset`**（+meta，guid 38731a3b…）：
+
+- `unitName = 克勒妮·玛塔`——与 `ScriptableObjects/单位/克勒妮·玛塔.asset` 的 unitName 完全一致，
+  `LevelData.Spawn.unit` 按这个名字匹配，关卡 `Level_1_克勒妮玛塔精英`（已在 RunRoute 精英池）即触发；
+- `leftName = 主` / 左立绘 `主角_立绘.png`；`rightName = 克` / 右立绘 `立绘/克勒妮玛塔.jpg`，
+  双方显示高 960、底贴屏幕（与 PSD 1255/1417 ≈ 88.6% 屏高一致）；
+- 台词全部取自飞书《对话文档》克勒妮·玛塔章节：第一次遇见 11 句、第二次及以后 6 句、胜利 2 句，
+  名牌按文档原文显示「克」/「主」。
+
+### 触发链（无需改代码）
+
+| 时机 | 代码 |
+|---|---|
+| 布阵完成后开战前 | `LevelManager` → `BossDialoguePanel.TryPlayBeforeBattle(level, StartBattleNow)`，播完回调才真正开战 |
+| 击败该单位后、开结算前 | `BattleEndPanel.HandleUnitDied` 记下 `defeatedDialogueUnit` → `OpenAfterDialogue` 播 victory → 回调开结算 |
+
+### 给其他角色加对话
+
+复制 `Resources/BossDialogues/` 下任一 `.asset`（Create → Game → 剧情 → 首领对话），
+改 `unitName` / 台词 / 立绘即可，运行时 `Resources.LoadAll` 自动扫描，不用写任何代码。
