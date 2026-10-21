@@ -1168,10 +1168,11 @@ UGUI 的 `PointerExit` 只在**指针真的移出**某个物体时由 `EventSyst
 
 - `unitName = 克勒妮·玛塔`——与 `ScriptableObjects/单位/克勒妮·玛塔.asset` 的 unitName 完全一致，
   `LevelData.Spawn.unit` 按这个名字匹配，关卡 `Level_1_克勒妮玛塔精英`（已在 RunRoute 精英池）即触发；
-- `leftName = 主` / 左立绘 `主角_立绘.png`；`rightName = 克` / 右立绘 `立绘/克勒妮玛塔.jpg`，
+- `leftName = 主` / 左立绘 `主角_立绘.png`；`rightName = 克勒妮·玛塔` / 右立绘 `立绘/克勒妮玛塔.jpg`，
   双方显示高 960、底贴屏幕（与 PSD 1255/1417 ≈ 88.6% 屏高一致）；
 - 台词全部取自飞书《对话文档》克勒妮·玛塔章节：第一次遇见 11 句、第二次及以后 6 句、胜利 2 句，
-  名牌按文档原文显示「克」/「主」。
+  名牌显示「克勒妮·玛塔」/「主」（2026-10-21 应需求由缩写「克」改为全名，
+  `rightName` 与台词 speaker 同步改，保证高亮判定依然命中）。
 
 ### 触发链（无需改代码）
 
@@ -1184,3 +1185,20 @@ UGUI 的 `PointerExit` 只在**指针真的移出**某个物体时由 `EventSyst
 
 复制 `Resources/BossDialogues/` 下任一 `.asset`（Create → Game → 剧情 → 首领对话），
 改 `unitName` / 台词 / 立绘即可，运行时 `Resources.LoadAll` 自动扫描，不用写任何代码。
+
+---
+
+## 黛亚&普兰对话（2026-10-21）
+
+**新增 `Assets/Game/Resources/BossDialogues/黛亚&普兰.asset`**（+meta，guid abad45f9…），
+完全复用队友的 `BossDialoguePanel` 系统，零代码改动：
+
+- `unitName = 黛亚`——`Level_1_黛亚&普兰BOSS` 的 spawns 里有黛亚（大抱抱、变色龙无对话配置不受影响）；
+  普兰不在任何关卡 spawns 里（战斗内由黛亚携带登场），所以匹配点选黛亚；
+- `leftName = 主` / 左立绘 `主角_立绘.png`；`rightName = 黛亚` / 右立绘 `立绘/普兰 黛亚.jpg`
+  （两人合照：黛亚与普兰同框，一张立绘同时代表两人）；
+- 台词取自飞书《对话文档》「黛亚&普兰」章节，缩写按需求替换：
+  「黛」→「黛亚」、「普」→「普兰」，主角仍为「主」：
+  第一次遇见 13 句、第二次及以后 8 句、胜利 3 句；
+- 高亮规则沿用队友实现：speaker 等于 `leftName`/`rightName` 时另一方压暗；
+  普兰的台词（舞台指示，如"（轻微地摇晃）"）两边名字都匹配不上 → 双方保持原色，符合合照同框的表现。
