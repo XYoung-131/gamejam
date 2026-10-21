@@ -16,6 +16,9 @@ MonoBehaviour:
   maxHealth: 8
   grade: 0
   attack: 1
+  passiveAbilities:
+  - {fileID: 11400000, guid: 32d92cf1308c4c0fb8055cae94a51e6f, type: 2}
+  - {fileID: 11400000, guid: ad34974b894d43a8b4581ddce6e89750, type: 2}
   passiveAbility: "\u8840\u91CF\u6BCF\u964D\u4F4E25%\uFF0C\u4FBF\u4F1A\u5728\u76F8\u90BB2\u683C\u8DDD\u79BB\u5185\u968F\u673A\u751F\u6210\u4E00\u53EA
     \u5C0F\u62B1\u62B1 / \u65E0\u6CD5\u88AB\u51FB\u9000"
   aiLogic: "\u76F8\u90BB2\u683C\u5185\u6CA1\u6709\u73A9\u5BB6\u65F6\uFF0C\u7528 \u5C0F\u6B65\u8D70
@@ -33,5 +36,7 @@ MonoBehaviour:
   - groupName: "\u6280\u80FD\u7EC42"
     cards:
     - {fileID: 11400000, guid: 667772554bc77c641a819ca182044246, type: 2}
+  - groupName: "\u6280\u80FD\u7EC43"
+    cards: []
   icon: {fileID: 21300000, guid: 0bab38b6a7a64eecaa1bfe5da90f85e8, type: 3}
   prefab: {fileID: 5125114976211495250, guid: f66ed6844021438d966d4f8c8ad039ad, type: 3}

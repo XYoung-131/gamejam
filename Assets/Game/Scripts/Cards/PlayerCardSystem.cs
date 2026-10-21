@@ -675,7 +675,7 @@ public class PlayerCardSystem : MonoBehaviour
             {
                 if (HexGrid.Instance.IsLineBlocked(player.GetCoord(), chosen))
                     return Fail($"【{card.cardName}】是远程技能，你和目标之间有单位或障碍物阻挡");
-                if (HexGrid.Instance.IsCellSmoky(chosen))
+                if (IsSmokeBlockingTarget(chosen))
                     return Fail($"目标格处于烟雾中，【{card.cardName}】无法锁定它");
             }
             HexCell cell = HexGrid.Instance.GetCell(chosen);
@@ -1166,12 +1166,20 @@ public class PlayerCardSystem : MonoBehaviour
             return Fail($"【{card.cardName}】是远程技能，你和目标之间有单位或障碍物阻挡，看不见目标");
         }
 
-        if (HexGrid.Instance.IsCellSmoky(to))
+        if (IsSmokeBlockingTarget(to))
         {
             return Fail($"目标站在烟雾里，【{card.cardName}】无法锁定它");
         }
 
         return true;
+    }
+
+    private static bool IsSmokeBlockingTarget(HexCoord coord)
+    {
+        if (HexGrid.Instance == null || !HexGrid.Instance.IsCellSmoky(coord)) return false;
+        HexCell cell = HexGrid.Instance.GetCell(coord);
+        Unit target = cell != null ? cell.occupyUnit : null;
+        return target == null || target.CanBeAffectedByTerrain(cell.terrain);
     }
 
     /// <summary>

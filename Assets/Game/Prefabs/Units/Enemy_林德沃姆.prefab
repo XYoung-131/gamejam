@@ -146,6 +146,30 @@ MonoBehaviour:
   activeBuffs: []
   thinkDelay: 0.8
   stepDelay: 0.3
+  decisionRules:
+  - ruleName: "\u5F00\u5C404-2\uFF0C\u7136\u540E1-3-2\u5FAA\u73AF"
+    conditions: []
+    actions:
+    - actionType: 4
+      skillGroupIndex: 0
+      skillGroupCycle:
+      - 0
+      - 2
+      - 1
+      skillGroupOpening:
+      - 3
+      - 1
+      movementDistance: 1
+    - actionType: 1
+      skillGroupIndex: 0
+      skillGroupCycle: []
+      skillGroupOpening: []
+      movementDistance: 1
+    - actionType: 6
+      skillGroupIndex: 0
+      skillGroupCycle: []
+      skillGroupOpening: []
+      movementDistance: 1
   skillsPerTurn: 1
 --- !u!114 &7033390731918600057
 MonoBehaviour:

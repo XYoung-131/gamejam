@@ -146,6 +146,95 @@ MonoBehaviour:
   activeBuffs: []
   thinkDelay: 0.8
   stepDelay: 0.3
+  decisionRules:
+  - ruleName: "\u4E0A\u56DE\u5408\u8F70\u51FB\uFF1A\u5FEB\u8D70\u4FDD\u63013\u683C"
+    conditions:
+    - conditionType: 5
+      subject: 0
+      comparison: 2
+      value: 0
+      healthValueType: 0
+      buff: {fileID: 0}
+      skill: {fileID: 11400000, guid: 3bd228247c9727e40917d1c53075f3e5, type: 2}
+      specifiedUnit: {fileID: 0}
+      specifiedUnitName:
+      unitRelation: 0
+      includeSelf: 0
+      invert: 0
+    actions:
+    - actionType: 0
+      skillGroupIndex: 1
+      skillGroupCycle: []
+      movementDistance: 1
+    - actionType: 5
+      skillGroupIndex: 0
+      skillGroupCycle: []
+      movementDistance: 3
+  - ruleName: "\u76F8\u90BB\uFF1A\u5FEB\u8D70\u8FDC\u79BB"
+    conditions:
+    - conditionType: 0
+      subject: 1
+      comparison: 1
+      value: 1
+      healthValueType: 0
+      buff: {fileID: 0}
+      skill: {fileID: 0}
+      specifiedUnit: {fileID: 0}
+      specifiedUnitName:
+      unitRelation: 0
+      includeSelf: 0
+      invert: 0
+    actions:
+    - actionType: 0
+      skillGroupIndex: 1
+      skillGroupCycle: []
+      movementDistance: 1
+    - actionType: 2
+      skillGroupIndex: 0
+      skillGroupCycle: []
+      movementDistance: 1
+  - ruleName: "\u8DDD\u79BB2\u81F33\u683C\uFF1A\u8F70\u51FB"
+    conditions:
+    - conditionType: 0
+      subject: 1
+      comparison: 1
+      value: 3
+      healthValueType: 0
+      buff: {fileID: 0}
+      skill: {fileID: 0}
+      specifiedUnit: {fileID: 0}
+      specifiedUnitName:
+      unitRelation: 0
+      includeSelf: 0
+      invert: 0
+    actions:
+    - actionType: 0
+      skillGroupIndex: 0
+      skillGroupCycle: []
+      movementDistance: 1
+  - ruleName: "\u8DDD\u79BB\u8D85\u8FC73\u683C\uFF1A\u5FEB\u8D70\u4FDD\u63013\u683C"
+    conditions:
+    - conditionType: 0
+      subject: 1
+      comparison: 4
+      value: 3
+      healthValueType: 0
+      buff: {fileID: 0}
+      skill: {fileID: 0}
+      specifiedUnit: {fileID: 0}
+      specifiedUnitName:
+      unitRelation: 0
+      includeSelf: 0
+      invert: 0
+    actions:
+    - actionType: 0
+      skillGroupIndex: 1
+      skillGroupCycle: []
+      movementDistance: 1
+    - actionType: 5
+      skillGroupIndex: 0
+      skillGroupCycle: []
+      movementDistance: 3
   skillsPerTurn: 1
 --- !u!114 &8871327685512830090
 MonoBehaviour:

@@ -86,6 +86,8 @@ public abstract class Unit : MonoBehaviour
     // 等整段位移全部结算完再统一死亡（文档："位移期间死亡，等位移结束再消失"）
     protected bool isDisplacing = false;   // 是否正在被位移
     protected bool pendingDeath = false;   // 位移中已归零，等位移结束再死
+    private Unit damageSourceContext;
+    private Unit pendingDeathSource;
 
     // 死亡标记：Unity 的 Destroy 延迟到帧末执行，Die() 之后对象还会被调用若干次。
     // 所有会改动状态的公开方法开头都要判它，防止"给已死单位挂 buff"、
@@ -131,6 +133,8 @@ public abstract class Unit : MonoBehaviour
         nextTurnSkillBuffs.Clear();
         isDead = false;        // 复用单位时重置死亡标记
         pendingDeath = false;
+        pendingDeathSource = null;
+        damageSourceContext = null;
         isDisplacing = false;
 
         // 把自己注册到格子上
@@ -150,6 +154,7 @@ public abstract class Unit : MonoBehaviour
                 cell.occupyUnit = this;
             }
         }
+        EventManager.Trigger("UnitInitialized", this);
     }
 
     // ============================================================
@@ -246,7 +251,10 @@ public abstract class Unit : MonoBehaviour
         }
 
         // 扣血（统一走 ApplyHealthLoss，内部处理免疫死亡 + 位移延迟死亡 + 血条事件）
+        Unit previousSource = damageSourceContext;
+        damageSourceContext = ctx.attacker;
         ApplyHealthLoss(amount);
+        damageSourceContext = previousSource;
 
         // 已经死了就不再触发"受到伤害时"——否则一击致死时会重复触发反伤类效果
         if (!isDead)
@@ -318,7 +326,20 @@ public abstract class Unit : MonoBehaviour
         }
 
         if (currentHealth != before)
+        {
             BroadcastHealthChanged();
+            EventManager.Trigger("UnitDamageResolved", this, damageSourceContext,
+                before - currentHealth);
+        }
+
+        // 受伤被动可能在事件中治疗单位或临时赋予免死，死亡判定必须以事件后的状态为准。
+        shouldDie = currentHealth <= 0;
+        if (shouldDie && HasEffect(BuffEffectType.免疫死亡))
+        {
+            currentHealth = 1;
+            shouldDie = false;
+            BroadcastHealthChanged();
+        }
 
         if (!shouldDie) return;
 
@@ -326,6 +347,7 @@ public abstract class Unit : MonoBehaviour
         if (isDisplacing)
         {
             pendingDeath = true;
+            pendingDeathSource = damageSourceContext;
             return;
         }
 
@@ -910,6 +932,8 @@ public abstract class Unit : MonoBehaviour
         }
 
         // 触发事件
+        Unit killer = pendingDeathSource != null ? pendingDeathSource : damageSourceContext;
+        EventManager.Trigger("UnitDiedBy", this, killer);
         OnUnitDied?.Invoke(this);
         EventManager.Trigger("UnitDied", this);
 
@@ -991,6 +1015,7 @@ public abstract class Unit : MonoBehaviour
     public virtual void PushBack(HexCoord fromDirection, int distance)
     {
         if (isDead) return;   // 已死亡的单位不再被击退
+        if (!CanBeDisplaced(DisplacementType.击退)) return;
 
         HexCoord dir = new HexCoord(
             currentCoord.q - fromDirection.q,
@@ -1049,6 +1074,7 @@ public abstract class Unit : MonoBehaviour
     {
         if (isDead) return;   // 已死亡的单位不再被位移
         if (type == DisplacementType.传送 || distance <= 0) return;
+        if (!CanBeDisplaced(type)) return;
         if (HexGrid.Instance == null) return;
 
         // 计算初始方向（在当前格的 6 个邻居里选最贴合目标方向的那个）
@@ -1057,6 +1083,7 @@ public abstract class Unit : MonoBehaviour
 
         isDisplacing = true;      // 开启"延迟死亡"
         pendingDeath = false;
+        pendingDeathSource = null;
 
         int remaining = distance;
         int guard = 0;            // 防止反弹死循环的保险丝
@@ -1093,6 +1120,7 @@ public abstract class Unit : MonoBehaviour
         {
             pendingDeath = false;
             Die();
+            pendingDeathSource = null;
         }
 
         EventManager.Trigger("UnitDisplaced", this);
@@ -1259,7 +1287,21 @@ public abstract class Unit : MonoBehaviour
         currentHealth = Mathf.Clamp(current, 1, runtimeMaxHealth);
         EventManager.Trigger("UnitHealthChanged", this);
     }
+    public void ModifyMaxHealth(int delta, bool healByIncrease = true)
+    {
+        if (delta == 0 || isDead) return;
+        int oldMax = GetMaxHealth();
+        runtimeMaxHealth = Mathf.Max(1, oldMax + delta);
+        if (delta > 0 && healByIncrease) currentHealth += runtimeMaxHealth - oldMax;
+        currentHealth = Mathf.Clamp(currentHealth, 0, runtimeMaxHealth);
+        EventManager.Trigger("UnitHealthChanged", this);
+    }
     public int GetShield() => shield;
+
+    protected virtual bool CanBeDisplaced(DisplacementType type) => true;
+
+    /// <summary>供地形与烟雾选中规则查询；具体免疫由敌人的被动运行时覆写。</summary>
+    public virtual bool CanBeAffectedByTerrain(TerrainData terrain) => true;
 
     /// <summary>血量百分比（0~1），UI 血条直接用</summary>
     public float GetHealthPercent()
@@ -1414,6 +1456,9 @@ public abstract class Unit : MonoBehaviour
             amount -= absorbed;
         }
 
+        Unit previousSource = damageSourceContext;
+        damageSourceContext = null;
         ApplyHealthLoss(amount);
+        damageSourceContext = previousSource;
     }
 }

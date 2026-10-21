@@ -146,6 +146,35 @@ MonoBehaviour:
   activeBuffs: []
   thinkDelay: 0.8
   stepDelay: 0.3
+  decisionRules:
+  - ruleName: "\u73A9\u5BB6\u6709\u4EB2\u5BC6\uFF1A\u556E\u54AC"
+    conditions:
+    - conditionType: 2
+      subject: 1
+      comparison: 1
+      value: 0
+      healthValueType: 0
+      buff: {fileID: 11400000, guid: ac7af3ac46d7e454e8e70f6e7d36c285, type: 2}
+      skill: {fileID: 0}
+      specifiedUnit: {fileID: 0}
+      specifiedUnitName:
+      unitRelation: 0
+      includeSelf: 0
+      invert: 0
+    actions:
+    - actionType: 0
+      skillGroupIndex: 1
+      skillGroupCycle: []
+      skillGroupOpening: []
+      movementDistance: 1
+  - ruleName: "\u73A9\u5BB6\u65E0\u4EB2\u5BC6\uFF1A\u62B1\u62B1"
+    conditions: []
+    actions:
+    - actionType: 0
+      skillGroupIndex: 0
+      skillGroupCycle: []
+      skillGroupOpening: []
+      movementDistance: 1
   skillsPerTurn: 1
 --- !u!114 &7033390731918600057
 MonoBehaviour:

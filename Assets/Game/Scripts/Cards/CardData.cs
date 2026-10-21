@@ -184,6 +184,10 @@ public class CardData : ScriptableObject
     [Tooltip("这张牌装入槽位后能用的次数。0 或负数 = 不限次数；正数 N = 可用 N 次，用完槽位自动腾空")]
     public int maxUses = 0;          // 0/负数 = 不限；正数 = 可用 N 次
 
+    [Header("敌人技能冷却")]
+    [Tooltip("敌人成功释放后需要跳过多少个敌方行动回合才能再次使用；0 = 无冷却。玩家使用此技能不受影响")]
+    [Min(0)] public int enemyCooldownTurns = 0;
+
     [Header("射程（六边形格子距离）")]
     [Tooltip("最小射程（0 表示无最小限制）。例：'1格外3格内' 这里填 2")]
     public int minRange = 0;
@@ -415,6 +419,16 @@ public class CardData : ScriptableObject
         return distance >= minRange && distance <= GetEffectiveMaxRange(caster);
     }
 
+    private bool CanAffectUnit(Unit caster, Unit target)
+    {
+        if (caster == null || target == null) return false;
+        if (target == caster) return affectsCaster;
+
+        bool ally = (target is PlayerUnit) == (caster is PlayerUnit);
+        if (!ally || affectsAllies) return true;
+        return caster is EnemyUnit enemy && enemy.CanTargetFriendlyWithAttack(target);
+    }
+
     public bool CanSelectAttackCell(Unit caster, HexCoord coord)
     {
         if (caster == null || HexGrid.Instance == null) return false;
@@ -451,7 +465,7 @@ public class CardData : ScriptableObject
         if (attackTargetRule == AttackTargetRule.地块) return true;
         Unit target = cell.occupyUnit;
         if (target != null && target != caster && target.GetCurrentHealth() > 0 &&
-            ((target is PlayerUnit) != (caster is PlayerUnit) || affectsAllies) &&
+            CanAffectUnit(caster, target) &&
             (!(caster is PlayerUnit) || !target.DefenseState.UntargetableThisTurn) &&
             !caster.IsAttackTargetForbidden(target)) return CanTargetUnit;
         return CanTargetObstacle && cell.obstacle != null;
@@ -862,7 +876,7 @@ public class CardData : ScriptableObject
                     if (nearby == null || nearby.coord == previousChainCoord) continue;
                     if (nearby.occupyUnit != null && nearby.occupyUnit != caster &&
                         nearby.occupyUnit.GetCurrentHealth() > 0 &&
-                        ((nearby.occupyUnit is PlayerUnit) != (caster is PlayerUnit)))
+                        CanAffectUnit(caster, nearby.occupyUnit))
                         units.Add(nearby.coord);
                     else if (CanTargetObstacle && nearby.obstacle != null) obstacles.Add(nearby.coord);
                 }
@@ -879,7 +893,7 @@ public class CardData : ScriptableObject
                     HexCell possible = HexGrid.Instance.GetCell(candidate.Coord);
                     if (possible != null && possible.occupyUnit != null &&
                         possible.occupyUnit.GetCurrentHealth() > 0 &&
-                        ((possible.occupyUnit is PlayerUnit) != (caster is PlayerUnit)))
+                        CanAffectUnit(caster, possible.occupyUnit))
                         livingEnemies.Add(candidate);
                 }
                 if (livingEnemies.Count == 0) break;
@@ -907,7 +921,7 @@ public class CardData : ScriptableObject
             if (target.GetCurrentHealth() <= 0) continue;
             if (target == caster && !affectsCaster) continue;
             bool ally = target != caster && ((target is PlayerUnit) == (caster is PlayerUnit));
-            if (ally && !affectsAllies) continue;
+            if (!CanAffectUnit(caster, target)) continue;
             if (caster.IsAttackTargetForbidden(target)) continue;
             if (!attacked)
             {
@@ -916,12 +930,16 @@ public class CardData : ScriptableObject
             }
 
             int finalDamage = target == caster ? casterDamage :
-                ally ? allyDamage : damage == 0 && entry.Damage == 0 ? 0 :
+                ally && affectsAllies ? allyDamage : damage == 0 && entry.Damage == 0 ? 0 :
                 Mathf.Max(0, GetFinalDamage(caster, target) + entry.Damage - damage);
             if (finalDamage > 0)
                 target.TakeDamage(DamageContext.FromCard(caster, this, finalDamage,
                     target == caster && affectsCaster ? DamageType.真实 : damageType));
-            if (target != caster && !ally && target.GetCurrentHealth() > 0 && buffs != null)
+            bool passiveFriendlyFire = ally && !affectsAllies &&
+                caster is EnemyUnit friendlyFireEnemy &&
+                friendlyFireEnemy.CanTargetFriendlyWithAttack(target);
+            if (target != caster && (!ally || passiveFriendlyFire) &&
+                target.GetCurrentHealth() > 0 && buffs != null)
                 foreach (BuffData buff in buffs)
                     if (buff != null && buff.polarity == BuffPolarity.负面)
                         target.ApplyBuff(buff);

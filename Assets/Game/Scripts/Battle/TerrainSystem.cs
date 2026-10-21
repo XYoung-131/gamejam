@@ -99,7 +99,7 @@ public class TerrainSystem : MonoBehaviour
         HexCell cell = HexGrid.Instance.GetCell(unit.GetCoord());
         TerrainData terrain = cell != null ? cell.terrain : null;
 
-        bool onBlanket = terrain != null &&
+        bool onBlanket = terrain != null && unit.CanBeAffectedByTerrain(terrain) &&
                          terrain.terrainType == TerrainType.克勒妮绒毯 &&
                          terrain.strengthBuff != null &&
                          IsEligible(terrain, unit);
@@ -186,6 +186,7 @@ public class TerrainSystem : MonoBehaviour
     private bool CanAffect(TerrainData terrain, Unit unit)
     {
         if (terrain == null || unit == null) return true;
+        if (!unit.CanBeAffectedByTerrain(terrain)) return false;
         if (!terrain.isNegative) return true;
 
         if (unit is PlayerUnit player)

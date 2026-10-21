@@ -148,6 +148,18 @@ MonoBehaviour:
   skipDecayOnAppliedTurn: 0
   thinkDelay: 0.8
   stepDelay: 0.3
+  decisionRules:
+  - ruleName: "\u56FA\u5B9A\u5FAA\u73AF2-4-2-3"
+    conditions: []
+    actions:
+    - actionType: 4
+      skillGroupIndex: 0
+      skillGroupCycle:
+      - 1
+      - 3
+      - 1
+      - 2
+      movementDistance: 1
   skillsPerTurn: 1
   maxStepsPerTurn: 3
 --- !u!114 &3719415654711483531

@@ -22,13 +22,12 @@ public class EnemyUnit : Unit
     [Tooltip("每步移动的间隔（秒）")]
     public float stepDelay = 0.3f;
 
+    [Tooltip("按顺序判断，第一条全部满足的规则决定技能组；没有命中时随机选择")]
+    public List<EnemyDecisionRule> decisionRules = new List<EnemyDecisionRule>();
+
     [Header("技能预告")]
     [Tooltip("每回合预告并释放的技能数量（题目举例的'上回合用了 5 个技能'就把这里设成 5）")]
     public int skillsPerTurn = 1;
-
-    [Header("移动")]
-    [Tooltip("射程够不到玩家时，这一回合最多朝玩家走几格")]
-    public int maxStepsPerTurn = 3;
 
     // 当前使用哪个技能组（1/2/3，对应 UnitData 上配置的三组技能；后续可做阶段切换）
     protected int currentSkillGroup = 1;
@@ -40,6 +39,17 @@ public class EnemyUnit : Unit
     // 上回合"实际"释放过的技能。保留重复（同一技能放两次就是两条），
     // 玩家窃取时 PlayerCardSystem 会再做去重和敌方特有过滤
     protected readonly List<CardData> lastTurnUsedSkills = new List<CardData>();
+
+    // 冷却和循环游标都属于单个敌人实例，不能写回共享的 CardData/规则配置。
+    private readonly Dictionary<CardData, int> skillCooldowns = new Dictionary<CardData, int>();
+    private readonly Dictionary<EnemyDecisionAction, int> skillGroupCyclePositions =
+        new Dictionary<EnemyDecisionAction, int>();
+    private readonly Dictionary<EnemyDecisionAction, int> skillGroupOpeningPositions =
+        new Dictionary<EnemyDecisionAction, int>();
+    private readonly List<PassiveRuntime> passiveRuntimes = new List<PassiveRuntime>();
+
+    // 玩家看到的预告与敌方实际执行共享这份决策快照。
+    protected EnemyDecision currentDecision;
 
     /// <summary>
     /// 是否已经行动过
@@ -56,15 +66,58 @@ public class EnemyUnit : Unit
     /// </summary>
     public IReadOnlyList<CardData> LastTurnUsedSkills => lastTurnUsedSkills;
 
+    /// <summary>本回合已经确定的完整决策，供预告UI和后续AI规则只读查看。</summary>
+    public EnemyDecision CurrentDecision => currentDecision;
+    public IReadOnlyList<PassiveRuntime> PassiveRuntimes => passiveRuntimes;
+
+    public T FindPassiveRuntime<T>() where T : PassiveRuntime
+    {
+        foreach (PassiveRuntime runtime in passiveRuntimes)
+            if (runtime is T matched) return matched;
+        return null;
+    }
+
+    /// <summary>
+    /// 立即替换当前回合已经生成的技能预告。
+    /// 用于“受伤后改变本回合技能”这类被动；预告 UI 每帧读取 PlannedSkills，
+    /// 敌方行动也读取同一个 EnemyDecision，因此显示和实际执行会保持一致。
+    /// </summary>
+    public void OverridePlannedSkills(IEnumerable<CardData> skills, int skillGroupIndex,
+        string reason = null)
+    {
+        if (currentDecision == null)
+            currentDecision = new EnemyDecision().SetPrimaryTarget(FindNearestPlayer());
+
+        var replacement = new List<CardData>();
+        if (skills != null)
+            foreach (CardData skill in skills)
+                if (skill != null) replacement.Add(skill);
+
+        currentSkillGroup = skillGroupIndex;
+        currentDecision.SetSkillGroup(skillGroupIndex)
+                       .SetSkipSkills(replacement.Count == 0, reason)
+                       .SetSkills(replacement);
+
+        plannedSkills.Clear();
+        plannedSkills.AddRange(replacement);
+        EventManager.Trigger("EnemyIntentChanged", this);
+    }
+
     // ============================================================
     //                       初始化
     // ============================================================
 
     public override void Initialize(UnitData unitData, HexCoord startCoord)
     {
+        DisposePassiveRuntimes();
         base.Initialize(unitData, startCoord);
-        currentSkillGroup = Random.Range(0,data.skillGroups.Count);
+        currentSkillGroup = 0;
+        currentDecision = null;
         hasActedThisTurn = false;
+        skillCooldowns.Clear();
+        skillGroupCyclePositions.Clear();
+        skillGroupOpeningPositions.Clear();
+        RebuildPassiveRuntimes();
     }
 
     // ============================================================
@@ -75,11 +128,14 @@ public class EnemyUnit : Unit
     {
         base.OnTurnStart();
         hasActedThisTurn = false;
+        TickSkillCooldowns();
+        NotifyPassivesTurnStart();
     }
 
     public override void OnTurnEnd()
     {
         base.OnTurnEnd();
+        NotifyPassivesTurnEnd();
     }
 
     // ============================================================
@@ -92,30 +148,54 @@ public class EnemyUnit : Unit
     /// </summary>
     public virtual List<CardData> GetActiveSkillGroup()
     {
-        currentSkillGroup = Random.Range(0,data.skillGroups.Count);
-        
-        if (data == null || data.skillGroups[currentSkillGroup].cards.Count == 0) return new List<CardData>();
+        if (data == null || data.skillGroups == null || data.skillGroups.Count == 0)
+            return new List<CardData>();
 
-        return data.skillGroups[currentSkillGroup].cards;
+        currentSkillGroup = Mathf.Clamp(currentSkillGroup, 0, data.skillGroups.Count - 1);
+        CardGroup group = data.skillGroups[currentSkillGroup];
+        if (group == null || group.cards == null || group.cards.Count == 0)
+            return new List<CardData>();
+
+        return group.cards;
     }
 
     /// <summary>
     /// 【回合开场调用】生成本回合将要释放的技能（先预告、后执行）。
-    /// 从当前技能组里有放回地随机抽 skillsPerTurn 个（允许同一个技能重复出现）。
+    /// 随机确定一个技能组，并把其中的有效技能按行动优先级写入决策快照。
     /// </summary>
     public virtual void PreparePlannedSkills()
     {
         plannedSkills.Clear();
 
+        NotifyPassivesBeforeDecision();
+        currentDecision = BuildDefaultDecision();
+        NotifyPassivesAfterDecision(currentDecision);
+        currentSkillGroup = currentDecision.SkillGroupIndex;
+
+        // 特殊撤退也在预告阶段改成位移牌，让玩家看到的技能与实际执行保持一致。
+        if (IsPebbleBug() && TryFindNearestLivingLindworm(out EnemyUnit lindworm))
+        {
+            OverrideWithPebbleBugRetreatSkill(lindworm);
+            return;
+        }
+
+        if (currentDecision.SkipSkills)
+        {
+            currentDecision.SetSkills(null);
+            return;
+        }
+
         // 复制一份技能组并过滤掉空引用，避免直接操作 UnitData 的原始列表
         List<CardData> group = new List<CardData>();
-        foreach (var card in GetActiveSkillGroup())
-            if (card != null) group.Add(card);
+        foreach (CardData card in currentDecision.Skills)
+            if (card != null && !IsSkillOnCooldown(card)) group.Add(card);
 
         if (group.Count == 0)
         {
-            // 策划没配技能，给警告但不崩溃
-            Debug.LogWarning($"{data.unitName} 的技能组 {currentSkillGroup} 没有配置技能");
+            // 技能组为空或全部处于冷却时仍保留方向意图，但不会在技能牌之外移动。
+            currentDecision.SetSkills(null);
+            string enemyName = data != null ? data.unitName : name;
+            Debug.LogWarning($"{enemyName} 的技能组 {currentSkillGroup} 没有可用技能（未配置或正在冷却）");
             return;
         }
 
@@ -123,13 +203,278 @@ public class EnemyUnit : Unit
             plannedSkills.Add(group[i]);
 
         // 按"怪物行动顺序"给预告技能排序（文档：瞄准 → 带位移的攻击 → 位移 → 特技 → 纯攻击）
-        ReorderByPriority();
+        if (!currentDecision.PreserveSkillOrder)
+            ReorderByPriority();
+        currentDecision.SetSkills(plannedSkills);
 
         // 打印带序号的预告，方便实战对照 UI 上的行动顺序数字
         string orderText = "";
         for (int i = 0; i < plannedSkills.Count; i++)
             orderText += $"{i + 1}.{plannedSkills[i].cardName} ";
         Debug.Log($"{data.unitName} 行动顺序：{orderText}");
+    }
+
+    /// <summary>
+    /// 旧敌人的默认决策：随机选一个技能组，并以最近玩家为主要目标。
+    /// 靠近/远离意图只指导位移技能选落点，不会直接移动单位。
+    /// 后续 EnemyAIData/规则系统只需覆写或替换这个方法产出的决策。
+    /// </summary>
+    protected virtual EnemyDecision BuildDefaultDecision()
+    {
+        var decision = new EnemyDecision();
+        PlayerUnit target = FindNearestPlayer();
+        decision.SetPrimaryTarget(target)
+                .SetMovement(EnemyMovementIntent.无);
+
+        if (data == null || data.skillGroups == null || data.skillGroups.Count == 0)
+            return decision.SetSkipSkills(true, "没有配置技能组");
+
+        int selectedGroup = Random.Range(0, data.skillGroups.Count);
+        int matchedRule = FindMatchingDecisionRule(target);
+        if (matchedRule >= 0)
+            ApplyDecisionActions(decisionRules[matchedRule], decision, target, ref selectedGroup);
+        currentSkillGroup = selectedGroup;
+        string reason = matchedRule >= 0
+            ? $"命中决策规则：{GetDecisionRuleName(matchedRule)}"
+            : "没有规则命中，随机选择技能组";
+        return decision.SetRule(matchedRule, reason)
+                       .SetSkillGroup(selectedGroup)
+                       .SetSkills(GetActiveSkillGroup());
+    }
+
+    private int FindMatchingDecisionRule(Unit primaryTarget)
+    {
+        if (decisionRules != null)
+        {
+            for (int i = 0; i < decisionRules.Count; i++)
+            {
+                EnemyDecisionRule rule = decisionRules[i];
+                if (rule == null || rule.actions == null || rule.actions.Count == 0 ||
+                    !rule.Matches(this, primaryTarget)) continue;
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private void ApplyDecisionActions(EnemyDecisionRule rule, EnemyDecision decision,
+        Unit primaryTarget, ref int selectedGroup)
+    {
+        if (rule.actions == null) return;
+        foreach (EnemyDecisionAction action in rule.actions)
+        {
+            if (action == null) continue;
+            switch (action.actionType)
+            {
+                case EnemyDecisionActionType.选择技能组:
+                    if (action.skillGroupIndex >= 0 && action.skillGroupIndex < data.skillGroups.Count)
+                        selectedGroup = action.skillGroupIndex;
+                    else
+                        Debug.LogWarning($"{data.unitName} 的决策规则指向不存在的技能组 " +
+                                         $"{action.skillGroupIndex}，继续使用技能组 {selectedGroup}");
+                    break;
+                case EnemyDecisionActionType.固定技能组循环:
+                    TrySelectCycledSkillGroup(action, ref selectedGroup);
+                    break;
+                case EnemyDecisionActionType.靠近主要目标:
+                    decision.SetMovement(EnemyMovementIntent.靠近目标, primaryTarget,
+                        Mathf.Max(1, action.movementDistance));
+                    break;
+                case EnemyDecisionActionType.远离主要目标:
+                    decision.SetMovement(EnemyMovementIntent.远离目标, primaryTarget,
+                        Mathf.Max(1, action.movementDistance));
+                    break;
+                case EnemyDecisionActionType.跳过行动:
+                    decision.SetMovement(EnemyMovementIntent.无)
+                            .SetSkipSkills(true, "规则要求跳过行动");
+                    break;
+                case EnemyDecisionActionType.位移牌保持距离:
+                    decision.SetMovement(EnemyMovementIntent.保持距离, primaryTarget,
+                        Mathf.Max(1, action.movementDistance));
+                    break;
+                case EnemyDecisionActionType.保留技能组顺序:
+                    decision.SetPreserveSkillOrder();
+                    break;
+            }
+        }
+    }
+
+    private void TrySelectCycledSkillGroup(EnemyDecisionAction action, ref int selectedGroup)
+    {
+        if (action.skillGroupOpening != null && action.skillGroupOpening.Count > 0)
+        {
+            skillGroupOpeningPositions.TryGetValue(action, out int openingPosition);
+            while (openingPosition < action.skillGroupOpening.Count)
+            {
+                int candidate = action.skillGroupOpening[openingPosition++];
+                skillGroupOpeningPositions[action] = openingPosition;
+                if (candidate < 0 || candidate >= data.skillGroups.Count) continue;
+                selectedGroup = candidate;
+                return;
+            }
+        }
+
+        if (action.skillGroupCycle == null || action.skillGroupCycle.Count == 0)
+        {
+            Debug.LogWarning($"{data.unitName} 的固定技能组循环没有配置任何索引");
+            return;
+        }
+
+        skillGroupCyclePositions.TryGetValue(action, out int position);
+        for (int offset = 0; offset < action.skillGroupCycle.Count; offset++)
+        {
+            int listIndex = (position + offset) % action.skillGroupCycle.Count;
+            int candidate = action.skillGroupCycle[listIndex];
+            if (candidate < 0 || candidate >= data.skillGroups.Count) continue;
+
+            selectedGroup = candidate;
+            skillGroupCyclePositions[action] = (listIndex + 1) % action.skillGroupCycle.Count;
+            return;
+        }
+
+        Debug.LogWarning($"{data.unitName} 的固定技能组循环中没有有效的技能组索引");
+    }
+
+    public int GetSkillCooldownRemaining(CardData card)
+    {
+        return card != null && skillCooldowns.TryGetValue(card, out int turns) ? turns : 0;
+    }
+
+    private bool IsSkillOnCooldown(CardData card)
+    {
+        return GetSkillCooldownRemaining(card) > 0;
+    }
+
+    private void StartSkillCooldown(CardData card)
+    {
+        if (card == null || card.enemyCooldownTurns <= 0) return;
+        skillCooldowns[card] = card.enemyCooldownTurns;
+    }
+
+    private void TickSkillCooldowns()
+    {
+        if (skillCooldowns.Count == 0) return;
+        var cards = new List<CardData>(skillCooldowns.Keys);
+        foreach (CardData card in cards)
+        {
+            int remaining = skillCooldowns[card] - 1;
+            if (remaining <= 0) skillCooldowns.Remove(card);
+            else skillCooldowns[card] = remaining;
+        }
+    }
+
+    private void RebuildPassiveRuntimes()
+    {
+        DisposePassiveRuntimes();
+        if (data == null || data.passiveAbilities == null) return;
+        foreach (PassiveAbilityData passiveData in data.passiveAbilities)
+        {
+            if (passiveData == null) continue;
+            PassiveRuntime runtime = passiveData.CreateRuntime(this);
+            if (runtime == null)
+            {
+                Debug.LogWarning($"{data.unitName} 的被动【{passiveData.name}】没有创建运行时实例");
+                continue;
+            }
+            passiveRuntimes.Add(runtime);
+            runtime.Activate();
+        }
+    }
+
+    private void DisposePassiveRuntimes()
+    {
+        foreach (PassiveRuntime runtime in passiveRuntimes)
+            runtime?.Deactivate();
+        passiveRuntimes.Clear();
+    }
+
+    private void NotifyPassivesTurnStart()
+    {
+        foreach (PassiveRuntime runtime in passiveRuntimes)
+            if (runtime != null && runtime.IsActive) runtime.OnTurnStart();
+    }
+
+    private void NotifyPassivesTurnEnd()
+    {
+        foreach (PassiveRuntime runtime in passiveRuntimes)
+            if (runtime != null && runtime.IsActive) runtime.OnTurnEnd();
+    }
+
+    private void NotifyPassivesBeforeDecision()
+    {
+        foreach (PassiveRuntime runtime in passiveRuntimes)
+            if (runtime != null && runtime.IsActive) runtime.BeforeDecision();
+    }
+
+    private void NotifyPassivesAfterDecision(EnemyDecision decision)
+    {
+        foreach (PassiveRuntime runtime in passiveRuntimes)
+            if (runtime != null && runtime.IsActive) runtime.AfterDecision(decision);
+    }
+
+    private bool PassivesAllowSkill(CardData card)
+    {
+        foreach (PassiveRuntime runtime in passiveRuntimes)
+            if (runtime != null && runtime.IsActive && !runtime.CanUseSkill(card)) return false;
+        return true;
+    }
+
+    /// <summary>
+    /// 某些怪物被动允许在特定决策中把同阵营单位作为攻击目标。
+    /// 默认所有被动都返回 false，不改变其他敌人的阵营判定。
+    /// </summary>
+    public bool CanTargetFriendlyWithAttack(Unit target)
+    {
+        if (target == null || target == this || !(target is EnemyUnit)) return false;
+        foreach (PassiveRuntime runtime in passiveRuntimes)
+            if (runtime != null && runtime.IsActive && runtime.CanTargetFriendlyWithAttack(target))
+                return true;
+        return false;
+    }
+
+    /// <summary>供被动在生成预告时复用执行前的射程、视线和选格检查。</summary>
+    public bool CanHitTargetWithSkill(CardData card, Unit target)
+    {
+        if (card == null || !card.IsAttack) return false;
+        bool needsPrimaryTarget = card.attackTargetRule != AttackTargetRule.自身范围 &&
+            card.attackTargetRule != AttackTargetRule.全场 &&
+            card.attackTargetRule != AttackTargetRule.全场随机 &&
+            card.attackTargetRule != AttackTargetRule.固定地图图案;
+        return CanExecutePlannedAttack(card, target, needsPrimaryTarget, out _);
+    }
+
+    private void NotifyPassivesSkillUsed(CardData card)
+    {
+        foreach (PassiveRuntime runtime in passiveRuntimes)
+            if (runtime != null && runtime.IsActive) runtime.OnSkillUsed(card);
+    }
+
+    protected override bool CanBeDisplaced(DisplacementType type)
+    {
+        foreach (PassiveRuntime runtime in passiveRuntimes)
+            if (runtime != null && runtime.IsActive && !runtime.CanBeDisplaced(type)) return false;
+        return true;
+    }
+
+    public override bool CanBeAffectedByTerrain(TerrainData terrain)
+    {
+        foreach (PassiveRuntime runtime in passiveRuntimes)
+            if (runtime != null && runtime.IsActive && !runtime.CanBeAffectedByTerrain(terrain))
+                return false;
+        return true;
+    }
+
+    protected virtual void OnDestroy()
+    {
+        DisposePassiveRuntimes();
+    }
+
+    private string GetDecisionRuleName(int index)
+    {
+        if (decisionRules == null || index < 0 || index >= decisionRules.Count ||
+            decisionRules[index] == null || string.IsNullOrWhiteSpace(decisionRules[index].ruleName))
+            return $"#{index + 1}";
+        return decisionRules[index].ruleName;
     }
 
     /// <summary>
@@ -181,17 +526,23 @@ public class EnemyUnit : Unit
         lastTurnUsedSkills.Clear();
         hasActedThisTurn = true;
 
-        // 飞砾虫的特殊行动：只要场上仍有存活的林德沃姆，本回合完全不释放技能，
-        // 改为向远离最近林德沃姆的合法相邻格移动 1 格。
-        // 该判断只改变飞砾虫自身行动，不把林德沃姆加入通用索敌系统。
+        // 飞砾虫的特殊行动：只要场上仍有存活的林德沃姆，就把本次行动改成
+        // 使用自身配置的位移技能远离林德沃姆。移动仍由技能牌结算，不直接 MoveTo。
         if (IsPebbleBug() && TryFindNearestLivingLindworm(out EnemyUnit lindworm))
+            OverrideWithPebbleBugRetreatSkill(lindworm);
+
+        if (currentDecision != null && currentDecision.SkipSkills)
         {
             plannedSkills.Clear();
-            yield return RetreatOneCellFrom(lindworm);
             yield break;
         }
 
-        foreach (var card in plannedSkills)
+        // 执行时复制快照。若反伤在行动中触发“替换下次技能”的被动，
+        // 被动可以安全更新 currentDecision，而不会修改正在 foreach 的集合。
+        var skillsToExecute = new List<CardData>(currentDecision != null
+            ? currentDecision.Skills
+            : plannedSkills);
+        foreach (var card in skillsToExecute)
         {
             // 每放一个技能前都检查：自己可能已被前面的反伤/队友流弹打死，
             // 或者战斗已经因胜负结束——两种情况都立刻终止
@@ -200,6 +551,8 @@ public class EnemyUnit : Unit
                 yield break;
 
             if (card == null) continue;
+            if (IsSkillOnCooldown(card)) continue;
+            if (!PassivesAllowSkill(card)) continue;
 
             if (!card.IsAttack)
             {
@@ -215,12 +568,14 @@ public class EnemyUnit : Unit
                         int limit = Mathf.Min(Mathf.Max(1, card.maxDefenseTargets), legal.Count);
                         for (int i = 0; i < limit; i++) defenseSelection.Add(legal[i]);
                     }
-                    else defenseSelection.Add(legal[Random.Range(0, legal.Count)]);
+                    else defenseSelection.Add(ChooseDefenseCell(card, legal));
                 }
                 if (!DefenseSkillResolver.CanResolve(card, this, defenseSelection)) continue;
                 EventManager.Trigger("EnemySkillExecuting", this, card);
                 if (!DefenseSkillResolver.Resolve(card, this, defenseSelection)) continue;
                 lastTurnUsedSkills.Add(card);
+                StartSkillCooldown(card);
+                NotifyPassivesSkillUsed(card);
                 yield return new WaitForSeconds(perSkillDelay);
                 continue;
             }
@@ -233,57 +588,24 @@ public class EnemyUnit : Unit
                                  (!card.IsAttack && card.CanDefenseEnemy && !card.CanDefenseSelf);
             if (targetsPlayer)
             {
-                target = FindNearestPlayer();
+                target = currentDecision != null ? currentDecision.PrimaryTarget : null;
+                if (target == null || target.IsDead || target.GetCurrentHealth() <= 0)
+                    target = FindNearestPlayer();
                 if (target == null) continue;   // 玩家不存在（已死亡），跳过
             }
             else
                 target = this;
 
-            // 攻击/对敌技能射程校验：目标是玩家（不是自己）时检查距离，超出就跳过
-            // 走 CardData 的统一判定，位移类技能会自动算上敏捷/残废
+            // 攻击在真正执行前按当前位置重新检查。玩家走出射程、阻断视线或使目标
+            // 失去合法性后，敌人只会跳过该攻击，不会为了攻击而自动寻路靠近。
             bool needsPrimaryTarget = card.attackTargetRule != AttackTargetRule.自身范围 &&
                 card.attackTargetRule != AttackTargetRule.全场 &&
                 card.attackTargetRule != AttackTargetRule.全场随机 &&
                 card.attackTargetRule != AttackTargetRule.固定地图图案;
-            if (target != this && needsPrimaryTarget)
+            if (!CanExecutePlannedAttack(card, target, needsPrimaryTarget, out string failureReason))
             {
-                // 够不到就先朝玩家走（最多 maxStepsPerTurn 格），走到能打为止。
-                // 不接这一步的话，只会近战的怪会永远站在原地——第 1 关神庙鼠
-                // 只有射程 1 的"啃咬"，开局距离 2，整局都不会动。
-                if (!card.IsInEffectiveRange(this, GetCoord(), target.GetCoord()))
-                {
-                    yield return ApproachTarget(target, card);
-
-                    // 走路途中可能被反伤/地形打死，或者战斗已经结束
-                    if (GetCurrentHealth() <= 0) yield break;
-                    if (GameManager.Instance != null && !GameManager.Instance.IsInBattle) yield break;
-                }
-
-                // 走完还是够不到（被柱子挡住 / 走满步数还不够）→ 本回合跳过这个技能
-                if (!card.IsInEffectiveRange(this, GetCoord(), target.GetCoord()))
-                {
-                    int distance = GetCoord().Distance(target.GetCoord());
-                    Debug.Log($"{data.unitName} 的【{card.cardName}】射程 {card.minRange}~{card.GetEffectiveMaxRange(this)}，" +
-                              $"目标距离 {distance}，超出射程，跳过");
-                    continue;
-                }
-                if (card.requiresStraightLine &&
-                    AttackAreaGeometry.StraightDirection(GetCoord(), target.GetCoord()) < 0)
-                    continue;
-                if (card.IsAttack &&
-                    card.attackTargetRule != AttackTargetRule.相邻地块定向扇形 &&
-                    !card.CanSelectAttackCell(this, target.GetCoord()))
-                    continue;
-
-                // 视线校验：和玩家侧 PlayerCardSystem.IsTargetReachable 用同一条规则。
-                // 原来敌人只查射程 + 可选中，能隔着柱子、别的单位或烟雾直接打到玩家，
-                // 而玩家用同一张远程卡却打不了，攻防不对称。
-                // 被挡住时不绕路（ApproachTarget 在射程内会立刻返回），本回合直接放弃这个技能。
-                if (!HasLineOfSight(card, target))
-                {
-                    Debug.Log($"{data.unitName} 的【{card.cardName}】视线被阻挡（单位/障碍物/烟雾），本回合跳过");
-                    continue;
-                }
+                Debug.Log($"{data.unitName} 的【{card.cardName}】无法命中：{failureReason}，跳过攻击");
+                continue;
             }
 
             Debug.Log($"{data.unitName} 释放【{card.cardName}】");
@@ -357,12 +679,44 @@ public class EnemyUnit : Unit
 
             // 记录"实际放出"的技能（只有走到这里的才算，中途死了没放的不算）
             lastTurnUsedSkills.Add(card);
+            StartSkillCooldown(card);
+            NotifyPassivesSkillUsed(card);
 
             yield return new WaitForSeconds(perSkillDelay);
         }
 
         // 本回合预告已全部执行完，清空预告队列
         plannedSkills.Clear();
+    }
+
+    private HexCoord ChooseDefenseCell(CardData card, List<HexCoord> legal)
+    {
+        if (card == null || legal == null || legal.Count == 0) return GetCoord();
+        Unit movementReference = currentDecision != null
+            ? currentDecision.MovementReference ?? currentDecision.PrimaryTarget
+            : null;
+        if (card.defenseEffectRule != DefenseEffectRule.步行 || movementReference == null)
+            return legal[Random.Range(0, legal.Count)];
+
+        HexCoord target = movementReference.GetCoord();
+        bool moveAway = currentDecision.Movement == EnemyMovementIntent.远离目标;
+        bool keepDistance = currentDecision.Movement == EnemyMovementIntent.保持距离;
+        int desiredDistance = Mathf.Max(0, currentDecision.MovementDistance);
+        int best = moveAway ? int.MinValue : int.MaxValue;
+        var candidates = new List<HexCoord>();
+        foreach (HexCoord coord in legal)
+        {
+            int distance = coord.Distance(target);
+            int score = keepDistance ? Mathf.Abs(distance - desiredDistance) : distance;
+            bool better = moveAway ? distance > best : score < best;
+            if (better)
+            {
+                best = moveAway ? distance : score;
+                candidates.Clear();
+            }
+            if ((moveAway ? distance : score) == best) candidates.Add(coord);
+        }
+        return candidates.Count > 0 ? candidates[Random.Range(0, candidates.Count)] : legal[0];
     }
 
     private bool IsPebbleBug()
@@ -389,45 +743,107 @@ public class EnemyUnit : Unit
         return nearest != null;
     }
 
-    private IEnumerator RetreatOneCellFrom(EnemyUnit lindworm)
+    /// <summary>
+    /// 飞砾虫的特殊撤退仍通过它配置的位移牌完成。
+    /// Movement 只负责告诉位移牌应该选择远离哪一方的落点，本身不直接移动单位。
+    /// </summary>
+    private void OverrideWithPebbleBugRetreatSkill(EnemyUnit lindworm)
     {
-        if (lindworm == null || HexGrid.Instance == null || IsDead) yield break;
-
-        int currentDistance = currentCoord.Distance(lindworm.GetCoord());
-        int bestDistance = currentDistance;
-        var candidates = new List<HexCoord>();
-        for (int direction = 0; direction < 6; direction++)
+        CardData movementSkill = null;
+        int movementGroup = -1;
+        if (data != null && data.skillGroups != null)
         {
-            HexCoord candidate = currentCoord.GetNeighbor(direction);
-            HexCell cell = HexGrid.Instance.GetCell(candidate);
-            if (cell == null || !cell.CanEnter(this)) continue;
-
-            int distance = candidate.Distance(lindworm.GetCoord());
-            if (distance < bestDistance) continue;
-            if (distance > bestDistance)
+            for (int groupIndex = 0; groupIndex < data.skillGroups.Count && movementSkill == null;
+                 groupIndex++)
             {
-                bestDistance = distance;
-                candidates.Clear();
+                CardGroup group = data.skillGroups[groupIndex];
+                if (group == null || group.cards == null) continue;
+                foreach (CardData candidate in group.cards)
+                {
+                    if (candidate == null || candidate.IsAttack || !candidate.IsMovementSkill ||
+                        IsSkillOnCooldown(candidate)) continue;
+                    movementSkill = candidate;
+                    movementGroup = groupIndex;
+                    break;
+                }
             }
-            if (distance > currentDistance)
-                candidates.Add(candidate);
         }
 
-        if (candidates.Count == 0)
+        if (currentDecision == null) currentDecision = new EnemyDecision();
+        currentDecision.SetPrimaryTarget(lindworm)
+                       .SetMovement(EnemyMovementIntent.远离目标, lindworm, 1)
+                       .SetSkillGroup(movementGroup)
+                       .SetSkipSkills(movementSkill == null,
+                           movementSkill == null ? "林德沃姆存在，但没有可用位移技能" : "林德沃姆存在")
+                       .SetSkills(movementSkill == null ? null : new[] { movementSkill });
+
+        plannedSkills.Clear();
+        if (movementSkill != null)
         {
-            Debug.Log($"{data.unitName} 周围没有能远离 {LindwormName} 的空格，本回合不攻击也不移动");
-            yield break;
+            currentSkillGroup = movementGroup;
+            plannedSkills.Add(movementSkill);
         }
-
-        HexCoord destination = candidates[Random.Range(0, candidates.Count)];
-        MoveTo(destination);
-        Debug.Log($"{data.unitName} 因 {LindwormName} 存在，放弃攻击并远离到 {destination}");
-        yield return new WaitForSeconds(stepDelay);
     }
 
     // ============================================================
-    //                       移动靠近（行动中）
+    //                       攻击执行前检查
     // ============================================================
+
+    private bool CanExecutePlannedAttack(CardData card, Unit target, bool needsPrimaryTarget,
+        out string reason)
+    {
+        reason = null;
+        if (card == null || !card.IsAttack)
+        {
+            reason = "不是有效的攻击技能";
+            return false;
+        }
+        if (!CanAttack())
+        {
+            reason = "当前状态无法攻击";
+            return false;
+        }
+        if (target == null || target.IsDead || target.GetCurrentHealth() <= 0)
+        {
+            reason = "没有存活目标";
+            return false;
+        }
+
+        // 全场和固定图案以地图为目标；只要仍有存活目标就可以正常结算。
+        if (!needsPrimaryTarget)
+        {
+            if (card.attackTargetRule != AttackTargetRule.自身范围) return true;
+            foreach (AttackAreaCell cell in card.GetAttackArea(this, GetCoord()))
+                if (cell.Coord == target.GetCoord()) return true;
+            reason = "目标已经离开自身范围";
+            return false;
+        }
+
+        int distance = GetCoord().Distance(target.GetCoord());
+        if (!card.IsInEffectiveRange(this, GetCoord(), target.GetCoord()))
+        {
+            reason = $"目标距离 {distance}，超出射程 {card.minRange}~{card.GetEffectiveMaxRange(this)}";
+            return false;
+        }
+        if (card.requiresStraightLine &&
+            AttackAreaGeometry.StraightDirection(GetCoord(), target.GetCoord()) < 0)
+        {
+            reason = "目标不在要求的直线上";
+            return false;
+        }
+        if (card.attackTargetRule != AttackTargetRule.相邻地块定向扇形 &&
+            !card.CanSelectAttackCell(this, target.GetCoord()))
+        {
+            reason = "目标或攻击路径不合法";
+            return false;
+        }
+        if (!HasLineOfSight(card, target))
+        {
+            reason = "视线被单位、障碍物或烟雾阻挡";
+            return false;
+        }
+        return true;
+    }
 
     /// <summary>
     /// 敌人版视线判定，规则与玩家侧的 PlayerCardSystem.IsTargetReachable 完全一致：
@@ -444,35 +860,6 @@ public class EnemyUnit : Unit
         if (HexGrid.Instance.IsLineBlocked(GetCoord(), target.GetCoord())) return false;
         if (HexGrid.Instance.IsCellSmoky(target.GetCoord())) return false;
         return true;
-    }
-
-    /// <summary>
-    /// 朝目标走，直到这个技能的射程够得着为止（最多 maxStepsPerTurn 格）。
-    ///
-    /// 这是"敌人也会走过来打你"的关键：ExecutePlannedSkills 原来只放技能不移动，
-    /// 只会近战的怪在距离 > 1 时整局站着不动。寻路复用 HexPathfinding.FindNextStep
-    /// （它已经把障碍物、不可行走格、占位单位都算进去了），每走一格用 MoveTo，
-    /// 这样格子占用、"移动时" buff、UnitMoved 事件都和正常移动一致。
-    /// </summary>
-    protected virtual IEnumerator ApproachTarget(Unit target, CardData card)
-    {
-        if (target == null || target.IsDead) yield break;
-        if (HexGrid.Instance == null) yield break;
-
-        for (int step = 0; step < maxStepsPerTurn; step++)
-        {
-            // 已经在射程里就不用再走了
-            if (card.IsInEffectiveRange(this, GetCoord(), target.GetCoord())) yield break;
-
-            HexCoord next = HexPathfinding.FindNextStep(GetCoord(), target.GetCoord());
-            if (next == GetCoord()) yield break;   // 没有可走的下一步（被围住 / 已相邻）
-
-            HexCell nextCell = HexGrid.Instance.GetCell(next);
-            if (nextCell == null || !nextCell.CanEnter(this)) yield break;
-
-            MoveTo(next);
-            yield return new WaitForSeconds(stepDelay);
-        }
     }
 
     // ============================================================
@@ -501,81 +888,13 @@ public class EnemyUnit : Unit
         // 思考一会
         yield return new WaitForSeconds(thinkDelay);
 
-        // 1. 找最近的玩家单位
-        PlayerUnit target = FindNearestPlayer();
-        if (target == null)
-        {
-            EndTurn();
-            yield break;
-        }
-
-        int distance = currentCoord.Distance(target.GetCoord());
-
-        // 2. 判断：相邻就攻击，否则移动靠近
-        if (distance == 1)
-        {
-            // 相邻 → 攻击
-            yield return new WaitForSeconds(0.3f);
-            AttackTarget(target);
-        }
-        else
-        {
-            // 不相邻 → 移动靠近
-            yield return MoveTowardsTarget(target);
-
-            // 移动完看看是不是到攻击范围了
-            int newDistance = currentCoord.Distance(target.GetCoord());
-            if (newDistance == 1)
-            {
-                yield return new WaitForSeconds(0.3f);
-                AttackTarget(target);
-            }
-        }
+        // 旧入口也统一走技能决策与技能结算，禁止在技能牌之外自动寻路或普通攻击。
+        PreparePlannedSkills();
+        yield return ExecutePlannedSkills(stepDelay);
 
         // 行动结束
         yield return new WaitForSeconds(0.3f);
         EndTurn();
-    }
-
-    // ============================================================
-    //                       移动 AI
-    // ============================================================
-
-    /// <summary>
-    /// 朝目标移动（走一步）
-    /// </summary>
-    protected virtual IEnumerator MoveTowardsTarget(Unit target)
-    {
-        HexCoord nextStep = HexPathfinding.FindNextStep(currentCoord, target.GetCoord());
-
-        if (nextStep == currentCoord)
-        {
-            yield break;  // 无法移动
-        }
-
-        // 检查目标格是否可走
-        HexCell nextCell = HexGrid.Instance.GetCell(nextStep);
-        if (nextCell == null || !nextCell.isWalkable || nextCell.occupyUnit != null)
-        {
-            yield break;
-        }
-
-        // 离开旧格子
-        HexCell oldCell = HexGrid.Instance.GetCell(currentCoord);
-        if (oldCell != null)
-            oldCell.occupyUnit = null;
-
-        // 站上新格子
-        currentCoord = nextStep;
-        nextCell.occupyUnit = this;
-
-        // 动画延迟（以后改成为移动动画）
-        yield return new WaitForSeconds(stepDelay);
-
-        // 更新位置
-        transform.position = HexGrid.Instance.HexToWorld(nextStep);
-
-        OnMove();
     }
 
     // ============================================================

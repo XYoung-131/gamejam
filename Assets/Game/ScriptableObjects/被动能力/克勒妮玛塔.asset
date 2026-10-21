@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 965e06f8bcb542e8adbc16f0af9dabac, type: 3}
+  m_Name: "\u514B\u52D2\u59AE\u739B\u5854"
+  m_EditorClassIdentifier:
+  abilityName: "\u514B\u52D2\u59AE\u739B\u5854"
+  description: "\u5F3A\u5316\u9F20\u7FA4\uFF0C\u8F6C\u79FB\u81F3\u591A2\u70B9\u4F24\u5BB3\uFF1B\u65E0\u968F\u4ECE\u65F6\u7729\u6655\uFF0C\u6B7B\u4EA1\u65F6\u73A9\u5BB6\u7ACB\u5373\u83B7\u80DC\u3002"
+  oneHealthAllies:
+  - {fileID: 11400000, guid: be960b0150b1e0b47a4d48f0fd957704, type: 2}
+  - {fileID: 11400000, guid: 4e6d5ca2fc80397489831d0ff4d922e7, type: 2}
+  twoHealthAlly: {fileID: 11400000, guid: d8628e512ef58e343838856432917bf6, type: 2}
+  stunBuff: {fileID: 11400000, guid: 69c3c0ba9c274bb42a21c5247d7250d4, type: 2}
+  fastWalkSkill: {fileID: 11400000, guid: 98c2e8508556a0c48a4444728ee03836, type: 2}

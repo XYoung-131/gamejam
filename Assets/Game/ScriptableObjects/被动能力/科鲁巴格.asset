@@ -1,0 +1,19 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4f2d0ec1c64b4d849793598fd74e4e12, type: 3}
+  m_Name: "\u79D1\u9C81\u5DF4\u683C"
+  m_EditorClassIdentifier:
+  abilityName: "\u79D1\u9C81\u5DF4\u683C"
+  description: "\u521D\u59CB\u83B7\u5F973\u70B9\u62A4\u76FE\uFF1B\u7B2C3\u56DE\u5408\u5F00\u59CB\u65F6\u83B7\u5F971\u5C42\u529B\u91CF\u3002"
+  initialShield: 3
+  strengthRound: 3
+  strengthBuff: {fileID: 11400000, guid: 6036645b86313be489798beaa6edba9b, type: 2}

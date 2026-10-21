@@ -136,6 +136,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   data: {fileID: 11400000, guid: be960b0150b1e0b47a4d48f0fd957704, type: 2}
   currentHealth: 0
+  runtimeMaxHealth: 0
   shield: 0
   currentCoord:
     q: 0
@@ -144,9 +145,48 @@ MonoBehaviour:
   collisionBlockerDamage: 2
   reflectsDisplacement: 0
   activeBuffs: []
+  skipDecayOnAppliedTurn: 0
   thinkDelay: 0.8
   stepDelay: 0.3
+  decisionRules:
+  - ruleName: "\u8DDD\u79BB\u8D85\u8FC71\u683C\uFF1A\u5FEB\u8D70"
+    conditions:
+    - conditionType: 0
+      subject: 1
+      comparison: 4
+      value: 1
+      healthValueType: 0
+      buff: {fileID: 0}
+      specifiedUnit: {fileID: 0}
+      specifiedUnitName:
+      unitRelation: 0
+      includeSelf: 0
+      invert: 0
+    actions:
+    - actionType: 0
+      skillGroupIndex: 1
+      skillGroupCycle: []
+      movementDistance: 1
+  - ruleName: "\u76F8\u90BB\uFF1A\u5543\u54AC"
+    conditions:
+    - conditionType: 0
+      subject: 1
+      comparison: 1
+      value: 1
+      healthValueType: 0
+      buff: {fileID: 0}
+      specifiedUnit: {fileID: 0}
+      specifiedUnitName:
+      unitRelation: 0
+      includeSelf: 0
+      invert: 0
+    actions:
+    - actionType: 0
+      skillGroupIndex: 0
+      skillGroupCycle: []
+      movementDistance: 1
   skillsPerTurn: 1
+  maxStepsPerTurn: 3
 --- !u!114 &7033390731918600057
 MonoBehaviour:
   m_ObjectHideFlags: 0

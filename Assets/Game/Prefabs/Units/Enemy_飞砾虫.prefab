@@ -146,6 +146,72 @@ MonoBehaviour:
   activeBuffs: []
   thinkDelay: 0.8
   stepDelay: 0.3
+  decisionRules:
+  - ruleName: "\u76F8\u90BB\uFF1A\u5C0F\u6B65\u8D70\u8FDC\u79BB"
+    conditions:
+    - conditionType: 0
+      subject: 1
+      comparison: 1
+      value: 1
+      healthValueType: 0
+      buff: {fileID: 0}
+      skill: {fileID: 0}
+      specifiedUnit: {fileID: 0}
+      specifiedUnitName:
+      unitRelation: 0
+      includeSelf: 0
+      invert: 0
+    actions:
+    - actionType: 0
+      skillGroupIndex: 1
+      skillGroupCycle: []
+      movementDistance: 1
+    - actionType: 2
+      skillGroupIndex: 0
+      skillGroupCycle: []
+      movementDistance: 1
+  - ruleName: "\u8DDD\u79BB2\u683C\uFF1A\u629B\u5C04"
+    conditions:
+    - conditionType: 0
+      subject: 1
+      comparison: 2
+      value: 2
+      healthValueType: 0
+      buff: {fileID: 0}
+      skill: {fileID: 0}
+      specifiedUnit: {fileID: 0}
+      specifiedUnitName:
+      unitRelation: 0
+      includeSelf: 0
+      invert: 0
+    actions:
+    - actionType: 0
+      skillGroupIndex: 0
+      skillGroupCycle: []
+      movementDistance: 1
+  - ruleName: "\u8DDD\u79BB\u8D85\u8FC72\u683C\uFF1A\u5C0F\u6B65\u8D70\u9760\u8FD1"
+    conditions:
+    - conditionType: 0
+      subject: 1
+      comparison: 4
+      value: 2
+      healthValueType: 0
+      buff: {fileID: 0}
+      skill: {fileID: 0}
+      specifiedUnit: {fileID: 0}
+      specifiedUnitName:
+      unitRelation: 0
+      includeSelf: 0
+      invert: 0
+    actions:
+    - actionType: 0
+      skillGroupIndex: 1
+      skillGroupCycle: []
+      movementDistance: 1
+    - actionType: 1
+      skillGroupIndex: 0
+      skillGroupCycle: []
+      movementDistance: 1
   skillsPerTurn: 1
 --- !u!114 &4545590917640907754
 MonoBehaviour:

@@ -16,22 +16,23 @@ MonoBehaviour:
   maxHealth: 12
   grade: 1
   attack: 1
+  passiveAbilities:
+  - {fileID: 11400000, guid: 512d53dca79e4371b6646013f7a969d1, type: 2}
   passiveAbility: "\u4F1A\u653B\u51FB\u53CB\u65B9\u5355\u4F4D\uFF0C\u51FB\u6740\u81F3\u5C113\u540D\u53CB\u65B9\u5355\u4F4D\u540E\u83B7\u5F971\u70B9\u529B\u91CF\u548C1\u70B9\u654F\u6377\uFF0C\u6B7B\u4EA1\u540E\u5206\u88C2\u4E3A
     \u6797\u5FB7\u6C83\u59C6-\u8EAF\u4F53 \u548C \u6797\u5FB7\u6C83\u59C6-\u5C3E\u5DF4"
-  aiLogic: 
-  skillGroup1:
-  - {fileID: 11400000, guid: c4d3f6affd88ea745a9b6e0440bc4975, type: 2}
-  - {fileID: 11400000, guid: 1783be519a124a64c9a6ffdf881f06f7, type: 2}
-  - {fileID: 11400000, guid: 98c2e8508556a0c48a4444728ee03836, type: 2}
-  - {fileID: 11400000, guid: 667772554bc77c641a819ca182044246, type: 2}
-  skillGroup2: []
-  skillGroup3: []
+  aiLogic: "\u6240\u6709\u79FB\u52A8\u9760\u8FD1\u73A9\u5BB6\n\u653B\u51FB\u8303\u56F4\u5185\u6CA1\u6709\u73A9\u5BB6\u4F46\u6709\u53CB\u65B9\u5355\u4F4D\u65F6\u4F1A\u653B\u51FB\u53CB\u65B9\u5355\u4F4D\uFF0C\u53CB\u65B9\u5355\u4F4D\u4E2D\u6BD2\u6B7B\u4EA1\u4E5F\u7B97\u81EA\u5DF1\u51FB\u6740\n\u5F53\u81EA\u8EAB\u4F7F\u7528\u6280\u80FD\u7EC41\u4E14\u73A9\u5BB6\u4E0E\u81EA\u8EAB\u8DDD\u79BB3\u683C\u4EE5\u5916\u65F6\uFF0C\u5728\u6280\u80FD\u7EC4\u524D\u5217\u52A0\u51651\u4E2A\u5C0F\u6B65\u8D70\n\u6280\u80FD\u7EC4\u4F7F\u7528\u987A\u5E8F\uFF1A\u5F00\u5C40\u51484\u20142\uFF0C\u7136\u540E1\u20143\u20142\u5FAA\u73AF"
   skillGroups:
   - groupName: "\u6280\u80FD\u7EC41"
     cards:
     - {fileID: 11400000, guid: c4d3f6affd88ea745a9b6e0440bc4975, type: 2}
+  - groupName: "\u6280\u80FD\u7EC42"
+    cards:
     - {fileID: 11400000, guid: 1783be519a124a64c9a6ffdf881f06f7, type: 2}
+  - groupName: "\u6280\u80FD\u7EC43"
+    cards:
     - {fileID: 11400000, guid: 98c2e8508556a0c48a4444728ee03836, type: 2}
+  - groupName: "\u6280\u80FD\u7EC44"
+    cards:
     - {fileID: 11400000, guid: 667772554bc77c641a819ca182044246, type: 2}
   icon: {fileID: 21300000, guid: ac396eb82b714ba09918b65a01658031, type: 3}
   prefab: {fileID: 5125114976211495250, guid: a915ef7562684f7397ed952cdc488666, type: 3}

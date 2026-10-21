@@ -16,6 +16,8 @@ MonoBehaviour:
   maxHealth: 3
   grade: 0
   attack: 1
+  passiveAbilities:
+  - {fileID: 11400000, guid: 6559045407b749a995f610815edb482d, type: 2}
   passiveAbility: "\u9996\u6B21\u53D7\u5230\u4F24\u5BB3\u65F6\u4F1A\u83B7\u5F97 \u65E0\u654C
     1\u56DE\u5408\uFF0C\u5C06\u4F7F\u7528\u7684\u6280\u80FD\u53D8\u4E3A \u9519\u4E71\u4F20\u9001"
   aiLogic: "\u76F8\u90BB3\u683C\u5185\u6709\u73A9\u5BB6\u65F6\uFF0C\u4F7F\u7528 \u60CA\u559C\u793C\u70AE

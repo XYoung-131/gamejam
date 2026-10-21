@@ -14,7 +14,7 @@ GameObject:
   - component: {fileID: 8705079475551071527}
   - component: {fileID: 7033390731918600057}
   m_Layer: 0
-  m_Name: "Enemy_\u7CBE\u5413\u793C\u7269"
+  m_Name: "Enemy_\u60CA\u5413\u793C\u7269"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -146,6 +146,49 @@ MonoBehaviour:
   activeBuffs: []
   thinkDelay: 0.8
   stepDelay: 0.3
+  decisionRules:
+  - ruleName: "\u4E0E\u73A9\u5BB6\u76F8\u90BB\uFF1A\u81EA\u7206"
+    conditions:
+    - conditionType: 0
+      subject: 1
+      comparison: 1
+      value: 1
+      healthValueType: 0
+      buff: {fileID: 0}
+      skill: {fileID: 0}
+      specifiedUnit: {fileID: 0}
+      specifiedUnitName:
+      unitRelation: 0
+      includeSelf: 0
+      invert: 0
+    actions:
+    - actionType: 0
+      skillGroupIndex: 0
+      skillGroupCycle: []
+      movementDistance: 1
+  - ruleName: "\u4E0E\u73A9\u5BB6\u4E0D\u76F8\u90BB\uFF1A\u5FEB\u8D70\u9760\u8FD1"
+    conditions:
+    - conditionType: 0
+      subject: 1
+      comparison: 4
+      value: 1
+      healthValueType: 0
+      buff: {fileID: 0}
+      skill: {fileID: 0}
+      specifiedUnit: {fileID: 0}
+      specifiedUnitName:
+      unitRelation: 0
+      includeSelf: 0
+      invert: 0
+    actions:
+    - actionType: 0
+      skillGroupIndex: 1
+      skillGroupCycle: []
+      movementDistance: 1
+    - actionType: 1
+      skillGroupIndex: 0
+      skillGroupCycle: []
+      movementDistance: 1
   skillsPerTurn: 1
 --- !u!114 &7033390731918600057
 MonoBehaviour:

@@ -31,6 +31,9 @@ public class UnitData : ScriptableObject
     public int attack = 1;
 
     [Header("能力")]
+    [Tooltip("实际运行的被动能力资产；每个单位实例都会创建独立的 PassiveRuntime")]
+    public List<PassiveAbilityData> passiveAbilities = new List<PassiveAbilityData>();
+    [Tooltip("旧版文字说明，不会自动执行效果")]
     [TextArea] public string passiveAbility;
     [TextArea] public string aiLogic;
     
