@@ -139,12 +139,21 @@ public class LevelManager : MonoBehaviour
         // ③ 一切就位后才开战
         if (startBattleAfterSpawn && GameManager.Instance != null)
         {
-            if (RunFlowController.Instance != null &&
-                RunFlowController.Instance.Progression.Phase == RunPhase.Battle)
-                GameManager.Instance.StartLevel(RunFlowController.Instance.Progression.ChapterIndex + 1);
-            else
-                GameManager.Instance.StartBattle();
+            // 本关有配置过剧情的首领单位（如林德沃姆）：先播开战前对话，
+            // 对话结束由回调开战；没有对应配置时 TryPlayBeforeBattle 返回 false，立刻开战
+            if (BossDialoguePanel.TryPlayBeforeBattle(level, StartBattleNow)) return;
+            StartBattleNow();
         }
+    }
+
+    /// <summary>正式开战（沿用原本的启动方式：正式流程用章节号，示例场景直接开打）</summary>
+    private void StartBattleNow()
+    {
+        if (RunFlowController.Instance != null &&
+            RunFlowController.Instance.Progression.Phase == RunPhase.Battle)
+            GameManager.Instance.StartLevel(RunFlowController.Instance.Progression.ChapterIndex + 1);
+        else
+            GameManager.Instance.StartBattle();
     }
 
     // ============================================================
