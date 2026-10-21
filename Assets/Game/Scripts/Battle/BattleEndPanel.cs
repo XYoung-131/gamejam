@@ -62,6 +62,8 @@ public class BattleEndPanel : MonoBehaviour
     private readonly List<RelicData> pendingRelicChoices = new List<RelicData>();   // 思维碎片的 3 件候选（打开面板时抽好）
     private bool defeatedElite;         // 本场是否击杀了精英怪
     private bool defeatedBoss;          // 本场是否击杀了 BOSS
+    // 本场被击败、且有剧情对话配置的单位名（如林德沃姆）：胜利时先播对话再开结算
+    private string defeatedDialogueUnit;
     private bool skillTaken;
     private bool potionTaken;
     private bool relicTaken;
@@ -202,6 +204,9 @@ public class BattleEndPanel : MonoBehaviour
         if (enemy == null || enemy.data == null) return;
         if (enemy.data.grade == UnitGrade.精英怪) defeatedElite = true;
         if (enemy.data.grade == UnitGrade.BOSS) defeatedBoss = true;
+        // 这个单位有剧情配置（如林德沃姆）：记下来，胜利时先播它的胜利对话
+        if (BossDialoguePanel.HasConfigFor(enemy.data.unitName))
+            defeatedDialogueUnit = enemy.data.unitName;
     }
 
     private void HandleGameStateChanged(GameState state)
@@ -212,7 +217,7 @@ public class BattleEndPanel : MonoBehaviour
             rewardOpening = true;
             // LootSystem 也监听同一事件，事件顺序不保证——
             // 延迟一帧再打开，确保 LastBattlePotionDrop 已经掷完
-            StartCoroutine(OpenNextFrame());
+            StartCoroutine(OpenAfterDialogue());
         }
         else if (state == GameState.Defeat)
         {
@@ -220,9 +225,18 @@ public class BattleEndPanel : MonoBehaviour
         }
     }
 
-    private IEnumerator OpenNextFrame()
+    /// <summary>
+    /// 胜利后打开结算：先让 LootSystem 掷完掉落，再按需播被击败单位的胜利对话，
+    /// 对话结束（或没有对话）才真正打开结算界面。
+    /// </summary>
+    private IEnumerator OpenAfterDialogue()
     {
         yield return null;
+
+        if (!string.IsNullOrEmpty(defeatedDialogueUnit) &&
+            BossDialoguePanel.TryPlayVictory(defeatedDialogueUnit, Open))
+            yield break;   // 对话播完由回调 Open() 打开结算
+
         Open();
     }
 

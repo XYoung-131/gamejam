@@ -1,0 +1,62 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ea96bc02e2f8481a9b2be0600ba5ee90, type: 3}
+  m_Name: 林德沃姆
+  m_EditorClassIdentifier: 
+  unitName: 林德沃姆
+  seenKey: 
+  charactersPerSecond: 45
+  leftName: 勒忒
+  leftPortrait: {fileID: 21300000, guid: 7a3c5e91b2d44f0e8c6105d9a4b73e21, type: 3}
+  leftPortraitHeight: 960
+  rightName: 林德沃姆
+  rightPortrait: {fileID: 21300000, guid: 5b6c7d8e9f0a1b2c3d4e5f60718293a4, type: 3}
+  rightPortraitHeight: 960
+  firstEncounter:
+  - speaker: 林德沃姆
+    text: 哇，勒忒，今天是你陪我玩吗？
+  - speaker: 勒忒
+    text: ……
+  - speaker: 林德沃姆
+    text: 怎么叫你没反应啊，你不会连自己的名字都忘了吧？
+  - speaker: 勒忒
+    text: 没有，我记得，我叫勒忒。
+  - speaker: 林德沃姆
+    text: 那我呢？
+  - speaker: 勒忒
+    text: 忘了。
+  - speaker: 林德沃姆
+    text: 我给你身上插一刀，也许你就想起我林德沃姆了。
+  - speaker: 勒忒
+    text: 那我会先把你打扁。
+  - speaker: 林德沃姆
+    text: 呃呃，又是这句，算了，反正我可不怕你，速战速决吧。
+  repeatEncounter:
+  - speaker: 林德沃姆
+    text: 哇，勒忒，今天是你陪我玩吗？
+  - speaker: 勒忒
+    text: 不是。
+  - speaker: 林德沃姆
+    text: 有反应哎，但你不陪我谁陪我呢。
+  - speaker: 勒忒
+    text: 我记得，你的尾巴，会到处乱跑，你可以追它玩。
+  - speaker: 林德沃姆
+    text: 哟，居然记这么细！但你忘了，它会跟我打架，我可不想跟它玩，还是朝你扔飞刀好玩。
+  - speaker: 勒忒
+    text: 那我会把你和你的尾巴一起打扁。
+  - speaker: 林德沃姆
+    text: 你就这么想打扁别人吗？哼，我才不怕你呢，看我的飞刀！
+  victory:
+  - speaker: 林德沃姆
+    text: 你又赢了，可你抱头思考的时候，整个人都在抽搐，看着比被刀插还痛苦，我都有点舍不得捅你了。
+  - speaker: 勒忒
+    text: 早习惯了，但我不想被刀插，再见。
